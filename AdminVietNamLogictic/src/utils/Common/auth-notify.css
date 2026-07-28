@@ -1,0 +1,56 @@
+/* Wrapper */
+.auth-notify {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* Viền chạy */
+  .auth-notify::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 14px;
+    padding: 2px;
+    background: linear-gradient(
+      90deg,
+      #22c55e,
+      #38bdf8,
+      #a855f7,
+      #22c55e
+    );
+    background-size: 300% 300%;
+    animation: borderRun 2s linear forwards;
+  
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  
+  /* Animation chạy hết 1 vòng */
+  @keyframes borderRun {
+    0% {
+      background-position: 0% 50%;
+    }
+    100% {
+      background-position: 300% 50%;
+    }
+  }
+  
+  /* Màu nền đậm hơn */
+  .auth-notify .ant-notification-notice {
+    background: #020617;
+    color: #fff;
+  }
+  
+  .auth-notify .ant-notification-notice-message {
+    color: #e5e7eb;
+    font-weight: 600;
+  }
+  
+  .auth-notify .ant-notification-notice-description {
+    color: #9ca3af;
+  }
+  

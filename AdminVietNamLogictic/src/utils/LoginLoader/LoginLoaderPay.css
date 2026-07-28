@@ -1,0 +1,226 @@
+/* ============================= */
+/* ===== LOADER OVERLAY ======== */
+/* ============================= */
+
+.loader-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+  
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  
+    background: radial-gradient(
+      circle at center,
+      rgba(10,15,25,0.75),
+      rgba(2,6,23,0.92)
+    );
+  
+    backdrop-filter: blur(6px);
+  }
+  
+  /* ============================= */
+  /* ===== LOADER CARD =========== */
+  /* ============================= */
+  
+  .loader-popup-content {
+  
+    width: 260px;
+    height: 200px;
+  
+    border-radius: 20px;
+  
+    background: rgba(255,255,255,0.05);
+  
+    border: 1px solid rgba(255,255,255,0.08);
+  
+    box-shadow:
+      0 20px 60px rgba(0,0,0,0.8),
+      inset 0 0 20px rgba(255,255,255,0.04);
+  
+    backdrop-filter: blur(10px);
+  
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  
+    position: relative;
+  }
+  
+  /* ============================= */
+  /* ===== LOADER CORE =========== */
+  /* ============================= */
+  
+  .loader-custom {
+    position: relative;
+    width: 80px;
+    height: 90px;
+  }
+  
+  /* ===== BARS ===== */
+  
+  .loader__bar {
+    position: absolute;
+    bottom: 0;
+  
+    width: 10px;
+    height: 50%;
+  
+    border-radius: 6px;
+  
+    background: linear-gradient(
+      180deg,
+      #fb7185,
+      #f43f5e
+    );
+  
+    box-shadow:
+      0 0 10px rgba(244,63,94,0.6),
+      0 0 20px rgba(244,63,94,0.4);
+  
+    transform-origin: center bottom;
+  }
+  
+  /* ===== BAR POSITIONS ===== */
+  
+  .loader__bar:nth-child(1) {
+    left: 0;
+    transform: scale(1,0.2);
+    animation: barUp1 2s infinite;
+  }
+  
+  .loader__bar:nth-child(2) {
+    left: 16px;
+    transform: scale(1,0.4);
+    animation: barUp2 2s infinite;
+  }
+  
+  .loader__bar:nth-child(3) {
+    left: 32px;
+    transform: scale(1,0.6);
+    animation: barUp3 2s infinite;
+  }
+  
+  .loader__bar:nth-child(4) {
+    left: 48px;
+    transform: scale(1,0.8);
+    animation: barUp4 2s infinite;
+  }
+  
+  .loader__bar:nth-child(5) {
+    left: 64px;
+    transform: scale(1,1);
+    animation: barUp5 2s infinite;
+  }
+  
+  /* ============================= */
+  /* ===== BALL ================== */
+  /* ============================= */
+  
+  .loader__ball {
+    position: absolute;
+  
+    bottom: 10px;
+    left: 0;
+  
+    width: 12px;
+    height: 12px;
+  
+    border-radius: 50%;
+  
+    background: #fff;
+  
+    box-shadow:
+      0 0 12px rgba(255,255,255,0.9),
+      0 0 25px rgba(244,63,94,0.8);
+  
+    animation: ball 2s infinite ease-in-out;
+  }
+  
+  /* ============================= */
+  /* ===== TEXT ================== */
+  /* ============================= */
+  
+  .Loading-text {
+  
+    margin-top: 30px;
+  
+    font-size: 18px;
+    font-weight: 700;
+  
+    letter-spacing: 0.15em;
+  
+    color: #f43f5e;
+  
+    text-shadow:
+      0 0 10px rgba(244,63,94,0.6);
+  
+  }
+  
+  /* dots */
+  
+  .Loading-text span {
+  
+    animation: textDots 1.5s infinite;
+  
+  }
+  
+  .Loading-text span:nth-child(2) {
+    animation-delay: 0.3s;
+  }
+  
+  .Loading-text span:nth-child(3) {
+    animation-delay: 0.6s;
+  }
+  
+  /* ============================= */
+  /* ===== ANIMATIONS ============ */
+  /* ============================= */
+  
+  @keyframes ball {
+  
+    0% { transform: translate(0,0); }
+  
+    25% { transform: translate(32px,-35px); }
+  
+    50% { transform: translate(64px,0); }
+  
+    75% { transform: translate(32px,-35px); }
+  
+    100% { transform: translate(0,0); }
+  
+  }
+  
+  @keyframes barUp1 {
+    0%,100% { transform: scale(1,0.2); }
+    50% { transform: scale(1,1); }
+  }
+  
+  @keyframes barUp2 {
+    0%,100% { transform: scale(1,0.4); }
+    50% { transform: scale(1,0.8); }
+  }
+  
+  @keyframes barUp3 {
+    0%,100% { transform: scale(1,0.6); }
+  }
+  
+  @keyframes barUp4 {
+    0%,100% { transform: scale(1,0.8); }
+    50% { transform: scale(1,0.4); }
+  }
+  
+  @keyframes barUp5 {
+    0%,100% { transform: scale(1,1); }
+    50% { transform: scale(1,0.2); }
+  }
+  
+  @keyframes textDots {
+  
+    0%,100% { opacity: 1; }
+  
+    50% { opacity: 0; }
+  
+  }

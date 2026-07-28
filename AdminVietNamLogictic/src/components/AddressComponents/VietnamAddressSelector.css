@@ -1,0 +1,13 @@
+.vietnam-address-selector { display: grid; gap: 11px; }
+.vietnam-address-selector__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vietnam-address-selector .ant-input-affix-wrapper,
+.vietnam-address-selector .ant-select-selector { min-height: 44px !important; border-color: #d4e0ee !important; border-radius: 11px !important; box-shadow: none !important; }
+.vietnam-address-selector .ant-select-single { height: 44px; }
+.vietnam-address-selector .ant-select-single .ant-select-selector { align-items: center; }
+.vietnam-address-selector__preview { display: flex; gap: 9px; align-items: flex-start; padding: 11px 13px; color: #285375; font-size: 12px; line-height: 1.5; border: 1px dashed #8fc1e9; border-radius: 11px; background: linear-gradient(135deg, #f1f8ff, #f7fcff); }
+.vietnam-address-selector__preview .anticon { margin-top: 3px; color: #078b88; }
+.vietnam-address-selector .ant-alert { border-radius: 10px; }
+
+@media (max-width: 640px) {
+  .vietnam-address-selector__grid { grid-template-columns: 1fr; }
+}

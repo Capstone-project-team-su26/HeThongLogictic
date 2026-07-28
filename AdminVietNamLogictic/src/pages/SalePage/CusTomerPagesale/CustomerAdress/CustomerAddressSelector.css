@@ -1,0 +1,5 @@
+.customer-address-selector { display: grid; gap: 11px; }
+.customer-address-selector__grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.customer-address-selector__preview { display: flex; gap: 9px; align-items: flex-start; padding: 11px 13px; color: #285375; font-size: 12px; line-height: 1.5; border: 1px dashed #9fc7e8; border-radius: 10px; background: #f3f9ff; }
+.customer-address-selector__preview .anticon { margin-top: 3px; color: #078b88; }
+@media (max-width: 640px) { .customer-address-selector__grid { grid-template-columns: 1fr; } }

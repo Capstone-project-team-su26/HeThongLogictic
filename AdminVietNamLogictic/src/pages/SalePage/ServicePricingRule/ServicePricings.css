@@ -1,0 +1,1189 @@
+.service-pricings-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  color: #172033;
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(37, 99, 235, 0.08),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      #f8fafc,
+      #f3f6fb
+    );
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "clig" 1;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.service-pricings-page * {
+  box-sizing: border-box;
+}
+
+.service-pricings-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  margin-bottom: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      125deg,
+      #0f172a,
+      #1d4ed8
+    );
+  box-shadow:
+    0 18px 45px
+    rgba(15, 23, 42, 0.12);
+}
+
+.service-pricings-hero::after {
+  content: "";
+  position: absolute;
+  top: -120px;
+  right: -70px;
+  width: 310px;
+  height: 310px;
+  border-radius: 999px;
+  background:
+    rgba(255, 255, 255, 0.08);
+}
+
+.service-pricings-hero > div,
+.service-pricings-refresh {
+  position: relative;
+  z-index: 1;
+}
+
+.service-pricings-hero span {
+  display: block;
+  margin-bottom: 8px;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.service-pricings-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(25px, 3vw, 36px);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.service-pricings-hero p {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.service-pricings-refresh {
+  min-height: 42px;
+  border-color:
+    rgba(255, 255, 255, 0.2);
+  background:
+    rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.service-pricings-stats {
+  display: grid;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.service-pricings-stats article {
+  min-width: 0;
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e7ebf3;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 8px 24px
+    rgba(15, 23, 42, 0.045);
+}
+
+.service-pricings-stat__icon {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #2563eb;
+  background: #eff6ff;
+  font-size: 17px;
+}
+
+.service-pricings-stat__icon.is-express {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.service-pricings-stat__icon.is-standard {
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.service-pricings-stat__icon.is-route {
+  color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.service-pricings-stat__icon.is-rule {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.service-pricings-stats span {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.service-pricings-stats strong {
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.service-pricings-card {
+  padding: 20px;
+  border: 1px solid #e7ebf3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow:
+    0 10px 28px
+    rgba(15, 23, 42, 0.05);
+}
+
+.service-pricings-tabs
+  .ant-tabs-tab {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.service-pricings-tabs
+  .ant-tabs-tab
+  span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.service-pricings-toolbar {
+  display: grid;
+  grid-template-columns:
+    minmax(280px, 1fr)
+    180px
+    180px
+    auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.service-pricings-toolbar
+  .ant-input-affix-wrapper,
+.service-pricings-toolbar
+  .ant-select-selector {
+  min-height: 42px !important;
+  border-color: #dbe3ef !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+}
+
+.service-pricings-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+}
+
+.service-pricings-table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.service-pricings-table th,
+.service-pricings-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #edf0f5;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.service-pricings-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.service-pricings-table td {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.service-pricings-table tbody tr:hover {
+  background: #f8fbff;
+}
+
+.service-pricings-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.service-pricings-index {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.service-pricings-service-type {
+  margin: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.service-pricings-service-type.is-express {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.service-pricings-service-type.is-standard {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.service-pricings-route {
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-pricings-route .anticon {
+  color: #2563eb;
+}
+
+.service-pricings-route strong {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.service-pricings-unit {
+  display: inline-grid;
+  place-items: center;
+  min-width: 42px;
+  height: 28px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.service-pricings-price {
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.service-pricings-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.service-pricings-date .anticon {
+  color: #64748b;
+}
+
+.service-pricings-rules-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.service-pricings-rule-card {
+  min-width: 0;
+  padding: 17px;
+  border: 1px solid #e7ebf3;
+  border-radius: 15px;
+  background:
+    linear-gradient(
+      145deg,
+      #fff,
+      #f8fafc
+    );
+  box-shadow:
+    0 8px 22px
+    rgba(15, 23, 42, 0.045);
+}
+
+.service-pricings-rule-card__header {
+  display: grid;
+  grid-template-columns:
+    42px 1fr auto;
+  gap: 11px;
+  align-items: center;
+}
+
+.service-pricings-rule-card__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 17px;
+}
+
+.service-pricings-rule-card__header span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.service-pricings-rule-card__header h3 {
+  margin: 4px 0 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.service-pricings-rule-status {
+  margin: 0;
+  border-color: #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.service-pricings-rule-card > p {
+  min-height: 48px;
+  margin: 15px 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.service-pricings-rule-card__metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.service-pricings-rule-card__metrics > div {
+  padding: 11px;
+  border: 1px solid #edf0f5;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.service-pricings-rule-card__metrics span {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.service-pricings-rule-card__metrics strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.service-pricings-empty,
+.service-pricings-error {
+  padding: 50px 20px;
+  text-align: center;
+}
+
+.service-pricings-error h2 {
+  margin: 0 0 7px;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.service-pricings-error p {
+  margin: 0 0 16px;
+  color: #64748b;
+}
+
+.service-pricings-loading {
+  padding: 24px;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.service-pricings-detail-modal .ant-modal-content {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 20px;
+}
+
+.service-pricings-detail__hero {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 24px;
+  background:
+    linear-gradient(
+      125deg,
+      #0f172a,
+      #1d4ed8
+    );
+}
+
+.service-pricings-detail__hero.is-rule {
+  background:
+    linear-gradient(
+      125deg,
+      #312e81,
+      #7c3aed
+    );
+}
+
+.service-pricings-detail__hero > .anticon {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background:
+    rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 20px;
+}
+
+.service-pricings-detail__hero span {
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.service-pricings-detail__hero h2 {
+  margin: 5px 0 0;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.service-pricings-detail__grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 22px;
+}
+
+.service-pricings-detail__grid article {
+  padding: 13px;
+  border: 1px solid #e7ebf3;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.service-pricings-detail__grid article.is-full {
+  grid-column: 1 / -1;
+}
+
+.service-pricings-detail__grid article.is-price {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.service-pricings-detail__grid span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.service-pricings-detail__grid strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.service-pricings-detail__grid .is-price strong {
+  color: #dc2626;
+  font-size: 21px;
+}
+
+.service-pricings-detail__grid p {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.service-pricings-detail__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 22px 22px;
+}
+
+@media (max-width: 1180px) {
+  .service-pricings-stats {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .service-pricings-toolbar {
+    grid-template-columns:
+      1fr 160px 160px;
+  }
+
+  .service-pricings-rules-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .service-pricings-page {
+    padding: 14px;
+  }
+
+  .service-pricings-hero {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 21px;
+  }
+
+  .service-pricings-stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .service-pricings-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .service-pricings-detail__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .service-pricings-detail__grid article.is-full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .service-pricings-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .service-pricings-card {
+    padding: 14px;
+  }
+
+  .service-pricings-rule-card__header {
+    grid-template-columns:
+      42px 1fr;
+  }
+
+  .service-pricings-rule-status {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .service-pricings-rule-card__metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   FONT CLARITY & READABILITY
+===================================================== */
+
+.service-pricings-page,
+.service-pricings-detail-modal,
+.service-pricings-detail-modal
+  .ant-modal-content,
+.service-pricings-detail-modal
+  .ant-modal-body {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "clig" 1;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.service-pricings-page button,
+.service-pricings-page input,
+.service-pricings-page textarea,
+.service-pricings-page select,
+.service-pricings-page table,
+.service-pricings-page
+  .ant-btn,
+.service-pricings-page
+  .ant-input,
+.service-pricings-page
+  .ant-input-affix-wrapper,
+.service-pricings-page
+  .ant-select,
+.service-pricings-page
+  .ant-select-item,
+.service-pricings-page
+  .ant-tabs,
+.service-pricings-page
+  .ant-tag,
+.service-pricings-detail-modal
+  .ant-btn,
+.service-pricings-detail-modal
+  .ant-tag,
+.service-pricings-detail-modal
+  .ant-modal-content {
+  font-family: inherit;
+}
+
+.service-pricings-page
+  .ant-input,
+.service-pricings-page
+  .ant-input::placeholder,
+.service-pricings-page
+  .ant-select-selection-item,
+.service-pricings-page
+  .ant-select-selection-placeholder {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.service-pricings-page
+  .ant-input::placeholder,
+.service-pricings-page
+  .ant-select-selection-placeholder {
+  color: #7a8799;
+  opacity: 1;
+}
+
+.service-pricings-page
+  .ant-btn {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.service-pricings-page
+  .ant-tabs-tab {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.service-pricings-page
+  .ant-tag,
+.service-pricings-detail-modal
+  .ant-tag {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.service-pricings-table th,
+.service-pricings-table td,
+.service-pricings-route strong,
+.service-pricings-date,
+.service-pricings-rule-card__header span,
+.service-pricings-rule-card__header h3,
+.service-pricings-rule-card > p,
+.service-pricings-rule-card__metrics span,
+.service-pricings-rule-card__metrics strong,
+.service-pricings-detail__grid span,
+.service-pricings-detail__grid strong,
+.service-pricings-detail__grid p {
+  font-synthesis: none;
+  text-shadow: none;
+}
+
+.service-pricings-date {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.service-pricings-rule-card
+  > .ant-btn {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.service-pricings-detail__actions
+  .ant-btn {
+  min-width: 88px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .service-pricings-hero h1 {
+    font-size: clamp(
+      24px,
+      7vw,
+      31px
+    );
+  }
+
+  .service-pricings-hero p {
+    font-size: 14px;
+  }
+
+  .service-pricings-table th {
+    font-size: 12px;
+  }
+
+  .service-pricings-table td {
+    font-size: 14px;
+  }
+}
+
+/* =====================================================
+   ONLY DATA AREA SCROLLS
+===================================================== */
+
+.service-pricings-page {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.service-pricings-hero,
+.service-pricings-stats {
+  flex: 0 0 auto;
+}
+
+.service-pricings-stats {
+  grid-template-columns:
+    repeat(6, minmax(0, 1fr));
+}
+
+.service-pricings-stat__icon.is-package {
+  color: #0369a1;
+  background: #f0f9ff;
+}
+
+.service-pricings-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.service-pricings-tabs,
+.service-pricings-toolbar {
+  flex: 0 0 auto;
+}
+
+.service-pricings-data-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 5px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.service-pricings-data-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.service-pricings-data-scroll::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.service-pricings-data-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #eef2f7;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.service-pricings-data-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.service-pricings-table-wrapper,
+.service-pricings-package-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.service-pricings-table thead th,
+.service-pricings-package-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f8fafc;
+  box-shadow:
+    0 1px 0 #e8edf5;
+}
+
+/* =====================================================
+   PACKAGE CONFIGURATION TABLE
+===================================================== */
+
+.service-pricings-package-table-wrapper {
+  width: 100%;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+}
+
+.service-pricings-package-table {
+  width: 100%;
+  min-width: 930px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.service-pricings-package-table th,
+.service-pricings-package-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #edf0f5;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.service-pricings-package-table th {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.service-pricings-package-table td {
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.service-pricings-package-table
+  tbody
+  tr:hover {
+  background: #f8fbff;
+}
+
+.service-pricings-package-table
+  tbody
+  tr:last-child
+  td {
+  border-bottom: 0;
+}
+
+.service-pricings-package-name {
+  min-width: 210px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.service-pricings-package-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #0369a1;
+  background: #f0f9ff;
+  font-size: 16px;
+}
+
+.service-pricings-package-name strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.service-pricings-package-name small {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.service-pricings-package-dimension,
+.service-pricings-package-weight {
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.service-pricings-package-status {
+  margin: 0;
+  border-color: #bbf7d0;
+  border-radius: 999px;
+  background: #f0fdf4;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* =====================================================
+   VIETNAMESE DATA READABILITY
+===================================================== */
+
+.service-pricings-rule-card__header
+  span {
+  max-width: 260px;
+  color: #526176;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.service-pricings-unit {
+  min-width: 76px;
+  padding: 0 9px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1320px) {
+  .service-pricings-stats {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .service-pricings-page {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .service-pricings-data-scroll {
+    padding-right: 2px;
+  }
+
+  .service-pricings-stats {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .service-pricings-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================
+   FIXED TABLE HEADER - ONLY DATA ROWS SCROLL
+===================================================== */
+
+.service-pricings-data-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-right: 0;
+}
+
+.service-pricings-table-wrapper,
+.service-pricings-package-table-wrapper {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  isolation: isolate;
+  -webkit-overflow-scrolling: touch;
+}
+
+.service-pricings-table,
+.service-pricings-package-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.service-pricings-table thead,
+.service-pricings-package-table thead {
+  position: relative;
+  z-index: 20;
+}
+
+.service-pricings-table thead th,
+.service-pricings-package-table thead th {
+  position: sticky !important;
+  top: 0;
+  z-index: 21;
+  background: #f8fafc !important;
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 -1px 0 #dfe6ef,
+    0 2px 5px rgba(15, 23, 42, 0.06);
+}
+
+.service-pricings-table thead th::after,
+.service-pricings-package-table thead th::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: #dfe6ef;
+  pointer-events: none;
+}
+
+.service-pricings-table tbody,
+.service-pricings-package-table tbody {
+  position: relative;
+  z-index: 1;
+}
+
+.service-pricings-rules-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 5px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar,
+.service-pricings-package-table-wrapper::-webkit-scrollbar,
+.service-pricings-rules-grid::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-track,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-track,
+.service-pricings-rules-grid::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-thumb,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-thumb,
+.service-pricings-rules-grid::-webkit-scrollbar-thumb {
+  border: 2px solid #eef2f7;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-thumb:hover,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-thumb:hover,
+.service-pricings-rules-grid::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.service-pricings-data-scroll
+  > .service-pricings-empty,
+.service-pricings-data-scroll
+  > .service-pricings-error {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-content: center;
+}
+
+@media (max-width: 680px) {
+  .service-pricings-rules-grid {
+    padding-right: 2px;
+  }
+}
