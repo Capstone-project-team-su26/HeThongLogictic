@@ -674,9 +674,7 @@ export default function OrderPaymentHistory({
 
               <div>
                 <span>LỊCH SỬ GIAO DỊCH</span>
-                <h2>
-                  Các khoản đã thanh toán
-                </h2>
+                <h2>Các khoản đã thanh toán</h2>
               </div>
             </div>
 
@@ -687,131 +685,212 @@ export default function OrderPaymentHistory({
 
           {!history?.payments?.length ? (
             <div className="payment-empty">
-              <Empty
-                description="Chưa có giao dịch thanh toán"
-              />
+              <Empty description="Chưa có giao dịch thanh toán" />
             </div>
           ) : (
-            <div className="payment-transaction-list">
-              {history.payments.map(
-                (payment, index) => {
-                  const status =
-                    getPaymentStatus(
-                      payment?.status
-                    );
+            <div className="payment-receipt-list">
+              {history.payments.map((payment, index) => {
+                const status = getPaymentStatus(payment?.status);
+                const isPaymentSuccess =
+                  normalizeUpperText(payment?.status) === "SUCCESS";
 
-                  return (
-                    <article
-                      key={
-                        payment?.paymentId ||
-                        `${payment?.orderCode}-${index}`
-                      }
-                      className="payment-transaction-card"
-                    >
-                      <div className="payment-transaction-index">
-                        {index + 1}
+                const transactionCode =
+                  payment?.transactionCode ||
+                  payment?.orderCode ||
+                  payment?.paymentId ||
+                  "—";
+
+                return (
+                  <article
+                    key={
+                      payment?.paymentId ||
+                      `${payment?.orderCode}-${index}`
+                    }
+                    className={`payment-receipt-card ${
+                      isPaymentSuccess
+                        ? "payment-receipt-card--success"
+                        : ""
+                    }`}
+                  >
+                    <div className="payment-receipt-card__head">
+                      <div className="payment-receipt-card__check">
+                        <CheckCircleOutlined />
                       </div>
 
-                      <div className="payment-transaction-main">
-                        <div className="payment-transaction-title-row">
-                          <div>
-                            <span>
-                              {getInstallmentTypeLabel(
-                                payment
-                                  ?.installmentType
+                      <div className="payment-receipt-card__head-content">
+                        <h3>
+                          {isPaymentSuccess
+                            ? "THANH TOÁN THÀNH CÔNG!"
+                            : status.label}
+                        </h3>
+                        <p>
+                          {isPaymentSuccess
+                            ? "Giao dịch đã được hệ thống ghi nhận"
+                            : getInstallmentTypeLabel(
+                                payment?.installmentType
                               )}
-                            </span>
+                        </p>
+                      </div>
 
-                            <h3>
-                              {formatCurrency(
-                                payment?.amount
-                              )}
-                            </h3>
-                          </div>
+                      <Tag
+                        className={`payment-status-tag ${status.className}`}
+                      >
+                        {status.label}
+                      </Tag>
+                    </div>
 
-                          <Tag
-                            className={`payment-status-tag ${status.className}`}
-                          >
-                            {status.label}
-                          </Tag>
-                        </div>
+                    <div className="payment-receipt-card__grid">
+                      <div className="payment-receipt-card__field">
+                        <span>Mã giao dịch</span>
+                        <CopyValue
+                          value={transactionCode}
+                          label="mã giao dịch"
+                        />
+                      </div>
 
-                        <div className="payment-transaction-grid">
-                          <div>
-                            <span>
-                              Phương thức
-                            </span>
-                            <strong>
-                              {getPaymentMethodLabel(
-                                payment
-                                  ?.paymentMethod
-                              )}
-                            </strong>
-                          </div>
+                      <div className="payment-receipt-card__field">
+                        <span>Thời gian thanh toán</span>
+                        <strong>
+                          {formatDateTime(
+                            payment?.paidAt || payment?.createdAt
+                          )}
+                        </strong>
+                      </div>
 
-                          <div>
-                            <span>
-                              Mã giao dịch
-                            </span>
-                            <CopyValue
-                              value={
-                                payment
-                                  ?.transactionCode
-                              }
-                              label="mã giao dịch"
-                            />
-                          </div>
+                      <div className="payment-receipt-card__field">
+                        <span>Khách hàng</span>
+                        <strong>
+                          {history?.customer?.fullName || "—"}
+                        </strong>
+                      </div>
 
-                          <div>
-                            <span>
-                              Mã thanh toán
-                            </span>
-                            <CopyValue
-                              value={
-                                payment?.orderCode
-                              }
-                              label="mã thanh toán"
-                            />
-                          </div>
+                      <div className="payment-receipt-card__field payment-receipt-card__field--amount">
+                        <span>Số tiền thanh toán</span>
+                        <strong>
+                          {formatCurrency(payment?.amount)}
+                        </strong>
+                      </div>
 
-                          <div>
-                            <span>
-                              Thời gian tạo
-                            </span>
-                            <strong>
-                              {formatDateTime(
-                                payment?.createdAt
-                              )}
-                            </strong>
-                          </div>
+                      <div className="payment-receipt-card__field">
+                        <span>Phương thức thanh toán</span>
+                        <strong>
+                          {getPaymentMethodLabel(
+                            payment?.paymentMethod
+                          )}
+                        </strong>
+                      </div>
 
-                          <div>
-                            <span>
-                              Thanh toán lúc
-                            </span>
-                            <strong>
-                              {formatDateTime(
-                                payment?.paidAt
-                              )}
-                            </strong>
-                          </div>
+                      <div className="payment-receipt-card__field">
+                        <span>Nội dung</span>
+                        <strong>
+                          {getInstallmentTypeLabel(
+                            payment?.installmentType
+                          )}
+                        </strong>
+                      </div>
+                    </div>
 
-                          <div>
-                            <span>
-                              Lý do thất bại
-                            </span>
-                            <strong>
-                              {payment
-                                ?.failureReason ||
-                                "Không có"}
-                            </strong>
-                          </div>
+                    <div className="payment-receipt-card__subheading">
+                      Thông tin đơn hàng / ký gửi
+                    </div>
+
+                    <div className="payment-receipt-card__grid payment-receipt-card__grid--order">
+                      <div className="payment-receipt-card__field">
+                        <span>Mã đơn / ký gửi</span>
+                        <CopyValue
+                          value={
+                            history?.consignmentCode || orderId
+                          }
+                          label="mã đơn ký gửi"
+                        />
+                      </div>
+
+                      <div className="payment-receipt-card__field">
+                        <span>Ngày ký gửi</span>
+                        <strong>
+                          {formatDateTime(
+                            history?.createdAt ||
+                              payment?.createdAt
+                          )}
+                        </strong>
+                      </div>
+
+                      <div className="payment-receipt-card__field">
+                        <span>Tổng giá trị hàng ký gửi</span>
+                        <strong>
+                          {formatCurrency(
+                            history?.totalBillAmount
+                          )}
+                        </strong>
+                      </div>
+
+                      <div className="payment-receipt-card__field">
+                        <span>Trạng thái</span>
+                        <Tag
+                          className={`payment-status-tag ${status.className}`}
+                        >
+                          {status.label}
+                        </Tag>
+                      </div>
+                    </div>
+
+                    {isPaymentSuccess && (
+                      <div className="payment-receipt-card__notice">
+                        <SafetyCertificateOutlined />
+                        <div>
+                          <strong>
+                            Hệ thống xác nhận: Khách hàng đã
+                            thanh toán thành công.
+                          </strong>
+                          <span>
+                            Sale có thể xuất phiếu nhập kho để
+                            gửi khách hàng làm chứng từ xác nhận.
+                          </span>
                         </div>
                       </div>
-                    </article>
-                  );
-                }
-              )}
+                    )}
+
+                    <div className="payment-receipt-card__actions">
+                      <Button
+                        icon={<FileTextOutlined />}
+                        onClick={() =>
+                          navigate(`/sale/consignments/${orderId}`, {
+                            state: {
+                              orderId,
+                              payment,
+                              paymentHistory: history,
+                            },
+                            }
+                          )
+                        }
+                      >
+                        Xem chi tiết
+                      </Button>
+
+                      {isPaymentSuccess && (
+                        <Button
+                          type="primary"
+                          icon={<BankOutlined />}
+                          onClick={() =>
+                            navigate(
+                              `/sale/warehouse-receipts/create/${orderId}`,
+                              {
+                                state: {
+                                  orderId,
+                                  paymentHistory: history,
+                                  payment,
+                                },
+                              }
+                            )
+                          }
+                        >
+                          Xuất phiếu nhập kho
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
