@@ -38,6 +38,9 @@ import {
 } from "../../utils/timeUtc";
 import "./AdminPage.css";
 
+const FILTERABLE_TYPES = new Set(["tag", "active", "status", "restriction"]);
+const RESTRICTION_LABELS = { BANNED: "Cấm", RESTRICTED: "Hạn chế", WARNING: "Cảnh báo" };
+
 const formatNumber = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? number.toLocaleString("vi-VN") : "—";
@@ -45,6 +48,59 @@ const formatNumber = (value) => {
 
 const formatDate = (value) => {
   return formatVietnamDateTime(value, { fallback: "—" });
+};
+
+const compareText = (a, b) =>
+  String(a ?? "").localeCompare(String(b ?? ""), "vi", { sensitivity: "base" });
+
+const uniqueSelectOptions = (items, getValue, getLabel = (value) => value) => {
+  const map = new Map();
+  for (const item of items) {
+    const value = getValue(item);
+    if (value == null || value === "") continue;
+    if (!map.has(value)) map.set(value, getLabel(value, item));
+  }
+  return [...map.entries()]
+    .sort((a, b) => compareText(a[1], b[1]))
+    .map(([value, label]) => ({ label: String(label), value }));
+};
+
+const isFilterableColumn = (column) =>
+  Boolean(column.filterable || FILTERABLE_TYPES.has(column.type));
+
+const getColumnSorter = (column) => {
+  if (column.type === "number" || column.type === "money" || column.type === "weight") {
+    return (a, b) => Number(a?.[column.name] ?? 0) - Number(b?.[column.name] ?? 0);
+  }
+  if (column.type === "date") {
+    return (a, b) => new Date(a?.[column.name] || 0) - new Date(b?.[column.name] || 0);
+  }
+  if (column.type === "active") {
+    return (a, b) => Number(Boolean(b?.[column.name])) - Number(Boolean(a?.[column.name]));
+  }
+  if (column.type === "dimensions") {
+    return (a, b) => {
+      const volumeA = Number(a?.length || 0) * Number(a?.width || 0) * Number(a?.height || 0);
+      const volumeB = Number(b?.length || 0) * Number(b?.width || 0) * Number(b?.height || 0);
+      return volumeA - volumeB;
+    };
+  }
+  if (column.type === "route") {
+    return (a, b) =>
+      compareText(
+        `${a?.originCountry || ""}→${a?.destinationCountry || ""}`,
+        `${b?.originCountry || ""}→${b?.destinationCountry || ""}`
+      );
+  }
+  return (a, b) => compareText(a?.[column.name], b?.[column.name]);
+};
+
+const matchesToolbarFilter = (column, selected, record) => {
+  if (selected == null || selected === "") return true;
+  if (column.type === "active") {
+    return Boolean(record?.[column.name]) === (selected === "true");
+  }
+  return String(record?.[column.name] ?? "") === String(selected);
 };
 
 const toDateTimeLocalValue = (value) => {
@@ -135,6 +191,7 @@ export default function AdminResourcePage({
 }) {
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState("");
+  const [toolbarFilters, setToolbarFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -143,6 +200,11 @@ export default function AdminResourcePage({
   const [editingRecord, setEditingRecord] = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
   const [form, setForm] = useState({});
+
+  const filterColumns = useMemo(
+    () => columns.filter(isFilterableColumn),
+    [columns]
+  );
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -163,6 +225,7 @@ export default function AdminResourcePage({
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setQuery("");
+      setToolbarFilters({});
       setEditorOpen(false);
       setDetailOpen(false);
       loadItems();
@@ -171,19 +234,61 @@ export default function AdminResourcePage({
     return () => window.clearTimeout(timer);
   }, [loadItems]);
 
+  const filterOptionsByField = useMemo(() => {
+    const options = {};
+
+    for (const column of filterColumns) {
+      if (column.type === "active") {
+        options[column.name] = [
+          { label: "Đang hoạt động", value: "true" },
+          { label: "Ngừng hoạt động", value: "false" },
+        ];
+        continue;
+      }
+
+      if (column.type === "restriction") {
+        options[column.name] = uniqueSelectOptions(
+          items,
+          (item) => item?.[column.name],
+          (value) => RESTRICTION_LABELS[value] || value
+        );
+        continue;
+      }
+
+      if (column.type === "status") {
+        options[column.name] = uniqueSelectOptions(
+          items,
+          (item) => item?.[column.name],
+          (value) => (String(value).toUpperCase() === "ACTIVE" ? "Đang hoạt động" : value === "INACTIVE" ? "Ngừng hoạt động" : value)
+        );
+        continue;
+      }
+
+      options[column.name] = uniqueSelectOptions(items, (item) => item?.[column.name]);
+    }
+
+    return options;
+  }, [filterColumns, items]);
+
   const filteredItems = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("vi");
 
-    if (!keyword) return items;
+    return items.filter((item) => {
+      for (const column of filterColumns) {
+        if (!matchesToolbarFilter(column, toolbarFilters[column.name], item)) {
+          return false;
+        }
+      }
 
-    return items.filter((item) =>
-      searchFields.some((fieldName) =>
+      if (!keyword) return true;
+
+      return searchFields.some((fieldName) =>
         String(item?.[fieldName] ?? "")
           .toLocaleLowerCase("vi")
           .includes(keyword)
-      )
-    );
-  }, [items, query, searchFields]);
+      );
+    });
+  }, [filterColumns, items, query, searchFields, toolbarFilters]);
 
   const openCreate = () => {
     setEditingRecord(null);
@@ -262,62 +367,66 @@ export default function AdminResourcePage({
     }
   };
 
-  const tableColumns = [
-    ...columns.map((column, index) => ({
-      title: column.label,
-      dataIndex: column.name,
-      key: column.name,
-      width: index === 0 ? 230 : 150,
-      fixed: index === 0 ? "left" : undefined,
-      ellipsis: true,
-      render: (value, record) => renderColumnValue(column, value, record),
-    })),
-    {
-      title: "Thao tác",
-      key: "actions",
-      width: 142,
-      fixed: "right",
-      align: "center",
-      render: (_, record) => (
-        <Space size={5}>
-          <Tooltip title="Xem chi tiết">
-            <Button
-              aria-label="Xem chi tiết"
-              type="text"
-              icon={<EyeOutlined />}
-              onClick={() => openDetail(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Chỉnh sửa">
-            <Button
-              aria-label="Chỉnh sửa"
-              type="text"
-              className="admin-action-edit"
-              icon={<EditOutlined />}
-              onClick={() => openEdit(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title={`Xóa ${singular}?`}
-            description="Dữ liệu đang được đơn hàng sử dụng có thể chỉ chuyển sang ngừng hoạt động."
-            okText="Xóa"
-            cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => removeRecord(record)}
-          >
-            <Tooltip title="Xóa/ngừng sử dụng">
+  const tableColumns = useMemo(
+    () => [
+      ...columns.map((column, index) => ({
+        title: column.label,
+        dataIndex: column.name,
+        key: column.name,
+        width: index === 0 ? 230 : 150,
+        fixed: index === 0 ? "left" : undefined,
+        ellipsis: true,
+        sorter: getColumnSorter(column),
+        render: (value, record) => renderColumnValue(column, value, record),
+      })),
+      {
+        title: "Thao tác",
+        key: "actions",
+        width: 142,
+        fixed: "right",
+        align: "center",
+        render: (_, record) => (
+          <Space size={5}>
+            <Tooltip title="Xem chi tiết">
               <Button
-                aria-label="Xóa"
+                aria-label="Xem chi tiết"
                 type="text"
-                danger
-                icon={<DeleteOutlined />}
+                icon={<EyeOutlined />}
+                onClick={() => openDetail(record)}
               />
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Tooltip title="Chỉnh sửa">
+              <Button
+                aria-label="Chỉnh sửa"
+                type="text"
+                className="admin-action-edit"
+                icon={<EditOutlined />}
+                onClick={() => openEdit(record)}
+              />
+            </Tooltip>
+            <Popconfirm
+              title={`Xóa ${singular}?`}
+              description="Dữ liệu đang được đơn hàng sử dụng có thể chỉ chuyển sang ngừng hoạt động."
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => removeRecord(record)}
+            >
+              <Tooltip title="Xóa/ngừng sử dụng">
+                <Button
+                  aria-label="Xóa"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [columns, singular]
+  );
 
   return (
     <div className="admin-page">
@@ -344,6 +453,19 @@ export default function AdminResourcePage({
             placeholder={`Tìm trong ${title.toLowerCase()}...`}
             className="admin-page__search"
           />
+          {filterColumns.map((column) => (
+            <Select
+              key={column.name}
+              allowClear
+              placeholder={column.label}
+              value={toolbarFilters[column.name] ?? null}
+              options={filterOptionsByField[column.name] || []}
+              onChange={(value) =>
+                setToolbarFilters((current) => ({ ...current, [column.name]: value ?? null }))
+              }
+              className="admin-page__filter-select"
+            />
+          ))}
           <Button icon={<ReloadOutlined />} onClick={loadItems} loading={loading}>
             Tải lại
           </Button>

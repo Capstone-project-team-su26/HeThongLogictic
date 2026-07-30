@@ -48,6 +48,21 @@ const INITIAL_FORM = {
 
 const getLocationId = (record) => record?.id || record?.locationId || "";
 
+const compareText = (a, b) =>
+  String(a ?? "").localeCompare(String(b ?? ""), "vi", { sensitivity: "base" });
+
+const uniqueSelectOptions = (items, getValue, getLabel = (value) => value) => {
+  const map = new Map();
+  for (const item of items) {
+    const value = getValue(item);
+    if (value == null || value === "") continue;
+    if (!map.has(value)) map.set(value, getLabel(value, item));
+  }
+  return [...map.entries()]
+    .sort((a, b) => compareText(a[1], b[1]))
+    .map(([value, label]) => ({ label: String(label), value }));
+};
+
 const buildPayload = (form) => ({
   zoneName: form.zoneName.trim() || null,
   shelfCode: form.shelfCode.trim() || null,
@@ -63,6 +78,8 @@ export default function WarehouseLocationsPage() {
   const [warehouseId, setWarehouseId] = useState("");
   const [locations, setLocations] = useState([]);
   const [query, setQuery] = useState("");
+  const [zoneFilter, setZoneFilter] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -101,19 +118,30 @@ export default function WarehouseLocationsPage() {
   }, [loadWarehouses]);
 
   useEffect(() => {
+    setQuery("");
+    setZoneFilter(null);
+    setStatusFilter(null);
     const timer = window.setTimeout(loadLocations, 0);
     return () => window.clearTimeout(timer);
   }, [loadLocations]);
 
+  const zoneOptions = useMemo(
+    () => uniqueSelectOptions(locations, (item) => item.zoneName),
+    [locations]
+  );
+
   const filteredLocations = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("vi");
-    if (!keyword) return locations;
 
-    return locations.filter((item) =>
-      [item.zoneName, item.shelfCode, item.binCode, item.note]
-        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword))
-    );
-  }, [locations, query]);
+    return locations.filter((item) => {
+      if (zoneFilter && item.zoneName !== zoneFilter) return false;
+      if (statusFilter === "true" && !item.isActive) return false;
+      if (statusFilter === "false" && item.isActive) return false;
+      if (!keyword) return true;
+      return [item.zoneName, item.shelfCode, item.binCode, item.note]
+        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
+    });
+  }, [locations, query, statusFilter, zoneFilter]);
 
   const openCreate = () => {
     setEditingRecord(null);
@@ -174,40 +202,90 @@ export default function WarehouseLocationsPage() {
     }
   };
 
-  const columns = [
-    { title: "Khu", dataIndex: "zoneName", key: "zoneName", width: 170, fixed: "left", render: (value) => value || "—" },
-    { title: "Mã kệ", dataIndex: "shelfCode", key: "shelfCode", width: 130, render: (value) => value || "—" },
-    { title: "Mã ô", dataIndex: "binCode", key: "binCode", width: 130, render: (value) => value || "—" },
-    { title: "Thể tích tối đa", dataIndex: "maxVolume", key: "maxVolume", width: 150, render: (value) => value ?? "—" },
-    { title: "Tải trọng tối đa", dataIndex: "maxWeight", key: "maxWeight", width: 150, render: (value) => value == null ? "—" : `${value} kg` },
-    { title: "Ghi chú", dataIndex: "note", key: "note", width: 220, ellipsis: true, render: (value) => value || "—" },
-    {
-      title: "Trạng thái",
-      dataIndex: "isActive",
-      key: "isActive",
-      width: 130,
-      render: (value) => <Tag color={value ? "success" : "default"}>{value ? "Đang dùng" : "Ngừng dùng"}</Tag>,
-    },
-    {
-      title: "Thao tác",
-      key: "actions",
-      width: 110,
-      fixed: "right",
-      align: "center",
-      render: (_, record) => (
-        <Space size={4}>
-          <Tooltip title="Chỉnh sửa">
-            <Button type="text" className="admin-action-edit" icon={<EditOutlined />} onClick={() => openEdit(record)} />
-          </Tooltip>
-          <Popconfirm title="Xóa vị trí kho?" okText="Xóa" cancelText="Hủy" onConfirm={() => remove(record)}>
-            <Tooltip title="Xóa">
-              <Button type="text" danger icon={<DeleteOutlined />} />
+  const columns = useMemo(
+    () => [
+      {
+        title: "Khu",
+        dataIndex: "zoneName",
+        key: "zoneName",
+        width: 170,
+        fixed: "left",
+        sorter: (a, b) => compareText(a.zoneName, b.zoneName),
+        render: (value) => value || "—",
+      },
+      {
+        title: "Mã kệ",
+        dataIndex: "shelfCode",
+        key: "shelfCode",
+        width: 130,
+        sorter: (a, b) => compareText(a.shelfCode, b.shelfCode),
+        render: (value) => value || "—",
+      },
+      {
+        title: "Mã ô",
+        dataIndex: "binCode",
+        key: "binCode",
+        width: 130,
+        sorter: (a, b) => compareText(a.binCode, b.binCode),
+        render: (value) => value || "—",
+      },
+      {
+        title: "Thể tích tối đa",
+        dataIndex: "maxVolume",
+        key: "maxVolume",
+        width: 150,
+        sorter: (a, b) => Number(a.maxVolume ?? 0) - Number(b.maxVolume ?? 0),
+        render: (value) => value ?? "—",
+      },
+      {
+        title: "Tải trọng tối đa",
+        dataIndex: "maxWeight",
+        key: "maxWeight",
+        width: 150,
+        sorter: (a, b) => Number(a.maxWeight ?? 0) - Number(b.maxWeight ?? 0),
+        render: (value) => (value == null ? "—" : `${value} kg`),
+      },
+      {
+        title: "Ghi chú",
+        dataIndex: "note",
+        key: "note",
+        width: 220,
+        ellipsis: true,
+        sorter: (a, b) => compareText(a.note, b.note),
+        render: (value) => value || "—",
+      },
+      {
+        title: "Trạng thái",
+        dataIndex: "isActive",
+        key: "isActive",
+        width: 130,
+        sorter: (a, b) => Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)),
+        render: (value) => (
+          <Tag color={value ? "success" : "default"}>{value ? "Đang dùng" : "Ngừng dùng"}</Tag>
+        ),
+      },
+      {
+        title: "Thao tác",
+        key: "actions",
+        width: 110,
+        fixed: "right",
+        align: "center",
+        render: (_, record) => (
+          <Space size={4}>
+            <Tooltip title="Chỉnh sửa">
+              <Button type="text" className="admin-action-edit" icon={<EditOutlined />} onClick={() => openEdit(record)} />
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm title="Xóa vị trí kho?" okText="Xóa" cancelText="Hủy" onConfirm={() => remove(record)}>
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <div className="admin-page">
@@ -242,6 +320,25 @@ export default function WarehouseLocationsPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Tìm khu, kệ, ô..."
             className="admin-page__search"
+          />
+          <Select
+            allowClear
+            placeholder="Khu"
+            value={zoneFilter}
+            options={zoneOptions}
+            onChange={setZoneFilter}
+            className="admin-page__filter-select"
+          />
+          <Select
+            allowClear
+            placeholder="Trạng thái"
+            value={statusFilter}
+            options={[
+              { label: "Đang dùng", value: "true" },
+              { label: "Ngừng dùng", value: "false" },
+            ]}
+            onChange={setStatusFilter}
+            className="admin-page__filter-select"
           />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={loadLocations}>Tải lại</Button>
           <Button type="primary" icon={<PlusOutlined />} disabled={!warehouseId} onClick={openCreate}>Thêm vị trí</Button>
