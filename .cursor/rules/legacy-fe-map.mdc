@@ -1,0 +1,46 @@
+---
+description: Map AdminVietNamLogictic (repo này) → vcl-forntend
+alwaysApply: true
+---
+
+# Legacy FE → vcl-forntend
+
+**Nguồn (repo này):** `AdminVietNamLogictic/` — Vite + React Router + MUI/Ant + axios.  
+**Đích:** repo `vcl-forntend` — Next App Router + Tailwind + `src/modules`.
+
+Port = **tái hiện nghiệp vụ**, không copy cấu trúc Vite/MUI/`*Service.js`.
+
+## Route map
+
+| Cũ (React Router) | Mới (App Router) |
+|-------------------|------------------|
+| `/login` | `/pages/auth/login` |
+| `/admin/users` | `/pages/admin/users` |
+| `/admin/warehouses` | `/pages/admin/warehouses` |
+| `/admin/carriers` | `/pages/admin/carriers` |
+| `/admin/shipping-methods` | `/pages/admin/shipping-methods` |
+| `/admin/package-configurations` | `/pages/admin/package-configurations` |
+| `/admin/additional-service-fees` | `/pages/admin/additional-service-fees` |
+| `/admin/pricing-rules` | `/pages/admin/pricing-rules` |
+| `/admin/restricted-items` | `/pages/admin/restricted-items` |
+| `/sale/consignments` | `/pages/sales/consignments` |
+| `/sale/consignments/:id` | `/pages/sales/consignments/[id]` |
+| `/sale/consignments/:id/create-quotation` | `/pages/sales/consignments/[id]/quotation` |
+| `/sale/customers` | `/pages/sales/customers` |
+| `/sale/purchase-requests` | `/pages/sales/purchase-requests` |
+| `/sale/customer-service` | `/pages/sales/messages` |
+| `/sale/create-order/consignment` | `/pages/sales/consignments/create` |
+| `/operations-manager` | `/pages/operations` |
+
+## Code map
+
+| Cũ (trong `AdminVietNamLogictic/`) | Mới (`vcl-forntend`) |
+|------------------------------------|----------------------|
+| `src/api/**/**Service.js` | `src/modules/<feature>/{api,mock,mappers,index}.js` |
+| `src/pages/SalePage/...` | `src/app/pages/sales/...` |
+| `src/pages/AdminPage/...` | `src/app/pages/admin/...` |
+| `AppRoutes.jsx` + `PrivateRoute` | `appRoutes.js` + `routeAccess.js` + middleware + AuthGuard |
+| `sessionStorage` auth | `authSession.js` + cookie middleware |
+| Ant Design / MUI | Tailwind + component sẵn có |
+
+Skill: `migrate-legacy-page`.

@@ -1,0 +1,13 @@
+{
+  "name": "hethonglogictic",
+  "private": true,
+  "description": "Root scripts — app nằm trong AdminVietNamLogictic/",
+  "scripts": {
+    "dev": "bun run --cwd AdminVietNamLogictic dev",
+    "dev:host": "bun run --cwd AdminVietNamLogictic dev:host",
+    "build": "bun run --cwd AdminVietNamLogictic build",
+    "preview": "bun run --cwd AdminVietNamLogictic preview",
+    "lint": "bun run --cwd AdminVietNamLogictic lint",
+    "install:app": "bun install --cwd AdminVietNamLogictic"
+  }
+}

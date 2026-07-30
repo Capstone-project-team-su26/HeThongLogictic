@@ -1,0 +1,32 @@
+---
+description: Bối cảnh repo HeThongLogictic — FE Vite cũ + hướng khung FE mới vcl-forntend
+alwaysApply: true
+---
+
+# HeThongLogictic — agent context
+
+Repo này = **FE nội bộ cũ** (Vite + React Router). Code app nằm trong **`AdminVietNamLogictic/`**.
+
+Khung FE **mới** (Next.js App Router + modules + mock): repo riêng  
+[`Capstone-project-team-su26/vcl-forntend`](https://github.com/Capstone-project-team-su26/vcl-forntend).
+
+## Khi nào làm gì
+
+| Việc | Làm ở đâu | Rule / skill |
+|------|-----------|--------------|
+| Sửa bug / feature trên FE đang chạy (Vite) | `AdminVietNamLogictic/` | `legacy-vite-fe` |
+| Port màn sang khung mới | Đọc đây → viết vào clone `vcl-forntend` | `legacy-fe-map`, skill `migrate-legacy-page` |
+| Feature mới trên khung mới | `vcl-forntend` | `fe-architecture`, skill `add-feature` |
+
+## Package manager
+
+- Agent: **Bun** trong `AdminVietNamLogictic/` (rule `use-bun`).
+- Đồng đội: vẫn **npm + Vite** được — **không** xóa `package-lock.json`.
+
+## Không nhầm
+
+- **Không** scaffold `src/app/pages` hay `src/modules` trong repo này trừ khi team quyết định chuyển code vào đây.
+- **Không** commit mật khẩu / connection string.
+- File `.md` mới cho agent/docs: ưu tiên `doc/` hoặc hỏi user.
+
+Rules + skills trong `.cursor/` được commit để máy nào clone repo cũng dùng được.

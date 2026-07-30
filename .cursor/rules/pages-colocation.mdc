@@ -1,0 +1,18 @@
+---
+description: Colocation pages theo role trên vcl-forntend
+alwaysApply: false
+---
+
+# Pages colocation (vcl-forntend)
+
+```
+src/app/pages/<role>/<feature>/
+  page.jsx
+  components/
+```
+
+Roles: `auth` | `admin` | `sales` | `operations`.
+
+- `page.jsx` mỏng; domain từ `@/modules/<feature>`.
+- Path: `ROUTES` trong `appRoutes.js`.
+- Shared ≥2 khu vực → `src/app/components/`.

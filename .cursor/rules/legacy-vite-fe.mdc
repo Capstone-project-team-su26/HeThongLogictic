@@ -1,0 +1,44 @@
+---
+description: Quy ước FE Vite cũ trong AdminVietNamLogictic (axios, routes, roles)
+globs: AdminVietNamLogictic/**/*
+alwaysApply: false
+---
+
+# Legacy Vite FE (`AdminVietNamLogictic`)
+
+Stack: **Vite**, **React**, **React Router**, **axios**, UI **MUI / Ant Design**.
+
+## Cấu trúc
+
+| Path | Vai trò |
+|------|---------|
+| `src/pages/SalePage/...` | Màn Sale |
+| `src/pages/AdminPage/...` | Màn Admin |
+| `src/api/**/**Service.js` | Gọi API (axios) |
+| `src/routes/AppRoutes.jsx` | Khai báo route |
+| `src/routes/PrivateRoute.jsx` | Guard role |
+| `src/layouts/` | Header / Sidebar / MainLayout |
+| `src/utils/Common/authSession.js` | Session (`sessionStorage`) |
+
+## Roles & home
+
+```js
+admin → /admin
+sale → /sale/consignments
+operationsmanager → /operations-manager
+```
+
+Normalize role: lowercase, bỏ ký tự không `[a-z0-9]` (xem `AppRoutes.jsx`).
+
+## Conventions khi sửa legacy
+
+- Thêm page → đăng ký trong `AppRoutes.jsx` + sidebar nếu cần.
+- API mới → `src/api/<domain>/...Service.js`, dùng `axiosInstance` sẵn có.
+- Giữ pattern CSS/JSX hiện có của khu vực (đừng đổi cả app sang Tailwind).
+- Auth: `sessionStorage` keys `accessToken`, `isAuth`, `role` — đừng phá `authSession` trừ khi fix bug.
+
+## Package manager
+
+- **Agent / máy Bun:** `bun install`, `bun run dev` — xem rule `use-bun`.
+- **Đồng đội npm:** vẫn dùng `npm install` / `npm run dev`; **giữ** `package-lock.json`.
+- Commit cả `bun.lock` và `package-lock.json`. Không xóa lockfile npm.

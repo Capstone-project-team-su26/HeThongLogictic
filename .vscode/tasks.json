@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "bun: install (app)",
+      "type": "shell",
+      "command": "bun install",
+      "options": {
+        "cwd": "${workspaceFolder}/AdminVietNamLogictic"
+      },
+      "problemMatcher": [],
+      "group": "none"
+    },
+    {
+      "label": "bun: dev",
+      "type": "shell",
+      "command": "bun run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/AdminVietNamLogictic"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Local:"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      }
+    },
+    {
+      "label": "bun: build",
+      "type": "shell",
+      "command": "bun run build",
+      "options": {
+        "cwd": "${workspaceFolder}/AdminVietNamLogictic"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "bun: preview",
+      "type": "shell",
+      "command": "bun run preview",
+      "options": {
+        "cwd": "${workspaceFolder}/AdminVietNamLogictic"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "none"
+    },
+    {
+      "label": "bun: lint",
+      "type": "shell",
+      "command": "bun run lint",
+      "options": {
+        "cwd": "${workspaceFolder}/AdminVietNamLogictic"
+      },
+      "problemMatcher": ["$eslint-stylish"],
+      "group": "test"
+    }
+  ]
+}

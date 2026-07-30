@@ -1,0 +1,34 @@
+---
+description: Pattern modules mock/API trên vcl-forntend (tham chiếu khi port)
+alwaysApply: false
+---
+
+# Module facade (vcl-forntend)
+
+Trong repo target `vcl-forntend`, mỗi feature:
+
+```
+src/modules/<feature>/
+  index.js     ← UI chỉ import đây
+  api.js
+  mock.js
+  mappers.js
+  seed.js      ← optional
+```
+
+```js
+import { isMockMode } from "@/utils/mocks/dataSource";
+import { listXApi } from "./api";
+import { listXMock } from "./mock";
+
+export async function listX(params) {
+  if (isMockMode()) return listXMock(params);
+  return listXApi(params);
+}
+```
+
+- Export: verb + noun — không suffix `Service`.
+- HTTP qua `apiRequest` → `/api/*`.
+- Tham chiếu tốt trên target: `src/modules/restricted-items/`.
+
+Skill: `wire-module-mock-api`.

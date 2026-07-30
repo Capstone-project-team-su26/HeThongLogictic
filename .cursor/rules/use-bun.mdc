@@ -1,0 +1,51 @@
+---
+description: Agent dùng Bun cho AdminVietNamLogictic — giữ nguyên npm/package-lock cho đồng đội
+alwaysApply: true
+---
+
+# Bun (HeThongLogictic / AdminVietNamLogictic)
+
+**Agent và máy dùng Bun:** luôn dùng Bun khi cài package / chạy script trong `AdminVietNamLogictic/`.
+
+**Đồng đội vẫn Vite + npm:** **không** xóa `package-lock.json`, **không** bắt buộc mọi người chuyển Bun, **không** bỏ script/`npm` docs dành cho họ.
+
+## Lệnh chuẩn (agent)
+
+Ưu tiên chạy từ **root repo** (`HeThongLogictic/`):
+
+| Việc | Lệnh (root) |
+|------|-------------|
+| Cài dependency | `bun run install:app` |
+| Dev | `bun run dev` |
+| Dev + host | `bun run dev:host` |
+| Build | `bun run build` |
+| Lint | `bun run lint` |
+| Preview | `bun run preview` |
+
+Trong `AdminVietNamLogictic/` (tương đương):
+
+| Việc | Lệnh |
+|------|------|
+| Cài | `bun install` |
+| Dev / build / lint | `bun run dev` / `build` / `lint` |
+| Thêm package | `bun add <pkg>` (cwd = app) |
+| Thêm devDep | `bun add -d <pkg>` |
+| Binary local | `bunx <cmd>` |
+
+Root scripts dùng `bun run --cwd AdminVietNamLogictic …` — **không** cần `cd` tay nếu đứng ở root.
+
+## Lockfile — cả hai được commit
+
+| File | Ai dùng |
+|------|---------|
+| `bun.lock` | Bun |
+| `package-lock.json` | npm (đồng đội) |
+
+- Sau khi `bun add` / đổi dependency: chạy lại `bun install`; nếu đồng đội cần đồng bộ npm, họ chạy `npm install` (hoặc agent có thể regenerate `package-lock.json` bằng `npm install --package-lock-only` **chỉ khi user nhờ** — mặc định đừng đụng nếu không cần).
+- **Không** xóa `package-lock.json` / `node_modules` của người khác trong hướng dẫn phá hoại.
+- **Không** bảo team “chỉ được dùng Bun”.
+
+## Agent / terminal
+
+- Ưu tiên `bun` / `bun run` / `bunx` — tránh `npm install`, `npm run`, `npx` trong session agent (trừ khi user hoặc đồng đội workflow yêu cầu rõ).
+- PowerShell: dùng `;` hoặc `Set-Location` thay `&&` khi nối lệnh.

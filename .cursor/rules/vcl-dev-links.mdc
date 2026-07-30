@@ -1,0 +1,18 @@
+---
+description: Link môi trường dev/test VCL — không chứa mật khẩu
+alwaysApply: true
+---
+
+# VCL — Link dev & test
+
+**Không** ghi mật khẩu / connection string vào rule hoặc source.
+
+| Mục | URL |
+|-----|-----|
+| FE nội bộ mới (Vercel) | https://vcl-forntend.vercel.app/ |
+| Web khách | https://vietnamlogictic.vercel.app/ |
+| API | https://api-vcl.zushin.io.vn |
+
+- Tài khoản test: hỏi team / sheet nội bộ.
+- FE chỉ gọi HTTP API — **không** kết nối thẳng DB.
+- Repo khung mới: https://github.com/Capstone-project-team-su26/vcl-forntend
