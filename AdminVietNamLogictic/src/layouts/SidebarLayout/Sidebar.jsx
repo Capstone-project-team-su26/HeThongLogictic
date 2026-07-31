@@ -10,7 +10,6 @@ import {
 
 import {
   AppstoreOutlined,
-  BarChartOutlined,
   CalculatorOutlined,
   CustomerServiceOutlined,
   DashboardOutlined,
@@ -167,34 +166,16 @@ const MENU_BY_ROLE = {
       end: true,
     },
     {
-      key: "operations-orders",
-      label: "Quản lý đơn hàng",
-      icon: <FileSearchOutlined />,
-      path: "/operations-manager/orders",
-    },
-    {
       key: "operations-parcels",
-      label: "Quản lý kiện hàng",
+      label: "Gom hàng",
       icon: <InboxOutlined />,
       path: "/operations-manager/parcels",
     },
     {
       key: "operations-warehouse",
-      label: "Quản lý kho hàng",
+      label: "Sơ đồ vị trí kho",
       icon: <DatabaseOutlined />,
       path: "/operations-manager/warehouse",
-    },
-    {
-      key: "operations-pricing",
-      label: "Quản lý bảng giá",
-      icon: <CalculatorOutlined />,
-      path: "/operations-manager/pricing",
-    },
-    {
-      key: "operations-reports",
-      label: "Báo cáo vận hành",
-      icon: <BarChartOutlined />,
-      path: "/operations-manager/reports",
     },
   ],
 
