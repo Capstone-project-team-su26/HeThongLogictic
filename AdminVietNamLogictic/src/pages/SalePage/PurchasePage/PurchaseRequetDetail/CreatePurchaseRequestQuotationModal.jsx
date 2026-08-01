@@ -1349,19 +1349,38 @@ export default function CreatePurchaseRequestQuotationModal({
             </strong>
           </div>
 
-          {additionalFeeBreakdown
-            .filter((item) => !item.isSkipped)
-            .map((item) => (
-              <div key={item.pricingRuleId}>
-                <span>
-                  {item.ruleName}
-                </span>
+          {(() => {
+            const activeFees = additionalFeeBreakdown.filter((item) => !item.isSkipped);
+            if (activeFees.length === 0) return null;
+            const activeFeesTotal = activeFees.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+            const tooltipContent = (
+              <div style={{ padding: "4px 2px" }}>
+                <div style={{ fontWeight: 800, marginBottom: "6px", borderBottom: "1px solid rgba(255,255,255,0.2)", paddingBottom: "4px" }}>
+                  Chi tiết {activeFees.length} khoản phụ phí & thuế:
+                </div>
+                {activeFees.map((fee) => (
+                  <div key={fee.pricingRuleId} style={{ display: "flex", justifyContent: "space-between", gap: "16px", fontSize: "12px", lineHeight: "1.6" }}>
+                    <span>• {fee.ruleName}</span>
+                    <strong>{formatCurrency(fee.amount)}</strong>
+                  </div>
+                ))}
+              </div>
+            );
+
+            return (
+              <div>
+                <Tooltip title={tooltipContent} placement="top">
+                  <span style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                    Phụ phí & thuế ({activeFees.length} khoản) <InfoCircleOutlined style={{ fontSize: "12px", color: "#60a5fa" }} />
+                  </span>
+                </Tooltip>
 
                 <strong>
-                  {formatCurrency(item.amount)}
+                  {formatCurrency(activeFeesTotal)}
                 </strong>
               </div>
-            ))}
+            );
+          })()}
 
           <div className="purchase-quotation-summary__total">
             <span>
