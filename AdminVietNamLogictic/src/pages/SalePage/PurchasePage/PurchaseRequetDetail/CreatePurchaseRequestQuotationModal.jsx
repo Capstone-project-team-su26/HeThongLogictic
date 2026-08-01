@@ -34,6 +34,10 @@ import {
 import {
   createPurchaseRequestQuotationApi,
 } from "../../../../api/SaleAPI/PurchaseRequestAPI/purchaseRequestService";
+import {
+  getActivePricingRulesApi,
+  PRICING_RULE_CODE,
+} from "../../../../api/SaleAPI/ConsignmentAPI/pricingRuleService";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 
 import "./CreatePurchaseRequestQuotationModal.css";
@@ -121,14 +125,14 @@ const moneyParser = (value) => {
 const getItemId = (item) =>
   normalizeText(
     item?.itemId ??
-      item?.purchaseRequestItemId
+    item?.purchaseRequestItemId
   );
 
 const getRuleId = (rule) =>
   normalizeText(
     rule?.id ??
-      rule?.pricingRuleId ??
-      rule?.ruleId
+    rule?.pricingRuleId ??
+    rule?.ruleId
   );
 
 const getRuleCode = (rule) =>
@@ -143,18 +147,45 @@ const getCalculationType = (
     rule?.calculationType
   );
 
+const getMinRequiredOrderAmount = (rule) => {
+  const condVal = normalizeNumber(rule?.conditionValue, 0);
+  if (condVal > 0) {
+    return condVal;
+  }
+  const minAmt = normalizeNumber(rule?.minAmount, 0);
+  if (minAmt > 0) {
+    return minAmt;
+  }
+  return 0;
+};
+
 const getRuleScopeLabel = (
-  rule
+  rule,
+  packageCount = 1
 ) => {
   const code =
     getRuleCode(rule);
+  const minRequired = getMinRequiredOrderAmount(rule);
 
   const map = {
     WOOD_CRATE:
-      "Một lần cho toàn đơn",
+      packageCount > 1
+        ? `Tính theo sản phẩm (${packageCount} sản phẩm)`
+        : "Theo 1 sản phẩm",
+
+    DOMESTIC_FEE:
+      "Vận chuyển nội địa",
 
     SUR_INSURANCE_3PERCENT:
+      minRequired > 0
+        ? `Theo tổng tiền sản phẩm (Đơn ≥ ${formatCurrency(minRequired)})`
+        : "Theo tổng tiền sản phẩm",
+
+    IMPORT_TAX:
       "Theo tổng tiền sản phẩm",
+
+    VAT:
+      "Theo tổng chi phí đơn hàng",
 
     SUR_INSPECTION:
       "Theo đơn",
@@ -166,7 +197,7 @@ const getRuleScopeLabel = (
   return (
     map[code] ||
     (getCalculationType(rule) ===
-    "PERCENTAGE"
+      "PERCENTAGE"
       ? "Theo tổng tiền sản phẩm"
       : "Theo đơn")
   );
@@ -182,21 +213,21 @@ const clampAmount = (
 
   const minimum =
     minAmount === null ||
-    minAmount === undefined ||
-    minAmount === ""
+      minAmount === undefined ||
+      minAmount === ""
       ? null
       : normalizeMoney(
-          minAmount
-        );
+        minAmount
+      );
 
   const maximum =
     maxAmount === null ||
-    maxAmount === undefined ||
-    maxAmount === ""
+      maxAmount === undefined ||
+      maxAmount === ""
       ? null
       : normalizeMoney(
-          maxAmount
-        );
+        maxAmount
+      );
 
   if (minimum !== null) {
     result = Math.max(
@@ -215,26 +246,42 @@ const clampAmount = (
   return roundMoney(result);
 };
 
-const calculateRuleAmount = (
+const calculateRuleAmountWithContext = (
   rule,
-  productSubtotal
+  { productSubtotal = 0, purchaseFee = 0, shippingFee = 0, packageCount = 1 } = {}
 ) => {
-  const calculationType =
-    getCalculationType(rule);
+  if (!rule) return 0;
+  const ruleCode = getRuleCode(rule);
+  const calculationType = getCalculationType(rule);
+  const conditionType = normalizeUpperText(rule?.conditionType);
+  const ruleValue = normalizeMoney(rule?.value);
 
-  const ruleValue =
-    normalizeMoney(
-      rule?.value
-    );
+  if (ruleCode === PRICING_RULE_CODE.VOLUMETRIC_DIVISOR) {
+    return 0;
+  }
 
-  const rawAmount =
-    calculationType ===
-    "PERCENTAGE"
-      ? normalizeMoney(
-          productSubtotal
-        ) *
-        (ruleValue / 100)
+  let percentageBase = productSubtotal;
+
+  if (ruleCode === PRICING_RULE_CODE.VAT) {
+    if (conditionType === "FREIGHT_PLUS_SERVICE") {
+      percentageBase = normalizeMoney(shippingFee) + normalizeMoney(purchaseFee);
+    } else {
+      percentageBase =
+        normalizeMoney(productSubtotal) +
+        normalizeMoney(purchaseFee) +
+        normalizeMoney(shippingFee);
+    }
+  }
+
+  let rawAmount =
+    calculationType === "PERCENTAGE"
+      ? percentageBase * (ruleValue / 100)
       : ruleValue;
+
+  if (ruleCode === PRICING_RULE_CODE.WOOD_CRATE) {
+    const totalPkgs = Math.max(1, packageCount);
+    rawAmount = rawAmount * totalPkgs;
+  }
 
   return clampAmount(
     rawAmount,
@@ -295,23 +342,33 @@ export default function CreatePurchaseRequestQuotationModal({
     [purchaseRequest?.items]
   );
 
-  const selectedRules =
-    useMemo(
-      () =>
-        (
-          Array.isArray(
-            pricingRules
-          )
-            ? pricingRules
-            : []
-        ).filter(
-          (rule) =>
-            Boolean(
-              getRuleId(rule)
-            )
-        ),
-      [pricingRules]
-    );
+  const [activeRules, setActiveRules] = useState([]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (Array.isArray(pricingRules) && pricingRules.length > 0) {
+      setActiveRules(pricingRules);
+    } else {
+      getActivePricingRulesApi()
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setActiveRules(data);
+          }
+        })
+        .catch(() => { });
+    }
+  }, [open, pricingRules]);
+
+  const effectiveRules = useMemo(() => {
+    return Array.isArray(activeRules) && activeRules.length > 0
+      ? activeRules
+      : Array.isArray(pricingRules)
+        ? pricingRules
+        : [];
+  }, [activeRules, pricingRules]);
 
   const [itemPrices, setItemPrices] =
     useState({});
@@ -350,8 +407,7 @@ export default function CreatePurchaseRequestQuotationModal({
   }, [
     items,
     open,
-    purchaseRequest
-      ?.purchaseRequestId,
+    purchaseRequest?.purchaseRequestId,
   ]);
 
   const itemBreakdown =
@@ -364,7 +420,7 @@ export default function CreatePurchaseRequestQuotationModal({
           const unitPrice =
             normalizeMoney(
               itemPrices?.[
-                itemId
+              itemId
               ]
             );
 
@@ -384,7 +440,7 @@ export default function CreatePurchaseRequestQuotationModal({
             lineTotal:
               roundMoney(
                 unitPrice *
-                  quantity
+                quantity
               ),
           };
         }),
@@ -409,65 +465,138 @@ export default function CreatePurchaseRequestQuotationModal({
       [itemBreakdown]
     );
 
-  const additionalFeeBreakdown =
-    useMemo(
-      () =>
-        selectedRules.map(
-          (rule) => ({
-            rule,
-            pricingRuleId:
-              getRuleId(rule),
-
-            amount:
-              calculateRuleAmount(
-                rule,
-                productSubtotal
-              ),
-          })
-        ),
-      [
-        productSubtotal,
-        selectedRules,
-      ]
+  const selectedRuleIds = useMemo(() => {
+    return new Set(
+      Array.isArray(purchaseRequest?.pricingRuleIds)
+        ? purchaseRequest.pricingRuleIds.map(normalizeText).filter(Boolean)
+        : []
     );
+  }, [purchaseRequest?.pricingRuleIds]);
 
-  const additionalFeeTotal =
-    useMemo(
-      () =>
-        additionalFeeBreakdown.reduce(
-          (
-            total,
-            current
-          ) =>
-            total +
-            current.amount,
-          0
-        ),
-      [
-        additionalFeeBreakdown,
-      ]
-    );
+  const packageCount = useMemo(() => {
+    if (Array.isArray(items) && items.length > 0) {
+      return items.length;
+    }
+    return 1;
+  }, [items]);
 
-  const quotationTotal =
-    useMemo(
-      () =>
-        roundMoney(
-          productSubtotal +
-            normalizeMoney(
-              purchaseFee
-            ) +
-            normalizeMoney(
-              shippingFee
-            ) +
-            additionalFeeTotal
-        ),
-      [
-        additionalFeeTotal,
-        productSubtotal,
-        purchaseFee,
-        shippingFee,
-      ]
-    );
+  const additionalFeeBreakdown = useMemo(() => {
+    const list = [];
+    const processedRuleIds = new Set();
+
+    effectiveRules.forEach((rule) => {
+      const ruleId = getRuleId(rule);
+      const ruleCode = getRuleCode(rule);
+      if (!ruleId || processedRuleIds.has(ruleId)) return;
+      if (ruleCode === PRICING_RULE_CODE.VOLUMETRIC_DIVISOR) {
+        return;
+      }
+
+      const isImportTax = ruleCode === PRICING_RULE_CODE.IMPORT_TAX;
+      const isVat = ruleCode === PRICING_RULE_CODE.VAT;
+      const isInsurance =
+        ruleCode === PRICING_RULE_CODE.SUR_INSURANCE_3PERCENT ||
+        ruleCode.includes("INSURANCE");
+      const isWoodCrate = ruleCode === PRICING_RULE_CODE.WOOD_CRATE;
+      const isInspection = ruleCode === PRICING_RULE_CODE.SUR_INSPECTION;
+      const isDomesticFee =
+        ruleCode === PRICING_RULE_CODE.DOMESTIC_FEE ||
+        ruleCode === "DOMESTIC_FEE";
+
+      let isRequested = selectedRuleIds.has(ruleId);
+      if (isImportTax || isVat || isDomesticFee) {
+        isRequested = true;
+      } else if (isInsurance && purchaseRequest?.requiresInsurance) {
+        isRequested = true;
+      } else if (isWoodCrate && purchaseRequest?.requiresWoodenCrate) {
+        isRequested = true;
+      } else if (isInspection && purchaseRequest?.requiresInspection) {
+        isRequested = true;
+      }
+
+      if (!isRequested) return;
+
+      processedRuleIds.add(ruleId);
+
+      let amount = 0;
+      let isSkipped = false;
+      let skipReason = "";
+
+      if (isInsurance) {
+        const minOrderAmount = getMinRequiredOrderAmount(rule);
+        if (minOrderAmount > 0 && productSubtotal < minOrderAmount) {
+          isSkipped = true;
+          skipReason = `Đơn hàng chưa đạt mức tối thiểu ${formatCurrency(minOrderAmount)} - Không áp dụng bảo hiểm`;
+          amount = 0;
+        } else {
+          amount = calculateRuleAmountWithContext(rule, {
+            productSubtotal,
+            purchaseFee,
+            shippingFee,
+            packageCount,
+          });
+        }
+      } else {
+        amount = calculateRuleAmountWithContext(rule, {
+          productSubtotal,
+          purchaseFee,
+          shippingFee,
+          packageCount,
+        });
+      }
+
+      list.push({
+        rule,
+        pricingRuleId: ruleId,
+        ruleCode,
+        ruleName: rule?.ruleName || "Phụ phí dịch vụ",
+        amount,
+        isSkipped,
+        skipReason,
+        isTaxOrVat: isImportTax || isVat,
+        isInsurance,
+        isDomesticFee,
+      });
+    });
+
+    return list;
+  }, [
+    effectiveRules,
+    purchaseRequest?.pricingRuleIds,
+    purchaseRequest?.requiresInsurance,
+    purchaseRequest?.requiresWoodenCrate,
+    purchaseRequest?.requiresInspection,
+    selectedRuleIds,
+    productSubtotal,
+    purchaseFee,
+    shippingFee,
+    packageCount,
+  ]);
+
+  const additionalFeeTotal = useMemo(
+    () =>
+      additionalFeeBreakdown.reduce(
+        (total, current) => total + (current.isSkipped ? 0 : current.amount),
+        0
+      ),
+    [additionalFeeBreakdown]
+  );
+
+  const quotationTotal = useMemo(
+    () =>
+      roundMoney(
+        productSubtotal +
+        normalizeMoney(purchaseFee) +
+        normalizeMoney(shippingFee) +
+        additionalFeeTotal
+      ),
+    [
+      additionalFeeTotal,
+      productSubtotal,
+      purchaseFee,
+      shippingFee,
+    ]
+  );
 
   const handlePriceChange = (
     itemId,
@@ -518,12 +647,11 @@ export default function CreatePurchaseRequestQuotationModal({
       );
 
     if (invalidPriceItem) {
-      return `Vui lòng nhập đơn giá lớn hơn 0 cho sản phẩm "${
-        invalidPriceItem
-          ?.item
-          ?.productName ||
+      return `Vui lòng nhập đơn giá lớn hơn 0 cho sản phẩm "${invalidPriceItem
+        ?.item
+        ?.productName ||
         "chưa xác định"
-      }".`;
+        }".`;
     }
 
     return "";
@@ -575,8 +703,9 @@ export default function CreatePurchaseRequestQuotationModal({
           ),
 
         additionalFees:
-          additionalFeeBreakdown.map(
-            (current) => {
+          additionalFeeBreakdown
+            .filter((current) => !current.isSkipped && current.amount > 0)
+            .map((current) => {
               const rule =
                 current.rule;
 
@@ -613,8 +742,7 @@ export default function CreatePurchaseRequestQuotationModal({
                     rule?.description
                   ),
               };
-            }
-          ),
+            }),
       };
 
       try {
@@ -738,10 +866,10 @@ export default function CreatePurchaseRequestQuotationModal({
         <div>
           <GiftOutlined />
           <span>
-            Dịch vụ tính phí
+            Quy tắc dịch vụ & thuế
           </span>
           <strong>
-            {selectedRules.length}
+            {additionalFeeBreakdown.filter((item) => !item.isSkipped).length}
           </strong>
         </div>
       </div>
@@ -797,7 +925,7 @@ export default function CreatePurchaseRequestQuotationModal({
                     item?.imageUrls
                   )
                     ? item
-                        .imageUrls[0]
+                      .imageUrls[0]
                     : "";
 
                 return (
@@ -849,14 +977,14 @@ export default function CreatePurchaseRequestQuotationModal({
                           )}
                         </Tag>
 
-                        {item
+                        {/* {item
                           ?.attributes && (
-                          <Tag>
-                            {
-                              item.attributes
-                            }
-                          </Tag>
-                        )}
+                            <Tag>
+                              {
+                                item.attributes
+                              }
+                            </Tag>
+                          )} */}
                       </div>
                     </div>
 
@@ -1007,22 +1135,22 @@ export default function CreatePurchaseRequestQuotationModal({
 
               <div>
                 <span>
-                  DỊCH VỤ ĐÃ CHỌN
+                  DỊCH VỤ & THUẾ
                 </span>
 
                 <h3>
-                  Phụ phí theo cấu hình hệ thống
+                  Phụ phí & Quy tắc thuế theo hệ thống
                 </h3>
               </div>
             </div>
 
             <Tag className="purchase-quotation-section__tag is-service">
-              {selectedRules.length} dịch vụ
+              {additionalFeeBreakdown.filter((item) => !item.isSkipped).length} quy tắc áp dụng
             </Tag>
           </div>
 
           {additionalFeeBreakdown.length ===
-          0 ? (
+            0 ? (
             <div className="purchase-quotation-service-empty">
               <InfoCircleOutlined />
 
@@ -1032,8 +1160,7 @@ export default function CreatePurchaseRequestQuotationModal({
                 </strong>
 
                 <span>
-                  Khách hàng không chọn dịch vụ
-                  có quy tắc tính phí.
+                  Khách hàng không chọn dịch vụ có quy tắc tính phí.
                 </span>
               </div>
             </div>
@@ -1044,28 +1171,32 @@ export default function CreatePurchaseRequestQuotationModal({
                   current,
                   index
                 ) => {
-                  const rule =
-                    current.rule;
-
-                  const isInsurance =
-                    getRuleCode(
-                      rule
-                    ).includes(
-                      "INSURANCE"
-                    );
+                  const rule = current.rule;
+                  const isInsurance = current.isInsurance;
+                  const isSkipped = current.isSkipped;
+                  const isTaxOrVat = current.isTaxOrVat;
 
                   return (
                     <article
                       key={
-                        current
-                          .pricingRuleId ||
-                        index
+                        current.pricingRuleId || index
                       }
-                      className="purchase-quotation-service-card"
+                      className={`purchase-quotation-service-card ${isSkipped
+                        ? "is-disabled"
+                        : isTaxOrVat
+                          ? "is-tax-vat"
+                          : isInsurance
+                            ? "is-insurance-card"
+                            : ""
+                        }`}
                     >
                       <div className="purchase-quotation-service-card__icon">
                         {isInsurance ? (
                           <SafetyCertificateOutlined />
+                        ) : current.isDomesticFee ? (
+                          <TruckOutlined />
+                        ) : isTaxOrVat ? (
+                          <DollarOutlined />
                         ) : (
                           <GiftOutlined />
                         )}
@@ -1073,38 +1204,36 @@ export default function CreatePurchaseRequestQuotationModal({
 
                       <div className="purchase-quotation-service-card__content">
                         <span>
-                          {rule
-                            ?.ruleCode ||
-                            "PRICING_RULE"}
+                          {rule?.ruleCode || "PRICING_RULE"}
                         </span>
 
                         <h4>
-                          {rule
-                            ?.ruleName ||
-                            "Phụ phí dịch vụ"}
+                          {rule?.ruleName || "Phụ phí dịch vụ"}
                         </h4>
 
                         <p>
-                          {rule
-                            ?.description ||
+                          {isSkipped
+                            ? current.skipReason
+                            : rule?.description ||
                             "Phụ phí được lấy từ cấu hình hệ thống."}
                         </p>
 
                         <div>
                           <Tag>
-                            {getCalculationType(
-                              rule
-                            ) ===
-                            "PERCENTAGE"
+                            {getCalculationType(rule) === "PERCENTAGE"
                               ? "Phần trăm"
                               : "Cố định"}
                           </Tag>
 
                           <Tag>
-                            {getRuleScopeLabel(
-                              rule
-                            )}
+                            {getRuleScopeLabel(rule, packageCount)}
                           </Tag>
+
+                          {isSkipped && (
+                            <Tag color="warning">
+                              Chưa đạt tối thiểu (&lt; {formatCurrency(getMinRequiredOrderAmount(rule))})
+                            </Tag>
+                          )}
                         </div>
                       </div>
 
@@ -1114,9 +1243,7 @@ export default function CreatePurchaseRequestQuotationModal({
                         </span>
 
                         <strong>
-                          {getRuleValueLabel(
-                            rule
-                          )}
+                          {getRuleValueLabel(rule)}
                         </strong>
 
                         <Divider />
@@ -1125,10 +1252,10 @@ export default function CreatePurchaseRequestQuotationModal({
                           Thành tiền
                         </span>
 
-                        <b>
-                          {formatCurrency(
-                            current.amount
-                          )}
+                        <b style={{ color: isSkipped ? "#8c8c8c" : undefined }}>
+                          {isSkipped
+                            ? "0 ₫ (Bỏ qua)"
+                            : formatCurrency(current.amount)}
                         </b>
                       </div>
                     </article>
@@ -1142,11 +1269,8 @@ export default function CreatePurchaseRequestQuotationModal({
             <InfoCircleOutlined />
 
             <span>
-              Phụ phí phần trăm được tính trên
-              tổng tiền sản phẩm và tự áp dụng
-              mức tối thiểu hoặc tối đa từ cấu hình.
-              Phí đóng thùng gỗ chỉ tính một lần
-              cho toàn đơn.
+              Thuế nhập khẩu và VAT được tự động tính theo quy tắc hệ thống và đơn giá đã nhập.
+              Bảo hiểm hàng hóa chỉ áp dụng khi tổng tiền sản phẩm đạt mức tối thiểu theo cấu hình quy tắc.
             </span>
           </div>
         </section>
@@ -1225,17 +1349,19 @@ export default function CreatePurchaseRequestQuotationModal({
             </strong>
           </div>
 
-          <div>
-            <span>
-              Phụ phí dịch vụ
-            </span>
+          {additionalFeeBreakdown
+            .filter((item) => !item.isSkipped)
+            .map((item) => (
+              <div key={item.pricingRuleId}>
+                <span>
+                  {item.ruleName}
+                </span>
 
-            <strong>
-              {formatCurrency(
-                additionalFeeTotal
-              )}
-            </strong>
-          </div>
+                <strong>
+                  {formatCurrency(item.amount)}
+                </strong>
+              </div>
+            ))}
 
           <div className="purchase-quotation-summary__total">
             <span>

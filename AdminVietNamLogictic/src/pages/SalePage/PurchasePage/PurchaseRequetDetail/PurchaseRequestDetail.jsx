@@ -2832,7 +2832,7 @@ export default function PurchaseRequestDetail() {
           detail
         }
         pricingRules={
-          pricingRuleRows
+          pricingRules
         }
       />
     </main>
