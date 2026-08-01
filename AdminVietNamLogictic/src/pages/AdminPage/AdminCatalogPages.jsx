@@ -23,7 +23,7 @@ const warehouseApi = { list: getWarehouses, create: createWarehouse, update: upd
 export const WarehousesAdminPage = () => page({
   title: "Quản lý kho", singular: "kho", description: "Dữ liệu kho được đồng bộ trực tiếp từ hệ thống.",
   searchFields: ["name", "code", "address", "region"], api: warehouseApi,
-  columns: [{ name: "name", label: "Tên kho" }, { name: "code", label: "Mã kho" }, { name: "region", label: "Khu vực" }, { name: "warehouseType", label: "Loại kho", type: "tag" }, { ...boolField, type: "active" }],
+  columns: [{ name: "name", label: "Tên kho" }, { name: "code", label: "Mã kho" }, { name: "region", label: "Khu vực", filterable: true }, { name: "warehouseType", label: "Loại kho", type: "tag" }, { ...boolField, type: "active" }],
   fields: [{ name: "name", label: "Tên kho", required: true }, { name: "code", label: "Mã kho", required: true }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2, required: true }, { name: "region", label: "Khu vực" }, { name: "warehouseType", label: "Loại kho", type: "select", required: true, options: ["ORIGIN", "DESTINATION", "TRANSIT"].map(value => ({ value, label: value })) }, boolField],
 });
 
@@ -58,7 +58,7 @@ export const AdditionalServiceFeesAdminPage = () => page({
 const pricingApi = { list: getServicePricings, detail: getServicePricingDetail, create: createServicePricing, update: updateServicePricing, remove: deleteServicePricing };
 export const ServicePricingsAdminPage = () => page({
   title: "Bảng giá vận chuyển", singular: "bảng giá", description: "Đơn giá theo tuyến và loại dịch vụ từ backend.", searchFields: ["serviceType", "originCountry", "destinationCountry", "carrierId"], api: pricingApi,
-  columns: [{ name: "serviceType", label: "Dịch vụ" }, { name: "route", label: "Tuyến", type: "route" }, { name: "unitType", label: "Đơn vị", type: "tag" }, { name: "price", label: "Đơn giá", type: "money" }, { name: "effectiveDate", label: "Hiệu lực", type: "date" }],
+  columns: [{ name: "serviceType", label: "Dịch vụ", filterable: true }, { name: "route", label: "Tuyến", type: "route" }, { name: "unitType", label: "Đơn vị", type: "tag" }, { name: "price", label: "Đơn giá", type: "money" }, { name: "effectiveDate", label: "Hiệu lực", type: "date" }],
   fields: [{ name: "carrierId", label: "Mã đơn vị vận chuyển", required: true }, { name: "serviceType", label: "Loại dịch vụ", required: true }, { name: "originCountry", label: "Nước đi", required: true }, { name: "destinationCountry", label: "Nước đến", required: true }, { name: "unitType", label: "Đơn vị tính", required: true }, { name: "price", label: "Đơn giá", type: "number", min: 0, required: true }, { name: "currency", label: "Tiền tệ", defaultValue: "VND", required: true }, { name: "effectiveDate", label: "Ngày hiệu lực", type: "datetime-local", required: true }],
 });
 
@@ -72,6 +72,6 @@ export const PricingRulesAdminPage = () => page({
 const restrictedApi = { list: getRestrictedItems, detail: getRestrictedItemDetail, create: createRestrictedItem, update: updateRestrictedItem, remove: deleteRestrictedItem };
 export const RestrictedItemsAdminPage = () => page({
   title: "Hàng cấm và hạn chế", singular: "mặt hàng", description: "Danh mục kiểm soát hàng hóa theo quốc gia.", searchFields: ["itemName", "country", "restrictionType", "note"], api: restrictedApi,
-  columns: [{ name: "itemName", label: "Tên mặt hàng" }, { name: "country", label: "Quốc gia" }, { name: "restrictionType", label: "Mức kiểm soát", type: "restriction" }, { name: "note", label: "Ghi chú" }, { ...boolField, type: "active" }],
+  columns: [{ name: "itemName", label: "Tên mặt hàng" }, { name: "country", label: "Quốc gia", filterable: true }, { name: "restrictionType", label: "Mức kiểm soát", type: "restriction" }, { name: "note", label: "Ghi chú" }, { ...boolField, type: "active" }],
   fields: [{ name: "itemName", label: "Tên mặt hàng", required: true }, { name: "country", label: "Quốc gia", required: true }, { name: "restrictionType", label: "Mức kiểm soát", type: "select", required: true, options: ["BANNED", "RESTRICTED", "WARNING"].map(value => ({ value, label: value })) }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
 });

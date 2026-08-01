@@ -66,9 +66,27 @@ const formatDate = (value) => {
   return formatVietnamDateTime(value, { fallback: "—" });
 };
 
+const compareText = (a, b) =>
+  String(a ?? "").localeCompare(String(b ?? ""), "vi", { sensitivity: "base" });
+
+const uniqueSelectOptions = (items, getValue, getLabel = (value) => value) => {
+  const map = new Map();
+  for (const item of items) {
+    const value = getValue(item);
+    if (value == null || value === "") continue;
+    if (!map.has(value)) map.set(value, getLabel(value, item));
+  }
+  return [...map.entries()]
+    .sort((a, b) => compareText(a[1], b[1]))
+    .map(([value, label]) => ({ label: String(label), value }));
+};
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState(null);
+  const [userTypeFilter, setUserTypeFilter] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -95,15 +113,40 @@ export default function AdminUsersPage() {
     return () => window.clearTimeout(timer);
   }, [loadUsers]);
 
+  const roleOptions = useMemo(
+    () => uniqueSelectOptions(users, (user) => user.role),
+    [users]
+  );
+  const userTypeOptions = useMemo(
+    () => uniqueSelectOptions(users, (user) => user.userType),
+    [users]
+  );
+  const statusOptions = useMemo(() => {
+    const options = [];
+    if (users.some(isLockedUser)) options.push({ label: "Đã khóa", value: "__locked__" });
+    uniqueSelectOptions(
+      users.filter((user) => !isLockedUser(user)),
+      (user) => user.status || "—"
+    ).forEach((item) => options.push(item));
+    return options;
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("vi");
-    if (!keyword) return users;
 
-    return users.filter((user) =>
-      [user.fullName, user.email, user.phone, user.role, user.region, user.status]
-        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword))
-    );
-  }, [query, users]);
+    return users.filter((user) => {
+      if (roleFilter && user.role !== roleFilter) return false;
+      if (userTypeFilter && user.userType !== userTypeFilter) return false;
+      if (statusFilter === "__locked__") {
+        if (!isLockedUser(user)) return false;
+      } else if (statusFilter && (isLockedUser(user) || (user.status || "—") !== statusFilter)) {
+        return false;
+      }
+      if (!keyword) return true;
+      return [user.fullName, user.email, user.phone, user.role, user.region, user.status]
+        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
+    });
+  }, [query, roleFilter, statusFilter, userTypeFilter, users]);
 
   const employeeCount = users.filter((user) => user.userType === "Employee").length;
 
@@ -216,85 +259,116 @@ export default function AdminUsersPage() {
     }
   };
 
-  const columns = [
-    {
-      title: "Người dùng",
-      dataIndex: "fullName",
-      key: "fullName",
-      width: 220,
-      fixed: "left",
-      render: (value, record) => (
-        <div className="admin-user-cell">
-          <strong>{value || "Chưa cập nhật"}</strong>
-          <span>{record.email}</span>
-        </div>
-      ),
-    },
-    { title: "Số điện thoại", dataIndex: "phone", key: "phone", width: 135 },
-    {
-      title: "Vai trò",
-      dataIndex: "role",
-      key: "role",
-      width: 145,
-      render: (value) => <Tag color="blue">{value || "—"}</Tag>,
-    },
-    { title: "Loại tài khoản", dataIndex: "userType", key: "userType", width: 135 },
-    { title: "Khu vực", dataIndex: "region", key: "region", width: 100, render: (value) => value || "—" },
-    {
-      title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      width: 135,
-      render: (value, record) => (
-        <Tag color={isLockedUser(record) ? "error" : value === "Active" ? "success" : "warning"}>
-          {isLockedUser(record) ? "Đã khóa" : value || "—"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Ngày tạo",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 155,
-      render: formatDate,
-    },
-    {
-      title: "Thao tác",
-      key: "actions",
-      width: 155,
-      fixed: "right",
-      align: "center",
-      render: (_, record) => (
-        <Space size={4}>
-          <Tooltip title="Xem chi tiết">
-            <Button type="text" icon={<EyeOutlined />} onClick={() => openDetail(record)} />
-          </Tooltip>
-          <Tooltip title="Phân quyền">
-            <Button
-              type="text"
-              className="admin-action-edit"
-              icon={<SafetyCertificateOutlined />}
-              onClick={() => openRoleEditor(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title={isLockedUser(record) ? "Mở khóa tài khoản?" : "Khóa tài khoản?"}
-            okText={isLockedUser(record) ? "Mở khóa" : "Khóa"}
-            cancelText="Hủy"
-            onConfirm={() => toggleLock(record)}
-          >
-            <Tooltip title={isLockedUser(record) ? "Mở khóa" : "Khóa tài khoản"}>
+  const columns = useMemo(
+    () => [
+      {
+        title: "Người dùng",
+        dataIndex: "fullName",
+        key: "fullName",
+        width: 220,
+        fixed: "left",
+        sorter: (a, b) => compareText(a.fullName, b.fullName),
+        render: (value, record) => (
+          <div className="admin-user-cell">
+            <strong>{value || "Chưa cập nhật"}</strong>
+            <span>{record.email}</span>
+          </div>
+        ),
+      },
+      {
+        title: "Số điện thoại",
+        dataIndex: "phone",
+        key: "phone",
+        width: 135,
+        sorter: (a, b) => compareText(a.phone, b.phone),
+      },
+      {
+        title: "Vai trò",
+        dataIndex: "role",
+        key: "role",
+        width: 145,
+        sorter: (a, b) => compareText(a.role, b.role),
+        render: (value) => <Tag color="blue">{value || "—"}</Tag>,
+      },
+      {
+        title: "Loại tài khoản",
+        dataIndex: "userType",
+        key: "userType",
+        width: 135,
+        sorter: (a, b) => compareText(a.userType, b.userType),
+      },
+      {
+        title: "Khu vực",
+        dataIndex: "region",
+        key: "region",
+        width: 100,
+        sorter: (a, b) => compareText(a.region, b.region),
+        render: (value) => value || "—",
+      },
+      {
+        title: "Trạng thái",
+        dataIndex: "status",
+        key: "status",
+        width: 135,
+        sorter: (a, b) => {
+          const statusA = isLockedUser(a) ? "Đã khóa" : a.status || "—";
+          const statusB = isLockedUser(b) ? "Đã khóa" : b.status || "—";
+          return compareText(statusA, statusB);
+        },
+        render: (value, record) => (
+          <Tag color={isLockedUser(record) ? "error" : value === "Active" ? "success" : "warning"}>
+            {isLockedUser(record) ? "Đã khóa" : value || "—"}
+          </Tag>
+        ),
+      },
+      {
+        title: "Ngày tạo",
+        dataIndex: "createdAt",
+        key: "createdAt",
+        width: 155,
+        sorter: (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+        defaultSortOrder: "descend",
+        render: formatDate,
+      },
+      {
+        title: "Thao tác",
+        key: "actions",
+        width: 155,
+        fixed: "right",
+        align: "center",
+        render: (_, record) => (
+          <Space size={4}>
+            <Tooltip title="Xem chi tiết">
+              <Button type="text" icon={<EyeOutlined />} onClick={() => openDetail(record)} />
+            </Tooltip>
+            <Tooltip title="Phân quyền">
               <Button
                 type="text"
-                danger={!isLockedUser(record)}
-                icon={isLockedUser(record) ? <UnlockOutlined /> : <LockOutlined />}
+                className="admin-action-edit"
+                icon={<SafetyCertificateOutlined />}
+                onClick={() => openRoleEditor(record)}
               />
             </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm
+              title={isLockedUser(record) ? "Mở khóa tài khoản?" : "Khóa tài khoản?"}
+              okText={isLockedUser(record) ? "Mở khóa" : "Khóa"}
+              cancelText="Hủy"
+              onConfirm={() => toggleLock(record)}
+            >
+              <Tooltip title={isLockedUser(record) ? "Mở khóa" : "Khóa tài khoản"}>
+                <Button
+                  type="text"
+                  danger={!isLockedUser(record)}
+                  icon={isLockedUser(record) ? <UnlockOutlined /> : <LockOutlined />}
+                />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    []
+  );
 
   return (
     <div className="admin-page">
@@ -320,6 +394,30 @@ export default function AdminUsersPage() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Tìm theo tên, email, SĐT, vai trò..."
             className="admin-page__search"
+          />
+          <Select
+            allowClear
+            placeholder="Vai trò"
+            value={roleFilter}
+            options={roleOptions}
+            onChange={setRoleFilter}
+            className="admin-page__filter-select"
+          />
+          <Select
+            allowClear
+            placeholder="Loại TK"
+            value={userTypeFilter}
+            options={userTypeOptions}
+            onChange={setUserTypeFilter}
+            className="admin-page__filter-select"
+          />
+          <Select
+            allowClear
+            placeholder="Trạng thái"
+            value={statusFilter}
+            options={statusOptions}
+            onChange={setStatusFilter}
+            className="admin-page__filter-select"
           />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>
             Tải lại

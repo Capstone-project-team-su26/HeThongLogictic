@@ -1,0 +1,30 @@
+---
+description: Kiến trúc khung FE mới vcl-forntend — tham chiếu khi port / làm feature mới
+alwaysApply: true
+---
+
+# FE architecture (target: vcl-forntend)
+
+Áp khi hướng dẫn / port sang khung mới. Code target nằm repo **`vcl-forntend`**, không phải tree Vite trong repo này.
+
+Stack target: **Next.js App Router**, **JavaScript**, **Tailwind**, **Bun**.
+
+## Layering
+
+| Layer | Path | Việc được làm |
+|-------|------|----------------|
+| Pages | `src/app/pages/<role>/...` | `page.jsx` + `components/` colocated |
+| Shared UI | `src/app/components/` | Logo, theme, AuthGuard |
+| Domain | `src/modules/<feature>/` | `api` + `mock` + `mappers` + `index` — UI chỉ import facade |
+| Helpers | `src/hooks/`, `src/utils/` | apiClient, routes, mocks core |
+| Proxy | `src/app/api/` | `/api/*` → `API_URL` |
+
+## Hard rules (target)
+
+- UI **không** gọi HTTP trực tiếp — qua `@/modules/<feature>`.
+- **Không** thêm `*Service.js` domain mới vào `utils/`.
+- URL staff dưới `/pages/...`; dùng `ROUTES` từ `appRoutes.js`.
+- Role: `routeAccess.js` + middleware + AuthGuard.
+- Mock trước: `NEXT_PUBLIC_DATA_SOURCE=mock`.
+
+Skills: `add-feature`, `wire-module-mock-api`, `migrate-legacy-page`.

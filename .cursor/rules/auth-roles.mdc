@@ -1,0 +1,26 @@
+---
+description: Auth/roles trên khung FE mới (tham chiếu vcl-forntend)
+alwaysApply: false
+---
+
+# Auth & roles (vcl-forntend)
+
+## Roles (casing đúng)
+
+- `Admin` → `/pages/admin/*`
+- `Sale` → `/pages/sales/*`
+- `OperationsManager` → `/pages/operations/*`
+
+Nguồn sự thật trên target: `src/utils/routeAccess.js` (`ROLE_GROUPS`).
+
+## Session (target)
+
+- Client: localStorage (`swiftship_session` + `accessToken`) qua `authSession.js`.
+- Middleware cookie: `vcl_role`, `vcl_auth`.
+- API **401** → login + `?next=`; **403** → home role.
+
+## Legacy (repo này)
+
+- `sessionStorage`: `accessToken`, `isAuth`, `role` — xem `AdminVietNamLogictic/src/utils/Common/authSession.js` và `AppRoutes.jsx`.
+
+Không commit mật khẩu test vào rule/source.

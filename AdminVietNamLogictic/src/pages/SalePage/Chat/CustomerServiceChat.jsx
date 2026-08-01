@@ -21,6 +21,8 @@ import {
 } from "antd";
 
 import {
+  CaretDownOutlined,
+  CaretRightOutlined,
   CheckCircleOutlined,
   CloseOutlined,
   CopyOutlined,
@@ -32,6 +34,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SendOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -686,6 +689,97 @@ const getUnreadCount = (conversation) => {
   );
 };
 
+const getCustomerId = (conversation) => {
+  return (
+    conversation?.customerId ||
+    conversation?.customerID ||
+    conversation?.customerUserId ||
+    conversation?.customer?.id ||
+    conversation?.customer?.userId ||
+    conversation?.createdByUserId ||
+    conversation?.createdBy ||
+    ""
+  );
+};
+
+const getCustomerDisplayName = (conversation) => {
+  return (
+    conversation?.customerName ||
+    conversation?.customer?.fullName ||
+    conversation?.customerFullName ||
+    conversation?.createdByName ||
+    conversation?.title ||
+    "Khách hàng"
+  );
+};
+
+const getCustomerGroupKey = (conversation) => {
+  const customerId = String(getCustomerId(conversation) || "").trim();
+
+  if (customerId) {
+    return `id:${customerId}`;
+  }
+
+  const name = String(getCustomerDisplayName(conversation) || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+  if (name) {
+    return `name:${name}`;
+  }
+
+  return `solo:${getConversationId(conversation)}`;
+};
+
+const buildConversationGroups = (conversationList = []) => {
+  const groupMap = new Map();
+
+  conversationList.forEach((conversation) => {
+    const key = getCustomerGroupKey(conversation);
+    const existing = groupMap.get(key);
+
+    if (existing) {
+      existing.conversations.push(conversation);
+      return;
+    }
+
+    groupMap.set(key, {
+      key,
+      customerId: getCustomerId(conversation),
+      customerName: getCustomerDisplayName(conversation),
+      conversations: [conversation],
+    });
+  });
+
+  return Array.from(groupMap.values())
+    .map((group) => {
+      const conversations = [...group.conversations].sort(
+        (firstConversation, secondConversation) =>
+          getTimeValue(secondConversation) - getTimeValue(firstConversation)
+      );
+
+      const unreadCount = conversations.reduce(
+        (total, conversation) => total + getUnreadCount(conversation),
+        0
+      );
+
+      return {
+        ...group,
+        conversations,
+        unreadCount,
+        latestConversation: conversations[0] || null,
+        conversationCount: conversations.length,
+      };
+    })
+    .sort((firstGroup, secondGroup) => {
+      return (
+        getTimeValue(secondGroup.latestConversation) -
+        getTimeValue(firstGroup.latestConversation)
+      );
+    });
+};
+
 const normalizeApiTimeToUtc = (value) => {
   return apiToUtcIso(value, {
     apiTimeMode: "utc",
@@ -803,6 +897,157 @@ const getTimeValue = (item) => {
   const timeValue = normalizedTime ? new Date(normalizedTime).getTime() : 0;
 
   return Number.isNaN(timeValue) ? 0 : timeValue;
+};
+
+const MESSAGE_GROUP_GAP_MS = 5 * 60 * 1000;
+
+const getMessageDayKey = (item) => {
+  const utcIso = normalizeApiTimeToUtc(getCreatedTime(item));
+
+  if (!utcIso) {
+    return "";
+  }
+
+  const date = new Date(utcIso);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const getPart = (type) =>
+    parts.find((part) => part.type === type)?.value || "";
+
+  return `${getPart("year")}-${getPart("month")}-${getPart("day")}`;
+};
+
+const formatDayLabel = (dayKey) => {
+  if (!dayKey) {
+    return "";
+  }
+
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1, day));
+  const todayKey = getMessageDayKey({ createdAtUtc: getSyncedNowUtcIso() });
+
+  if (dayKey === todayKey) {
+    return "Hôm nay";
+  }
+
+  const [todayYear, todayMonth, todayDay] = todayKey.split("-").map(Number);
+  const yesterdayDate = new Date(Date.UTC(todayYear, todayMonth - 1, todayDay));
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterdayKey = [
+    yesterdayDate.getUTCFullYear(),
+    String(yesterdayDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(yesterdayDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+
+  if (dayKey === yesterdayKey) {
+    return "Hôm qua";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(target);
+};
+
+const formatMessageTime = (value) => {
+  const utcIso = normalizeApiTimeToUtc(value);
+
+  if (!utcIso) {
+    return "";
+  }
+
+  const date = new Date(utcIso);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+};
+
+const getMessageSenderKey = (message, currentUserId, currentUserRole) => {
+  if (isMessageMine(message, currentUserId, currentUserRole)) {
+    return `mine:${currentUserId || normalizeRoleKey(currentUserRole) || "self"}`;
+  }
+
+  return `other:${
+    getMessageSenderId(message) ||
+    normalizeRoleKey(getMessageSenderRole(message)) ||
+    getMessageSenderName(message) ||
+    "peer"
+  }`;
+};
+
+const buildMessageTimeline = (
+  messageList = [],
+  currentUserId,
+  currentUserRole
+) => {
+  const timeline = [];
+  let currentCluster = null;
+
+  messageList.forEach((message, index) => {
+    const dayKey = getMessageDayKey(message);
+    const senderKey = getMessageSenderKey(
+      message,
+      currentUserId,
+      currentUserRole
+    );
+    const timeValue = getTimeValue(message);
+    const mine = isMessageMine(message, currentUserId, currentUserRole);
+
+    if (
+      !currentCluster ||
+      currentCluster.dayKey !== dayKey ||
+      currentCluster.senderKey !== senderKey ||
+      timeValue - currentCluster.lastTimeValue > MESSAGE_GROUP_GAP_MS
+    ) {
+      if (
+        !currentCluster ||
+        currentCluster.dayKey !== dayKey
+      ) {
+        timeline.push({
+          type: "day",
+          key: `day-${dayKey || index}`,
+          label: formatDayLabel(dayKey),
+        });
+      }
+
+      currentCluster = {
+        type: "cluster",
+        key: `cluster-${index}-${senderKey}`,
+        senderKey,
+        mine,
+        dayKey,
+        lastTimeValue: timeValue,
+        items: [],
+      };
+      timeline.push(currentCluster);
+    }
+
+    currentCluster.items.push({ message, index });
+    currentCluster.lastTimeValue = timeValue;
+  });
+
+  return timeline;
 };
 
 const getRelatedItemId = (item, relatedType) => {
@@ -1031,6 +1276,7 @@ export default function CustomerServiceChat() {
 
   const messagesSignatureRef = useRef("");
   const isSilentRefreshingRef = useRef(false);
+  const didInitGroupCollapseRef = useRef(false);
 
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -1052,6 +1298,7 @@ export default function CustomerServiceChat() {
   const [isSending, setIsSending] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState(() => new Set());
 
   const hasConversation = conversations.length > 0;
   const hasSelectedConversation = Boolean(selectedConversationId);
@@ -1059,6 +1306,16 @@ export default function CustomerServiceChat() {
   const selectedConversationTitle = selectedConversation
     ? getConversationTitle(selectedConversation)
     : "Chọn cuộc trò chuyện";
+
+  const conversationGroups = useMemo(
+    () => buildConversationGroups(conversations),
+    [conversations]
+  );
+
+  const messageTimeline = useMemo(
+    () => buildMessageTimeline(messages, currentUserId, currentUserRole),
+    [messages, currentUserId, currentUserRole]
+  );
 
   const isCreateFormValid = useMemo(() => {
     const relatedType = String(createForm.relatedType || "").trim();
@@ -1571,6 +1828,49 @@ export default function CustomerServiceChat() {
   }, [selectedConversationId]);
 
   useEffect(() => {
+    if (didInitGroupCollapseRef.current || conversationGroups.length === 0) {
+      return;
+    }
+
+    didInitGroupCollapseRef.current = true;
+
+    const multiGroupKeys = conversationGroups
+      .filter((group) => group.conversationCount > 1)
+      .map((group) => group.key);
+
+    if (multiGroupKeys.length > 0) {
+      setCollapsedGroupKeys(new Set(multiGroupKeys));
+    }
+  }, [conversationGroups]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      return;
+    }
+
+    const activeGroup = conversationGroups.find((group) =>
+      group.conversations.some(
+        (conversation) =>
+          getConversationId(conversation) === selectedConversationId
+      )
+    );
+
+    if (!activeGroup) {
+      return;
+    }
+
+    setCollapsedGroupKeys((current) => {
+      if (!current.has(activeGroup.key)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(activeGroup.key);
+      return next;
+    });
+  }, [selectedConversationId, conversationGroups]);
+
+  useEffect(() => {
     if (selectedConversationId) {
       const detailTimer =
         window.setTimeout(
@@ -1643,6 +1943,20 @@ export default function CustomerServiceChat() {
     setRelatedOptions([]);
     setCreateForm(INITIAL_CREATE_FORM);
     clearCreateAttachments();
+  };
+
+  const handleToggleCustomerGroup = (groupKey) => {
+    setCollapsedGroupKeys((current) => {
+      const next = new Set(current);
+
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+
+      return next;
+    });
   };
 
   const handleSelectConversation = (conversation) => {
@@ -2049,16 +2363,16 @@ export default function CustomerServiceChat() {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: "#2563eb",
-          colorInfo: "#2563eb",
+          colorPrimary: "#0084ff",
+          colorInfo: "#0084ff",
           colorSuccess: "#16a34a",
           colorError: "#d34f4f",
-          colorText: "#1e293b",
-          colorTextSecondary: "#64748b",
-          borderRadius: 12,
-          controlHeight: 44,
+          colorText: "#050505",
+          colorTextSecondary: "#65676b",
+          borderRadius: 10,
+          controlHeight: 40,
           fontFamily:
-            'Inter, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            '"Segoe UI", Roboto, Tahoma, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
         },
         components: {
           Button: {
@@ -2081,37 +2395,45 @@ export default function CustomerServiceChat() {
       }}
     >
       <div className="cskh-chat-page">
-        <div className="cskh-chat-bg cskh-chat-bg--one" />
-        <div className="cskh-chat-bg cskh-chat-bg--two" />
-
         <section className="cskh-chat-shell">
           <aside className="cskh-chat-sidebar">
             <div className="cskh-chat-sidebar__header">
-              <div>
-                <p className="cskh-chat-eyebrow">CHĂM SÓC KHÁCH HÀNG</p>
+              <p className="cskh-chat-eyebrow">CHĂM SÓC KHÁCH HÀNG</p>
+
+              <div className="cskh-chat-sidebar__title-row">
                 <h2>
                   {isSaleViewer
                     ? "Hộp thư khách hàng"
                     : "Trung tâm hỗ trợ"}
                 </h2>
-                <span>
-                  {isSaleViewer
-                    ? "Tiếp nhận yêu cầu và trao đổi trực tiếp với khách hàng."
-                    : "Trao đổi trực tiếp và theo dõi phản hồi từ nhân viên Sale."}
-                </span>
+
+                <Tooltip title="Làm mới hộp thư">
+                  <Button
+                    type="text"
+                    shape="circle"
+                    className={[
+                      "cskh-refresh-button",
+                      (isLoadingList || isLoadingDetail) && "is-loading",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    icon={
+                      <ReloadOutlined
+                        spin={isLoadingList || isLoadingDetail}
+                      />
+                    }
+                    onClick={handleRefresh}
+                    disabled={isLoadingList || isLoadingDetail}
+                    aria-label="Làm mới danh sách trò chuyện"
+                  />
+                </Tooltip>
               </div>
 
-              <Tooltip title="Làm mới dữ liệu">
-                <Button
-                  type="text"
-                  shape="circle"
-                  className="cskh-icon-button"
-                  icon={<ReloadOutlined spin={isLoadingList || isLoadingDetail} />}
-                  onClick={handleRefresh}
-                  disabled={isLoadingList || isLoadingDetail}
-                  aria-label="Làm mới danh sách trò chuyện"
-                />
-              </Tooltip>
+              <span className="cskh-chat-sidebar__subtitle">
+                {isSaleViewer
+                  ? "Tiếp nhận yêu cầu và trao đổi trực tiếp với khách hàng."
+                  : "Trao đổi trực tiếp và theo dõi phản hồi từ nhân viên Sale."}
+              </span>
             </div>
 
             {!isSaleViewer && (
@@ -2167,61 +2489,191 @@ export default function CustomerServiceChat() {
               )}
 
               {!isLoadingList &&
-                conversations.map((conversation) => {
-                  const id = getConversationId(conversation);
-                  const unreadCount = getUnreadCount(conversation);
-                  const isActive = id === selectedConversationId;
-                  const staffName = getStaffDisplayName(conversation);
+                conversationGroups.map((group) => {
+                  const isCollapsed = collapsedGroupKeys.has(group.key);
+                  const hasMultiple = group.conversationCount > 1;
+                  const groupHasActive = group.conversations.some(
+                    (conversation) =>
+                      getConversationId(conversation) === selectedConversationId
+                  );
+                  const latest = group.latestConversation;
+                  const previewConversation = latest || group.conversations[0];
+
+                  if (!hasMultiple) {
+                    const conversation = group.conversations[0];
+                    const id = getConversationId(conversation);
+                    const unreadCount = getUnreadCount(conversation);
+                    const isActive = id === selectedConversationId;
+
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        className={[
+                          "cskh-conversation-item",
+                          isActive && "is-active",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => handleSelectConversation(conversation)}
+                        aria-busy={isActive && isLoadingDetail}
+                      >
+                        <Avatar
+                          size={40}
+                          className="cskh-conversation-avatar"
+                          icon={<UserOutlined />}
+                        />
+
+                        <span className="cskh-conversation-main">
+                          <span className="cskh-conversation-top">
+                            <strong>{group.customerName}</strong>
+                            <em>
+                              {formatDateTime(getCreatedTime(conversation))}
+                            </em>
+                          </span>
+
+                          <span className="cskh-conversation-subtitle">
+                            {getConversationSubtitle(conversation)}
+                          </span>
+
+                          <span className="cskh-conversation-message">
+                            {getConversationLastMessage(conversation)}
+                          </span>
+                        </span>
+
+                        {unreadCount > 0 && (
+                          <Badge
+                            count={unreadCount}
+                            overflowCount={99}
+                            className="cskh-unread-badge"
+                          />
+                        )}
+                      </button>
+                    );
+                  }
 
                   return (
-                    <button
-                      key={id}
-                      type="button"
+                    <div
+                      key={group.key}
                       className={[
-                        "cskh-conversation-item",
-                        isActive && "is-active",
+                        "cskh-customer-group",
+                        groupHasActive && "has-active",
+                        isCollapsed && "is-collapsed",
                       ]
                         .filter(Boolean)
                         .join(" ")}
-                      onClick={() => handleSelectConversation(conversation)}
-                      aria-busy={isActive && isLoadingDetail}
                     >
-                      <Avatar
-                        size={44}
-                        className="cskh-conversation-avatar"
-                        icon={<MessageFilled />}
-                      />
-
-                      <span className="cskh-conversation-main">
-                        <span className="cskh-conversation-top">
-                          <strong>{getConversationTitle(conversation)}</strong>
-                          <em>{formatDateTime(getCreatedTime(conversation))}</em>
+                      <button
+                        type="button"
+                        className={[
+                          "cskh-customer-group__header",
+                          groupHasActive && "is-active",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => handleToggleCustomerGroup(group.key)}
+                        aria-expanded={!isCollapsed}
+                      >
+                        <span className="cskh-customer-group__caret">
+                          {isCollapsed ? (
+                            <CaretRightOutlined />
+                          ) : (
+                            <CaretDownOutlined />
+                          )}
                         </span>
 
-                        <span className="cskh-conversation-subtitle">
-                          {getConversationSubtitle(conversation)}
-                        </span>
-
-                        {staffName && (
-                          <span className="cskh-staff-line">
-                            <MessageFilled />
-                            {staffName}
-                          </span>
-                        )}
-
-                        <span className="cskh-conversation-message">
-                          {getConversationLastMessage(conversation)}
-                        </span>
-                      </span>
-
-                      {unreadCount > 0 && (
-                        <Badge
-                          count={unreadCount}
-                          overflowCount={99}
-                          className="cskh-unread-badge"
+                        <Avatar
+                          size={40}
+                          className="cskh-conversation-avatar"
+                          icon={<UserOutlined />}
                         />
+
+                        <span className="cskh-conversation-main">
+                          <span className="cskh-conversation-top">
+                            <strong>{group.customerName}</strong>
+                            <em>
+                              {formatDateTime(getCreatedTime(previewConversation))}
+                            </em>
+                          </span>
+
+                          <span className="cskh-customer-group__meta">
+                            {group.conversationCount} cuộc trò chuyện
+                            {previewConversation
+                              ? ` · ${getConversationSubtitle(previewConversation)}`
+                              : ""}
+                          </span>
+                        </span>
+
+                        {group.unreadCount > 0 && (
+                          <Badge
+                            count={group.unreadCount}
+                            overflowCount={99}
+                            className="cskh-unread-badge"
+                          />
+                        )}
+                      </button>
+
+                      {!isCollapsed && (
+                        <div className="cskh-customer-group__children">
+                          {group.conversations.map((conversation) => {
+                            const id = getConversationId(conversation);
+                            const unreadCount = getUnreadCount(conversation);
+                            const isActive = id === selectedConversationId;
+
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                className={[
+                                  "cskh-conversation-item",
+                                  "cskh-conversation-item--child",
+                                  isActive && "is-active",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                onClick={() =>
+                                  handleSelectConversation(conversation)
+                                }
+                                aria-busy={isActive && isLoadingDetail}
+                              >
+                                <span className="cskh-conversation-item__tree-line" />
+
+                                <Avatar
+                                  size={32}
+                                  className="cskh-conversation-avatar cskh-conversation-avatar--child"
+                                  icon={<MessageFilled />}
+                                />
+
+                                <span className="cskh-conversation-main">
+                                  <span className="cskh-conversation-top">
+                                    <strong>
+                                      {getConversationSubtitle(conversation)}
+                                    </strong>
+                                    <em>
+                                      {formatDateTime(
+                                        getCreatedTime(conversation)
+                                      )}
+                                    </em>
+                                  </span>
+
+                                  <span className="cskh-conversation-message">
+                                    {getConversationLastMessage(conversation)}
+                                  </span>
+                                </span>
+
+                                {unreadCount > 0 && (
+                                  <Badge
+                                    count={unreadCount}
+                                    overflowCount={99}
+                                    className="cskh-unread-badge"
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
             </div>
@@ -2281,46 +2733,14 @@ export default function CustomerServiceChat() {
                     <div className="cskh-chat-title__content">
                       <h1>{selectedConversationTitle}</h1>
 
-                      <div
-  className="cskh-chat-title__status"
-  style={{
-    display: "flex",
-    alignItems: "center",
-    marginTop: 6,
-  }}
->
-  <div
-    style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 8,
-      padding: "6px 14px",
-      borderRadius: 999,
-      background: "#ecfdf5",
-      border: "1px solid #bbf7d0",
-      color: "#166534",
-      fontSize: 12,
-      fontWeight: 600,
-      lineHeight: 1,
-      whiteSpace: "nowrap",
-      boxShadow: "0 2px 8px rgba(34,197,94,.08)",
-    }}
-  >
-    <span
-      style={{
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        background: "#22c55e",
-        boxShadow: "0 0 0 4px rgba(34,197,94,.18)",
-        animation: "onlinePulse 1.8s infinite",
-      }}
-    />
-    {hasAssignedStaff(selectedConversation)
-      ? `Nhân viên: ${getStaffDisplayName(selectedConversation)}`
-      : "Đang hỗ trợ trực tuyến"}
-  </div>
-</div>
+                      <div className="cskh-chat-title__status">
+                        <span className="cskh-status-dot" />
+                        <span className="cskh-status-text">
+                          {hasAssignedStaff(selectedConversation)
+                            ? `Nhân viên: ${getStaffDisplayName(selectedConversation)}`
+                            : "Đang hỗ trợ trực tuyến"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -2367,124 +2787,164 @@ export default function CustomerServiceChat() {
                   )}
 
                   {!isLoadingDetail &&
-                    messages.map((item, index) => {
-                      const mine = isMessageMine(
-                        item,
-                        currentUserId,
-                        currentUserRole
-                      );
-                      const content = getMessageContent(item);
-                      const attachmentUrls = getMessageAttachments(item);
-                      const messageId = String(getMessageId(item, index));
-                      const isCopied = copiedMessageId === messageId;
+                    messageTimeline.map((entry) => {
+                      if (entry.type === "day") {
+                        return (
+                          <div key={entry.key} className="cskh-day-divider">
+                            <span>{entry.label}</span>
+                          </div>
+                        );
+                      }
+
+                      const clusterSize = entry.items.length;
 
                       return (
                         <div
-                          key={messageId}
+                          key={entry.key}
                           className={[
-                            "cskh-message-row",
-                            mine ? "is-mine" : "is-other",
+                            "cskh-message-cluster",
+                            entry.mine ? "is-mine" : "is-other",
                           ]
                             .filter(Boolean)
                             .join(" ")}
                         >
-                          {!mine && (
-                            <Avatar
-                              size={34}
-                              className="cskh-message-avatar"
-                              icon={<MessageFilled />}
-                            />
-                          )}
+                          {entry.items.map(({ message: item, index }, itemIndex) => {
+                            const content = getMessageContent(item);
+                            const attachmentUrls = getMessageAttachments(item);
+                            const messageId = String(getMessageId(item, index));
+                            const isCopied = copiedMessageId === messageId;
+                            const isFirst = itemIndex === 0;
+                            const isLast = itemIndex === clusterSize - 1;
+                            const showAvatar = !entry.mine && isLast;
+                            const showMeta = isFirst;
 
-                          <div className="cskh-message-group">
-                            <div className="cskh-message-bubble">
-                              <div className="cskh-message-meta">
-                                <div className="cskh-message-meta__identity">
-                                  <strong>
-                                    {getViewerMessageLabel(
-                                      mine,
-                                      currentUserRole,
-                                      currentUserName,
-                                      item
-                                    )}
-                                  </strong>
-                                  <span>{formatDateTime(getCreatedTime(item))}</span>
-                                </div>
-
-                                {(content || attachmentUrls.length > 0) && (
-                                  <Tooltip
-                                    title={
-                                      isCopied
-                                        ? "Đã sao chép"
-                                        : "Sao chép nội dung"
-                                    }
-                                  >
-                                    <Button
-                                      type="text"
-                                      shape="circle"
-                                      size="small"
-                                      className={[
-                                        "cskh-message-copy-button",
-                                        isCopied && "is-copied",
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" ")}
-                                      icon={
-                                        isCopied ? (
-                                          <CheckCircleOutlined />
-                                        ) : (
-                                          <CopyOutlined />
-                                        )
-                                      }
-                                      onClick={() =>
-                                        handleCopyMessage(item, index)
-                                      }
-                                      aria-label="Sao chép tin nhắn"
+                            return (
+                              <div
+                                key={messageId}
+                                className={[
+                                  "cskh-message-row",
+                                  entry.mine ? "is-mine" : "is-other",
+                                  isFirst && "is-group-start",
+                                  isLast && "is-group-end",
+                                  !isFirst && !isLast && "is-group-middle",
+                                  clusterSize === 1 && "is-group-single",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                              >
+                                {!entry.mine && (
+                                  showAvatar ? (
+                                    <Avatar
+                                      size={28}
+                                      className="cskh-message-avatar"
+                                      icon={<MessageFilled />}
                                     />
-                                  </Tooltip>
+                                  ) : (
+                                    <span
+                                      className="cskh-message-avatar-spacer"
+                                      aria-hidden="true"
+                                    />
+                                  )
                                 )}
-                              </div>
 
-                              {content && <p>{content}</p>}
-
-                              {attachmentUrls.length > 0 && (
-                                <div
-                                  className={[
-                                    "cskh-attachment-grid",
-                                    attachmentUrls.length === 1 &&
-                                      "has-single-image",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" ")}
-                                >
-                                  {attachmentUrls.map((attachmentUrl, imageIndex) => (
-                                    <a
-                                      key={`${attachmentUrl}-${imageIndex}`}
-                                      className="cskh-attachment-preview"
-                                      href={attachmentUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      {isImageUrl(attachmentUrl) ? (
-                                        <img
-                                          src={attachmentUrl}
-                                          alt={`Ảnh đính kèm ${imageIndex + 1}`}
-                                          onLoad={() =>
-                                            scrollMessagesToBottom("auto")
-                                          }
-                                        />
-                                      ) : (
+                                <div className="cskh-message-group">
+                                  {showMeta && (
+                                    <div className="cskh-message-meta cskh-message-meta--outside">
+                                      <div className="cskh-message-meta__identity">
+                                        <strong>
+                                          {getViewerMessageLabel(
+                                            entry.mine,
+                                            currentUserRole,
+                                            currentUserName,
+                                            item
+                                          )}
+                                        </strong>
                                         <span>
-                                          <PaperClipOutlined />
-                                          Xem tệp đính kèm
+                                          {formatMessageTime(getCreatedTime(item))}
                                         </span>
-                                      )}
-                                    </a>
-                                  ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="cskh-message-bubble">
+                                    {(content || attachmentUrls.length > 0) && (
+                                      <Tooltip
+                                        title={
+                                          isCopied
+                                            ? "Đã sao chép"
+                                            : "Sao chép nội dung"
+                                        }
+                                      >
+                                        <Button
+                                          type="text"
+                                          shape="circle"
+                                          size="small"
+                                          className={[
+                                            "cskh-message-copy-button",
+                                            isCopied && "is-copied",
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                          icon={
+                                            isCopied ? (
+                                              <CheckCircleOutlined />
+                                            ) : (
+                                              <CopyOutlined />
+                                            )
+                                          }
+                                          onClick={() =>
+                                            handleCopyMessage(item, index)
+                                          }
+                                          aria-label="Sao chép tin nhắn"
+                                        />
+                                      </Tooltip>
+                                    )}
+
+                                    {content && <p>{content}</p>}
+
+                                    {attachmentUrls.length > 0 && (
+                                      <div
+                                        className={[
+                                          "cskh-attachment-grid",
+                                          attachmentUrls.length === 1 &&
+                                            "has-single-image",
+                                        ]
+                                          .filter(Boolean)
+                                          .join(" ")}
+                                      >
+                                        {attachmentUrls.map(
+                                          (attachmentUrl, imageIndex) => (
+                                            <a
+                                              key={`${attachmentUrl}-${imageIndex}`}
+                                              className="cskh-attachment-preview"
+                                              href={attachmentUrl}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                            >
+                                              {isImageUrl(attachmentUrl) ? (
+                                                <img
+                                                  src={attachmentUrl}
+                                                  alt={`Ảnh đính kèm ${imageIndex + 1}`}
+                                                  onLoad={() =>
+                                                    scrollMessagesToBottom("auto")
+                                                  }
+                                                />
+                                              ) : (
+                                                <span>
+                                                  <PaperClipOutlined />
+                                                  Xem tệp đính kèm
+                                                </span>
+                                              )}
+                                            </a>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -2584,22 +3044,24 @@ export default function CustomerServiceChat() {
                       className="cskh-message-input"
                     />
 
-                    <Button
-                      htmlType="submit"
-                      type="primary"
-                      className="cskh-send-button"
-                      icon={<SendOutlined />}
-                      loading={isSending}
-                      disabled={
-                        isSending ||
-                        (
-                          !messageForm.content.trim() &&
-                          messageAttachments.length === 0
-                        )
-                      }
-                    >
-                      <span>Gửi</span>
-                    </Button>
+                    <Tooltip title="Gửi tin nhắn">
+                      <Button
+                        htmlType="submit"
+                        type="text"
+                        shape="circle"
+                        className="cskh-send-button"
+                        icon={<SendOutlined />}
+                        loading={isSending}
+                        disabled={
+                          isSending ||
+                          (
+                            !messageForm.content.trim() &&
+                            messageAttachments.length === 0
+                          )
+                        }
+                        aria-label="Gửi tin nhắn"
+                      />
+                    </Tooltip>
                   </div>
                 </form>
               </>

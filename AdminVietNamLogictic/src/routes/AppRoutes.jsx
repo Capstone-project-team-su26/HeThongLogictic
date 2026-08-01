@@ -20,6 +20,7 @@ import CustomerList from "../pages/SalePage/CusTomerPagesale/CustomerList";
 import RestrictedItems from "../pages/SalePage/BanItem/RestrictedItems";
 import ServicePricings from "../pages/SalePage/ServicePricingRule/ServicePricings";
 import PendingConsignmentListHistory from "../pages/SalePage/HistorySalePage/HistoryOrderPage/PendingConsignmentListHistory";
+import PendingPurchaseRequestListHistory from "../pages/SalePage/HistorySalePage/HistoryPurchasePage/PendingPurchaseRequestListHistory";
 import OrderPaymentHistory from "../pages/SalePage/HistorySalePage/HistoryOrderPage/OrderDetailhisstory/OrderPaymentHistory";
 import PurchaseRequestList from "../pages/SalePage/PurchasePage/PurchaseRequestList";
 import WarehouseReceiptCreate from "../pages/SalePage/HistorySalePage/HistoryOrderPage/WarehouseReceipt/WarehouseReceiptCreate";
@@ -43,6 +44,13 @@ import {
   ShippingMethodsAdminPage,
   WarehousesAdminPage,
 } from "../pages/AdminPage/AdminCatalogPages";
+
+/* ================= OPERATIONS ================= */
+
+import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
+import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
+import OperationsWarehousePage from "../pages/OperationsPage/OperationsWarehousePage";
+
 /* ================= ROLE CONFIG ================= */
 
 const ROLE_HOME = {
@@ -238,6 +246,11 @@ export default function AppRoutes() {
         />
 
         <Route
+          path="history/purchase-requests"
+          element={<PendingPurchaseRequestListHistory />}
+        />
+
+        <Route
           path="orders/:orderId/payments/history"
           element={<OrderPaymentHistory />}
         />
@@ -264,7 +277,11 @@ export default function AppRoutes() {
             <MainLayout />
           </RequireAuth>
         }
-      />
+      >
+        <Route index element={<OperationsDashboard />} />
+        <Route path="parcels" element={<OperationsParcelsPage />} />
+        <Route path="warehouse" element={<OperationsWarehousePage />} />
+      </Route>
 
       {/* ================= ROOT ================= */}
 
