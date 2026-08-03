@@ -14,7 +14,7 @@ import "./AdminPage.css";
 const ADMIN_MODULES = [
   { path: "/admin/users", title: "Người dùng", description: "Tài khoản, phân quyền, khóa và mở khóa.", icon: <TeamOutlined />, color: "blue" },
   { path: "/admin/warehouses", title: "Kho vận hành", description: "Kho nguồn, kho đích và trạng thái hoạt động.", icon: <BankOutlined />, color: "cyan" },
-  { path: "/admin/warehouse-locations", title: "Vị trí kho", description: "Khu, kệ, ô chứa và tải trọng lưu trữ.", icon: <EnvironmentOutlined />, color: "green" },
+  { path: "/admin/warehouse-locations", title: "Sơ đồ vị trí kho", description: "Chỉnh Zone / Shelf / Bin và giới hạn lưu trữ.", icon: <EnvironmentOutlined />, color: "green" },
   { path: "/admin/carriers", title: "Đơn vị vận chuyển", description: "Đối tác vận chuyển và thông tin tích hợp.", icon: <CarOutlined />, color: "purple" },
   { path: "/admin/package-configurations", title: "Cấu hình đóng gói", description: "Kích thước thùng và phí đóng gói.", icon: <BoxPlotOutlined />, color: "orange" },
   { path: "/admin/service-pricings", title: "Bảng giá vận chuyển", description: "Đơn giá theo tuyến và loại dịch vụ.", icon: <DollarOutlined />, color: "gold" },

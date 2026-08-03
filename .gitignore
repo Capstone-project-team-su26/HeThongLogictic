@@ -1,0 +1,7 @@
+# Local-only Cursor rules — không push link sheet / secret
+.cursor/rules/*.local.mdc
+
+# Env local (root)
+.env
+.env.*
+!.env.example

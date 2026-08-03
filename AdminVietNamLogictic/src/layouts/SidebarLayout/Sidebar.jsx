@@ -93,7 +93,7 @@ const MENU_BY_ROLE = {
         },
         {
           key: "admin-warehouse-locations",
-          label: "Vị trí kho",
+          label: "Sơ đồ vị trí kho",
           icon: <InboxOutlined />,
           path: "/admin/warehouse-locations",
         },
@@ -170,12 +170,6 @@ const MENU_BY_ROLE = {
       label: "Gom hàng",
       icon: <InboxOutlined />,
       path: "/operations-manager/parcels",
-    },
-    {
-      key: "operations-warehouse",
-      label: "Sơ đồ vị trí kho",
-      icon: <DatabaseOutlined />,
-      path: "/operations-manager/warehouse",
     },
   ],
 

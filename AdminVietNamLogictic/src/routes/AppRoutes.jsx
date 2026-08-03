@@ -49,7 +49,6 @@ import {
 
 import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
 import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
-import OperationsWarehousePage from "../pages/OperationsPage/OperationsWarehousePage";
 
 /* ================= ROLE CONFIG ================= */
 
@@ -280,7 +279,6 @@ export default function AppRoutes() {
       >
         <Route index element={<OperationsDashboard />} />
         <Route path="parcels" element={<OperationsParcelsPage />} />
-        <Route path="warehouse" element={<OperationsWarehousePage />} />
       </Route>
 
       {/* ================= ROOT ================= */}
