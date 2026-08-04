@@ -814,71 +814,74 @@ function ProductImageGallery({
   imageUrls = [],
   productName = "Sản phẩm",
 }) {
-  const images =
-    Array.from(
-      new Set(
-        (
-          Array.isArray(imageUrls)
-            ? imageUrls
-            : []
+  const images = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (Array.isArray(imageUrls) ? imageUrls : [])
+            .map(normalizeText)
+            .filter(Boolean)
         )
-          .map(normalizeText)
-          .filter(Boolean)
-      )
-    );
+      ),
+    [imageUrls]
+  );
+
+  const [activeIndex, setActiveIndex] = useState(0);
 
   if (images.length === 0) {
     return (
       <div className="purchase-detail-image-empty">
         <ShoppingOutlined />
-        <span>
-          Chưa có hình ảnh
-        </span>
+        <span>Chưa có hình ảnh</span>
       </div>
     );
   }
 
+  const currentImage = images[activeIndex] || images[0];
+
   return (
     <Image.PreviewGroup
       preview={{
-        countRender: (
-          current,
-          total
-        ) =>
-          `Ảnh ${current}/${total}`,
+        countRender: (current, total) => `Ảnh ${current}/${total}`,
       }}
     >
-      <div className="purchase-detail-image-grid">
-        {images.map(
-          (
-            imageUrl,
-            imageIndex
-          ) => (
-            <div
-              key={`${imageUrl}-${imageIndex}`}
-              className="purchase-detail-image-item"
-            >
-              <Image
-                src={imageUrl}
-                alt={`${productName} - ảnh ${imageIndex + 1}`}
-                rootClassName="purchase-detail-image-root"
-                className="purchase-detail-product-image"
-                preview={{
-                  mask: (
-                    <span className="purchase-detail-image-mask">
-                      <EyeOutlined />
-                      Xem ảnh
-                    </span>
-                  ),
-                }}
-              />
+      <div className="purchase-detail-gallery-container">
+        <div className="purchase-detail-featured-image-box">
+          <Image
+            src={currentImage}
+            alt={`${productName} - ảnh ${activeIndex + 1}`}
+            rootClassName="purchase-detail-featured-image-root"
+            className="purchase-detail-featured-image"
+            preview={{
+              mask: (
+                <span className="purchase-detail-image-mask">
+                  <EyeOutlined /> Phóng to ({activeIndex + 1}/{images.length})
+                </span>
+              ),
+            }}
+          />
+          {images.length > 1 && (
+            <span className="purchase-detail-image-badge">
+              {images.length} hình ảnh
+            </span>
+          )}
+        </div>
 
-              <span className="purchase-detail-image-counter">
-                {imageIndex + 1}/
-                {images.length}
-              </span>
-            </div>
-          )
+        {images.length > 1 && (
+          <div className="purchase-detail-thumbnail-list">
+            {images.map((url, idx) => (
+              <button
+                type="button"
+                key={`${url}-${idx}`}
+                className={`purchase-detail-thumbnail-item ${
+                  idx === activeIndex ? "is-active" : ""
+                }`}
+                onClick={() => setActiveIndex(idx)}
+              >
+                <img src={url} alt={`Thumbnail ${idx + 1}`} />
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </Image.PreviewGroup>
@@ -1257,20 +1260,6 @@ function QuotationView({
                             ?.productName ||
                             "Sản phẩm"}
                         </strong>
-
-                        <small>
-                          Mã dòng báo giá:{" "}
-                          {item
-                            ?.quotationItemId ||
-                            "—"}
-                        </small>
-
-                        <small>
-                          Mã sản phẩm yêu cầu:{" "}
-                          {item
-                            ?.purchaseRequestItemId ||
-                            "—"}
-                        </small>
                       </div>
                     </div>
 
@@ -1345,141 +1334,59 @@ function QuotationView({
         0 ? (
           <Empty description="Không có phụ phí" />
         ) : (
-          <div className="purchase-quote-fee-list">
-            {additionalFees.map(
-              (fee, index) => {
-                const feeTone =
-                  getFeeToneClass(
-                    fee?.feeType
-                  );
+          <div className="purchase-quote-fee-table" role="table" aria-label="Bảng chi tiết phụ phí và thuế">
+            <div className="purchase-quote-fee-table__head" role="row">
+              <span>#</span>
+              <span>Khoản phí / Thuế</span>
+              <span>Phân loại</span>
+              <span>Cách tính</span>
+              <span>Giá trị cấu hình</span>
+              <span style={{ textAlign: "right" }}>Thành tiền</span>
+            </div>
 
+            <div className="purchase-quote-fee-table__body">
+              {additionalFees.map((fee, index) => {
+                const feeTone = getFeeToneClass(fee?.feeType);
                 return (
-                  <article
-                    key={
-                      fee?.id ||
-                      index
-                    }
-                    className={`purchase-quote-fee-card ${feeTone}`}
+                  <div
+                    key={fee?.id || index}
+                    className="purchase-quote-fee-table__row"
+                    role="row"
                   >
-                    <div className="purchase-quote-fee-card__number">
+                    <div className="purchase-quote-fee-table__index">
                       {index + 1}
                     </div>
 
-                    <div className="purchase-quote-fee-card__content">
-                      <div className="purchase-quote-fee-card__title">
-                        <div>
-                          <span>
-                            {getFeeTypeLabel(
-                              fee?.feeType
-                            )}
-                          </span>
-
-                          <h4>
-                            {fee
-                              ?.feeName ||
-                              "Phụ phí"}
-                          </h4>
-                        </div>
-
-                        <strong>
-                          {formatCurrency(
-                            fee?.amount
-                          )}
-                        </strong>
-                      </div>
-
-                      <div className="purchase-quote-fee-card__meta">
-                        <div>
-                          <span>
-                            Cách tính
-                          </span>
-
-                          <strong>
-                            {formatFeeCalculation(
-                              fee
-                            )}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Giá trị cấu hình
-                          </span>
-
-                          <strong>
-                            {normalizeUpperText(
-                              fee
-                                ?.calculationType
-                            ) ===
-                            "PERCENTAGE"
-                              ? `${formatNumber(
-                                  fee?.value
-                                )}%`
-                              : formatCurrency(
-                                  fee?.value
-                                )}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Mã quy tắc giá
-                          </span>
-
-                          <strong>
-                            {fee
-                              ?.pricingRuleId ||
-                              "Hệ thống tự động"}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Thời gian tạo
-                          </span>
-
-                          <div
-                            className="purchase-quote-fee-date"
-                            title={
-                              formatDateUtcTitle(
-                                fee
-                                  ?.createdAt
-                              )
-                            }
-                          >
-                            <strong>
-                              {formatDateTime(
-                                fee
-                                  ?.createdAt
-                              )}
-                            </strong>
-
-                            <small>
-                              UTC+7
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="purchase-quote-fee-card__note">
-                        <FileTextOutlined />
-
-                        <span>
-                          {fee?.note ||
-                            "Không có ghi chú"}
-                        </span>
-                      </div>
-
-                      <small className="purchase-quote-fee-card__id">
-                        Mã khoản phí:{" "}
-                        {fee?.id ||
-                          "—"}
-                      </small>
+                    <div className="purchase-quote-fee-table__name">
+                      <strong>{fee?.feeName || "Phụ phí"}</strong>
+                      {fee?.note && <small>{fee.note}</small>}
                     </div>
-                  </article>
+
+                    <div>
+                      <Tag className={`purchase-quote-fee-tag ${feeTone}`}>
+                        {getFeeTypeLabel(fee?.feeType)}
+                      </Tag>
+                    </div>
+
+                    <div className="purchase-quote-fee-table__calc">
+                      <span>{formatFeeCalculation(fee)}</span>
+                    </div>
+
+                    <div className="purchase-quote-fee-table__val">
+                      <strong>
+                        {normalizeUpperText(fee?.calculationType) === "PERCENTAGE"
+                          ? `${formatNumber(fee?.value)}%`
+                          : formatCurrency(fee?.value)}
+                      </strong>
+                    </div>
+
+                    <div className="purchase-quote-fee-table__amount">
+                      <strong>{formatCurrency(fee?.amount)}</strong>
+                    </div>
+                  </div>
                 );
-              }
-            )}
+              })}
+            </div>
           </div>
         )}
       </section>
@@ -2217,32 +2124,6 @@ export default function PurchaseRequestDetail() {
                     "—"}
                 </strong>
               </div>
-
-              <div className="is-full">
-                <span>
-                  Mã khách hàng
-                </span>
-                <CopyValue
-                  value={
-                    detail
-                      ?.customerId
-                  }
-                  label="mã khách hàng"
-                />
-              </div>
-
-              <div className="is-full">
-                <span>
-                  Mã yêu cầu nội bộ
-                </span>
-                <CopyValue
-                  value={
-                    detail
-                      ?.purchaseRequestId
-                  }
-                  label="mã yêu cầu nội bộ"
-                />
-              </div>
             </div>
           </section>
 
@@ -2298,72 +2179,63 @@ export default function PurchaseRequestDetail() {
         </div>
 
         <section className="purchase-detail-card purchase-services-section">
-          <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
-            <div className="purchase-detail-section-heading__group">
-              <GiftOutlined />
+          {selectedServiceCards.length > 0 && (
+            <>
+              <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
+                <div className="purchase-detail-section-heading__group">
+                  <GiftOutlined />
 
-              <div>
-                <span>
-                  DỊCH VỤ BỔ SUNG
-                </span>
+                  <div>
+                    <span>
+                      DỊCH VỤ BỔ SUNG
+                    </span>
 
-                <h2>
-                  Yêu cầu dịch vụ của khách hàng
-                </h2>
+                    <h2>
+                      Yêu cầu dịch vụ của khách hàng
+                    </h2>
+                  </div>
+                </div>
+
+                <Tag className="purchase-service-count-tag">
+                  {selectedServiceCount}/
+                  {serviceCards.length} dịch vụ đã chọn
+                </Tag>
               </div>
-            </div>
 
-            <Tag className="purchase-service-count-tag">
-              {selectedServiceCount}/
-              {serviceCards.length} dịch vụ đã chọn
-            </Tag>
-          </div>
-
-          {selectedServiceCards.length >
-          0 ? (
-            <div className="purchase-service-grid">
-              {selectedServiceCards.map(
-                (service) => (
-                  <ServiceOptionCard
-                    key={service.key}
-                    icon={service.icon}
-                    title={service.title}
-                    description={
-                      service.description
-                    }
-                    enabled
-                    rule={service.rule}
-                    fallbackValue={
-                      service.fallbackValue
-                    }
-                    fallbackScope={
-                      service.fallbackScope
-                    }
-                    fallbackCode={
-                      service.fallbackCode
-                    }
-                  />
-                )
-              )}
-            </div>
-          ) : (
-            <div className="purchase-service-empty">
-              <GiftOutlined />
-
-              <div>
-                <strong>
-                  Khách hàng không chọn dịch vụ bổ sung
-                </strong>
-
-                <span>
-                  Yêu cầu này không đăng ký đóng gói lại,
-                  đóng thùng gỗ hoặc bảo hiểm hàng hóa.
-                </span>
+              <div className="purchase-service-grid">
+                {selectedServiceCards.map(
+                  (service) => (
+                    <ServiceOptionCard
+                      key={service.key}
+                      icon={service.icon}
+                      title={service.title}
+                      description={
+                        service.description
+                      }
+                      enabled
+                      rule={service.rule}
+                      fallbackValue={
+                        service.fallbackValue
+                      }
+                      fallbackScope={
+                        service.fallbackScope
+                      }
+                      fallbackCode={
+                        service.fallbackCode
+                      }
+                    />
+                  )
+                )}
               </div>
-            </div>
+            </>
           )}
 
-          <div className="purchase-service-detail-grid">
+          <div
+            className="purchase-service-detail-grid"
+            style={{
+              marginTop: selectedServiceCards.length > 0 ? "16px" : "0px",
+            }}
+          >
             <div className="purchase-service-note-card">
               <span>
                 GHI CHÚ CHUNG
@@ -2387,106 +2259,61 @@ export default function PurchaseRequestDetail() {
               </strong>
             </div>
           </div>
-
-          <div className="purchase-service-rule-ids">
-            <div>
-              <span>
-                MÃ QUY TẮC GIÁ ĐÃ CHỌN
-              </span>
-
-              <small>
-                Các mã cấu hình được API gắn trực tiếp vào yêu cầu.
-              </small>
-            </div>
-
-            {Array.isArray(
-              detail
-                ?.pricingRuleIds
-            ) &&
-            detail.pricingRuleIds
-              .length > 0 ? (
-              <div className="purchase-service-rule-id-list">
-                {detail.pricingRuleIds.map(
-                  (ruleId) => (
-                    <Tag
-                      key={ruleId}
-                      className="purchase-service-rule-id-tag"
-                    >
-                      {ruleId}
-                    </Tag>
-                  )
-                )}
-              </div>
-            ) : (
-              <strong className="purchase-service-rule-empty">
-                Chưa có mã quy tắc giá được chọn
-              </strong>
-            )}
-          </div>
         </section>
 
-        <section className="purchase-detail-card purchase-pricing-section">
-          <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
-            <div className="purchase-detail-section-heading__group">
+        {pricingRuleRows.length > 0 && (
+          <section className="purchase-detail-card purchase-pricing-section">
+            <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
+              <div className="purchase-detail-section-heading__group">
+                <DollarOutlined />
+
+                <div>
+                  <span>
+                    CẤU HÌNH PHÍ DỊCH VỤ
+                  </span>
+
+                  <h2>
+                    Bảng quy tắc tính phí đang hoạt động
+                  </h2>
+                </div>
+              </div>
+
+              <Tag className="purchase-pricing-applied-count">
+                {formatNumber(
+                  appliedPricingRuleCount
+                )} cấu hình đã chọn
+              </Tag>
+            </div>
+
+            <div className="purchase-pricing-intro">
               <DollarOutlined />
 
               <div>
-                <span>
-                  CẤU HÌNH PHÍ DỊCH VỤ
-                </span>
+                <strong>
+                  Cách đọc bảng phí
+                </strong>
 
-                <h2>
-                  Bảng quy tắc tính phí đang hoạt động
-                </h2>
+                <p>
+                  Bảng chỉ hiển thị các dịch vụ
+                  khách hàng đã lựa chọn.
+                  Quy tắc kỹ thuật và cấu hình
+                  tham khảo được ẩn khỏi giao diện.
+                </p>
               </div>
             </div>
 
-            <Tag className="purchase-pricing-applied-count">
-              {formatNumber(
-                appliedPricingRuleCount
-              )} cấu hình đã chọn
-            </Tag>
-          </div>
+            {pricingWarning && (
+              <Alert
+                type="warning"
+                showIcon
+                message="Chưa tải đủ cấu hình phí"
+                description={
+                  pricingWarning
+                }
+                className="purchase-pricing-warning"
+              />
+            )}
 
-          <div className="purchase-pricing-intro">
-            <DollarOutlined />
-
-            <div>
-              <strong>
-                Cách đọc bảng phí
-              </strong>
-
-              <p>
-                Bảng chỉ hiển thị các dịch vụ
-                khách hàng đã lựa chọn.
-                Quy tắc kỹ thuật và cấu hình
-                tham khảo được ẩn khỏi giao diện.
-              </p>
-            </div>
-          </div>
-
-          {pricingWarning && (
-            <Alert
-              type="warning"
-              showIcon
-              message="Chưa tải đủ cấu hình phí"
-              description={
-                pricingWarning
-              }
-              className="purchase-pricing-warning"
-            />
-          )}
-
-          {pricingRuleRows.length ===
-          0 ? (
-            <Empty
-              image={
-                Empty
-                  .PRESENTED_IMAGE_SIMPLE
-              }
-              description="Khách hàng chưa chọn dịch vụ có cấu hình phí"
-            />
-          ) : (
             <div
               className="purchase-pricing-table"
               role="table"
@@ -2617,14 +2444,14 @@ export default function PurchaseRequestDetail() {
                 )}
               </div>
             </div>
-          )}
 
-          <p className="purchase-pricing-note">
-            Đây là mức cấu hình của hệ thống.
-            Tổng tiền thanh toán chính thức vẫn
-            sử dụng dữ liệu báo giá do API trả về.
-          </p>
-        </section>
+            <p className="purchase-pricing-note">
+              Đây là mức cấu hình của hệ thống.
+              Tổng tiền thanh toán chính thức vẫn
+              sử dụng dữ liệu báo giá do API trả về.
+            </p>
+          </section>
+        )}
 
         <section className="purchase-detail-card purchase-items-section">
           <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
@@ -2832,7 +2659,7 @@ export default function PurchaseRequestDetail() {
           detail
         }
         pricingRules={
-          pricingRuleRows
+          pricingRules
         }
       />
     </main>
