@@ -116,6 +116,37 @@ const MENU_BY_ROLE = {
           icon: <ShoppingCartOutlined />,
           path: "/admin/shipping-methods",
         },
+        {
+          key: "admin-shipping-routes",
+          label: "Tuyến vận chuyển",
+          icon: <ShoppingCartOutlined />,
+          path: "/admin/shipping-routes",
+        },
+        {
+          key: "admin-suppliers",
+          label: "Nhà cung cấp",
+          icon: <ShoppingOutlined />,
+          path: "/admin/suppliers",
+        },
+      ],
+    },
+    {
+      key: "admin-goods-catalog",
+      label: "Danh mục hàng hóa",
+      icon: <InboxOutlined />,
+      children: [
+        {
+          key: "admin-product-types",
+          label: "Loại hàng",
+          icon: <InboxOutlined />,
+          path: "/admin/product-types",
+        },
+        {
+          key: "admin-units-of-measure",
+          label: "Đơn vị tính",
+          icon: <InboxOutlined />,
+          path: "/admin/units-of-measure",
+        },
       ],
     },
     {

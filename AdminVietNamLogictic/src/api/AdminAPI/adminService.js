@@ -419,6 +419,150 @@ export const deleteRestrictedItem = async (itemId, options = {}) => {
   return getAdminApiData(response);
 };
 
+/* ==================== PRODUCT TYPES ==================== */
+export const getProductTypes = async (options = {}) => {
+  const response = await axiosInstance.get("/api/product-types/all", requestConfig(options));
+  return getAdminApiList(response);
+};
+
+export const getProductTypeDetail = async (productTypeId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/product-types/${requireId(productTypeId, "mã loại hàng")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const createProductType = async (payload, options = {}) => {
+  const response = await axiosInstance.post("/api/product-types", payload, requestConfig(options));
+  return getAdminApiData(response);
+};
+
+export const updateProductType = async (productTypeId, payload, options = {}) => {
+  const response = await axiosInstance.put(
+    `/api/product-types/${requireId(productTypeId, "mã loại hàng")}`,
+    payload,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const deleteProductType = async (productTypeId, options = {}) => {
+  const response = await axiosInstance.delete(
+    `/api/product-types/${requireId(productTypeId, "mã loại hàng")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+/* ==================== UNITS OF MEASURE ==================== */
+export const getUnitsOfMeasure = async (options = {}) => {
+  const response = await axiosInstance.get("/api/units-of-measure/all", requestConfig(options));
+  return getAdminApiList(response);
+};
+
+export const getUnitOfMeasureDetail = async (unitId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/units-of-measure/${requireId(unitId, "mã đơn vị tính")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const createUnitOfMeasure = async (payload, options = {}) => {
+  const response = await axiosInstance.post("/api/units-of-measure", payload, requestConfig(options));
+  return getAdminApiData(response);
+};
+
+export const updateUnitOfMeasure = async (unitId, payload, options = {}) => {
+  const response = await axiosInstance.put(
+    `/api/units-of-measure/${requireId(unitId, "mã đơn vị tính")}`,
+    payload,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const deleteUnitOfMeasure = async (unitId, options = {}) => {
+  const response = await axiosInstance.delete(
+    `/api/units-of-measure/${requireId(unitId, "mã đơn vị tính")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+/* ==================== SUPPLIERS ==================== */
+export const getSuppliers = async (options = {}) => {
+  const response = await axiosInstance.get("/api/suppliers", requestConfig(options));
+  return getAdminApiList(response);
+};
+
+export const getSupplierDetail = async (supplierId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/suppliers/${requireId(supplierId, "mã nhà cung cấp")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const createSupplier = async (payload, options = {}) => {
+  const response = await axiosInstance.post("/api/suppliers", payload, requestConfig(options));
+  return getAdminApiData(response);
+};
+
+export const updateSupplier = async (supplierId, payload, options = {}) => {
+  const response = await axiosInstance.put(
+    `/api/suppliers/${requireId(supplierId, "mã nhà cung cấp")}`,
+    payload,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const deleteSupplier = async (supplierId, options = {}) => {
+  const response = await axiosInstance.delete(
+    `/api/suppliers/${requireId(supplierId, "mã nhà cung cấp")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+/* ==================== SHIPPING ROUTES ==================== */
+export const getShippingRoutes = async (options = {}) => {
+  const response = await axiosInstance.get("/api/shipping-routes", requestConfig(options));
+  return getAdminApiList(response);
+};
+
+export const getShippingRouteDetail = async (routeId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/shipping-routes/${requireId(routeId, "mã tuyến vận chuyển")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const createShippingRoute = async (payload, options = {}) => {
+  const response = await axiosInstance.post("/api/shipping-routes", payload, requestConfig(options));
+  return getAdminApiData(response);
+};
+
+export const updateShippingRoute = async (routeId, payload, options = {}) => {
+  const response = await axiosInstance.put(
+    `/api/shipping-routes/${requireId(routeId, "mã tuyến vận chuyển")}`,
+    payload,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const deleteShippingRoute = async (routeId, options = {}) => {
+  const response = await axiosInstance.delete(
+    `/api/shipping-routes/${requireId(routeId, "mã tuyến vận chuyển")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
 /* ==================== WAREHOUSE LAYOUT ==================== */
 export const getWarehouseLayout = async (warehouseId, options = {}) => {
   const response = await axiosInstance.get(

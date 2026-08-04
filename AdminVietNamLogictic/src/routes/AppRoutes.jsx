@@ -39,9 +39,13 @@ import {
   CarriersAdminPage,
   PackageConfigurationsAdminPage,
   PricingRulesAdminPage,
+  ProductTypesAdminPage,
   RestrictedItemsAdminPage,
   ServicePricingsAdminPage,
   ShippingMethodsAdminPage,
+  ShippingRoutesAdminPage,
+  SuppliersAdminPage,
+  UnitsOfMeasureAdminPage,
   WarehousesAdminPage,
 } from "../pages/AdminPage/AdminCatalogPages";
 
@@ -200,6 +204,10 @@ export default function AppRoutes() {
         <Route path="service-pricings" element={<ServicePricingsAdminPage />} />
         <Route path="pricing-rules" element={<PricingRulesAdminPage />} />
         <Route path="restricted-items" element={<RestrictedItemsAdminPage />} />
+        <Route path="product-types" element={<ProductTypesAdminPage />} />
+        <Route path="units-of-measure" element={<UnitsOfMeasureAdminPage />} />
+        <Route path="suppliers" element={<SuppliersAdminPage />} />
+        <Route path="shipping-routes" element={<ShippingRoutesAdminPage />} />
       </Route>
 
       {/* ================= SALE ================= */}
