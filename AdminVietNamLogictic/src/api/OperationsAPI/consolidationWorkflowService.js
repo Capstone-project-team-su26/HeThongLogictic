@@ -4,9 +4,9 @@
  * Mapping:
  * - Tồn kho      → GET /api/inventories
  * - Master box    → /api/consolidation (masterCode ≈ mã master box; gom theo orderIds)
- * - Lookups       → /api/warehouses|carriers|shipping-methods/active
+ * - Lookups       → /api/warehouses|carriers|shipping-methods/active|shipping-routes
  * - Chi tiết kiện → GET /api/parcels/{parcelId}
- * - Shipment QT   → WRO pipeline + POST /api/international-shipments
+ * - Shipment QT   → WRO: AVAILABLE → RELEASE_APPROVED → picking → route@PACKING → complete(RELEASED) → POST /api/international-shipments
  */
 
 import axiosInstance from "../axiosInstance";
@@ -81,11 +81,20 @@ function volumeM3(length, width, height) {
   return Math.round(((length * width * height) / 1e6) * 1000) / 1000;
 }
 
+export const TRANSPORT_MODES = [
+  { value: "AIR", label: "Hàng không (AIR)" },
+  { value: "SEA", label: "Đường biển (SEA)" },
+  { value: "ROAD", label: "Đường bộ (ROAD)" },
+  { value: "RAIL", label: "Đường sắt (RAIL)" },
+];
+
 function detectShippingMode(method) {
   const hay = `${method?.code ?? ""} ${method?.name ?? ""} ${method?.methodCode ?? ""} ${method?.methodName ?? ""}`.toUpperCase();
   if (/SEA|LCL|FCL|OCEAN|ĐƯỜNG BIỂN|DUONG BIEN/.test(hay)) return "SEA";
-  if (/EXPRESS|NHANH/.test(hay)) return "EXPRESS";
-  return "AIR";
+  if (/ROAD|LAND|TRUCK|ĐƯỜNG BỘ|DUONG BO/.test(hay)) return "ROAD";
+  if (/RAIL|TRAIN|ĐƯỜNG SẮT|DUONG SAT/.test(hay)) return "RAIL";
+  if (/AIR|BAY|HÀNG KHÔNG|HANG KHONG|EXPRESS|NHANH/.test(hay)) return "AIR";
+  return "";
 }
 
 /** Chuẩn hoá status consolidation BE → DRAFT | PACKED | SHIPPED | CANCELLED */
@@ -206,6 +215,22 @@ function mapShippingMethod(row) {
     name: text(row?.methodName || row?.name),
   };
   return { ...mapped, mode: detectShippingMode(mapped) };
+}
+
+function mapShippingRoute(row) {
+  return {
+    id: text(row?.id || row?.shippingRouteId || row?.routeId),
+    code: text(row?.routeCode || row?.code),
+    name: text(row?.routeName || row?.name),
+    originCountry: text(row?.originCountry),
+    destinationCountry: text(row?.destinationCountry),
+    transportMode: upper(row?.transportMode || row?.TransportMode),
+    originWarehouseId: text(row?.originWarehouseId),
+    destinationWarehouseId: text(row?.destinationWarehouseId),
+    carrierId: text(row?.carrierId),
+    estimatedTransitDays: num(row?.estimatedTransitDays),
+    isActive: row?.isActive !== false,
+  };
 }
 
 /** Map 1 dòng inventory BE → shape kiện trên UI. */
@@ -440,6 +465,18 @@ export async function listShippingMethods() {
   try {
     const response = await axiosInstance.get("/api/shipping-methods");
     return getAdminApiList(response).map(mapShippingMethod).filter((row) => row.id);
+  } catch {
+    return [];
+  }
+}
+
+export async function listShippingRoutes(filters = {}) {
+  try {
+    const params = {};
+    if (filters.transportMode) params.transportMode = filters.transportMode;
+    if (filters.isActive != null) params.isActive = filters.isActive;
+    const response = await axiosInstance.get("/api/shipping-routes", { params });
+    return getAdminApiList(response).map(mapShippingRoute).filter((row) => row.id || row.code);
   } catch {
     return [];
   }
@@ -706,10 +743,19 @@ export async function confirmMasterBoxPacking(boxId) {
 /* ============================ WRO + Shipment ============================ */
 
 /**
- * Pipeline BE:
- * Create WRO (AVAILABLE) → APPROVED → picking-list → confirm picking (PACKING)
- * → complete (RELEASED) → POST /api/international-shipments
+ * Pipeline BE (đã smoke-test):
+ * POST WRO từ inventory AVAILABLE
+ * → PUT status = RELEASE_APPROVED
+ * → POST picking-list
+ * → PUT picking confirm  (WRO → PACKING)
+ * → PUT shipping-route   (vẫn PACKING; gán sau RELEASED sẽ nhảy IN_TRANSIT)
+ * → PUT complete         (WRO → RELEASED)
+ * → POST /api/international-shipments
+ *
+ * Lưu ý: kiện đã gom consolidation (packed) thường RESERVED — BE từ chối tạo WRO.
  */
+const WRO_CREATABLE_STATUSES = new Set(["AVAILABLE", "READY_FOR_CONSOLIDATION"]);
+
 async function resolveAvailableInventoryForBoxes(masterBoxIds) {
   const details = await Promise.all(masterBoxIds.map((id) => getMasterBoxDetail(id)));
   const wantedCodes = new Set();
@@ -724,66 +770,107 @@ async function resolveAvailableInventoryForBoxes(masterBoxIds) {
     throw new Error("Các master box đã chọn chưa có kiện — không tạo được WRO.");
   }
 
-  const response = await axiosInstance.get("/api/inventories", {
-    params: { status: "AVAILABLE" },
-  });
-  const available = getAdminApiList(response).map((row) => mapInventoryRow(row));
-  const matched = available.filter(
-    (row) =>
-      (row.parcelCode && wantedCodes.has(upper(row.parcelCode))) ||
-      (row.parcelId && wantedParcelIds.has(text(row.parcelId)))
+  const response = await axiosInstance.get("/api/inventories");
+  const inventoryRows = getAdminApiList(response).map((row) => mapInventoryRow(row));
+
+  const matchesWanted = (row) =>
+    (row.parcelCode && wantedCodes.has(upper(row.parcelCode))) ||
+    (row.parcelId && wantedParcelIds.has(text(row.parcelId)));
+
+  const found = inventoryRows.filter(matchesWanted);
+  const matched = found.filter((row) =>
+    WRO_CREATABLE_STATUSES.has(row.inventoryStatus || "AVAILABLE")
   );
 
   if (!matched.length) {
+    if (found.length) {
+      const sample = found
+        .slice(0, 5)
+        .map((row) => `${row.parcelCode || row.parcelId}=${row.inventoryStatus || "?"}`)
+        .join(", ");
+      throw new Error(
+        `BE chỉ cho tạo WRO từ tồn AVAILABLE. Kiện trong master box đang: ${sample}. ` +
+          "Hãy tạo WRO + shipment trước khi pack consolidation, hoặc hủy/mở lại box để trả kiện về AVAILABLE."
+      );
+    }
     throw new Error(
-      "Không tìm thấy tồn kho AVAILABLE khớp kiện trong master box. WRO chỉ tạo được từ inventory đang AVAILABLE."
+      "Không tìm thấy tồn kho khớp kiện trong master box trên /api/inventories."
     );
   }
 
-  const missing = [...wantedCodes].filter(
-    (code) => !matched.some((row) => upper(row.parcelCode) === code)
+  const matchedCodes = new Set(matched.map((row) => upper(row.parcelCode)).filter(Boolean));
+  const matchedParcelIds = new Set(matched.map((row) => text(row.parcelId)).filter(Boolean));
+  const missingCodes = [...wantedCodes].filter((code) => {
+    if (matchedCodes.has(code)) return false;
+    const row = found.find((item) => upper(item.parcelCode) === code);
+    return !(row?.parcelId && matchedParcelIds.has(text(row.parcelId)));
+  });
+  if (missingCodes.length) {
+    const blocked = found
+      .filter((row) => !WRO_CREATABLE_STATUSES.has(row.inventoryStatus || ""))
+      .map((row) => `${row.parcelCode}=${row.inventoryStatus}`)
+      .slice(0, 5);
+    throw new Error(
+      `Thiếu tồn AVAILABLE cho kiện: ${missingCodes.slice(0, 5).join(", ")}` +
+        (blocked.length ? ` (${blocked.join(", ")})` : "")
+    );
+  }
+
+  const byId = new Map();
+  for (const row of matched) {
+    const key = text(row.inventoryId || row.id);
+    if (key && !byId.has(key)) byId.set(key, row);
+  }
+  return { details, items: [...byId.values()] };
+}
+
+async function assignWroShippingRoute(wroId, payload) {
+  const body = {
+    carrierId: text(payload.carrierId) || undefined,
+    shippingMethodId: text(payload.shippingMethodId) || undefined,
+    shippingRoute: text(payload.shippingRoute) || undefined,
+    estimatedDeliveryDays:
+      payload.estimatedDeliveryDays != null && payload.estimatedDeliveryDays !== ""
+        ? Number(payload.estimatedDeliveryDays)
+        : undefined,
+    note: text(payload.note) || undefined,
+  };
+  if (
+    !body.carrierId &&
+    !body.shippingMethodId &&
+    !body.shippingRoute &&
+    body.estimatedDeliveryDays == null &&
+    !body.note
+  ) {
+    return;
+  }
+  await axiosInstance.put(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/shipping-route`,
+    body
   );
-  if (missing.length) {
-    throw new Error(
-      `Thiếu tồn kho AVAILABLE cho kiện: ${missing.slice(0, 5).join(", ")}${
-        missing.length > 5 ? "…" : ""
-      }`
-    );
-  }
-
-  return { details, items: matched };
 }
 
 async function createAndReleaseWro(payload, inventoryRows) {
-  const receiverName = text(payload.receiverName);
-  const receiverPhone = text(payload.receiverPhone);
-  const deliveryAddress = text(payload.deliveryAddress);
-  if (!receiverName || !receiverPhone || !deliveryAddress) {
-    throw new Error("Cần nhập người nhận, SĐT và địa chỉ giao để tạo WRO.");
-  }
-
   const createItems = inventoryRows.map((row) => ({
     inventoryId: row.inventoryId || row.id,
     quantity: Math.max(1, Number(row.quantity) || 1),
   }));
 
   const createResponse = await axiosInstance.post("/api/warehouse-release-requests", {
-    receiverName,
-    receiverPhone,
-    deliveryAddress,
     shelfCode: payload.shelfCode || undefined,
+    exportReason: text(payload.exportReason) || undefined,
+    carrierId: text(payload.carrierId) || undefined,
     items: createItems,
   });
   const created = getAdminApiData(createResponse);
   const wroId = text(created?.wroId || created?.id || created?.WroId);
   if (!wroId) throw new Error("Tạo WRO thành công nhưng không nhận được wroId.");
 
-  // Duyệt
+  // BE: RELEASE_APPROVED (không phải APPROVED)
   await axiosInstance.put(`/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`, {
-    status: "APPROVED",
+    status: "RELEASE_APPROVED",
   });
 
-  // Tạo phiếu picking
   const pickingResponse = await axiosInstance.post(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/picking-list`
   );
@@ -793,22 +880,28 @@ async function createAndReleaseWro(payload, inventoryRows) {
   );
   if (!pickingListId) throw new Error("Tạo phiếu picking thành công nhưng thiếu pickingListId.");
 
-  const pickingItems = (picking?.items || created?.items || []).map((item) => ({
-    inventoryId: text(item.inventoryId || item.InventoryId),
-    quantity: Math.max(1, Number(item.quantity ?? item.Quantity) || 1),
-  })).filter((item) => item.inventoryId);
+  // Dùng inventoryId từ response WRO/picking (BE có thể đổi id so với request)
+  const pickingItems = (picking?.items || created?.items || [])
+    .map((item) => ({
+      inventoryId: text(item.inventoryId || item.InventoryId),
+      quantity: Math.max(1, Number(item.quantity ?? item.Quantity) || 1),
+    }))
+    .filter((item) => item.inventoryId);
 
   if (!pickingItems.length) {
     throw new Error("Phiếu picking không có item để xác nhận.");
   }
 
-  // Xác nhận lấy hàng → WRO = PACKING
+  // Confirm → WRO = PACKING
   await axiosInstance.put(
     `/api/picking-lists/${encodeURIComponent(pickingListId)}/confirm`,
     { items: pickingItems }
   );
 
-  // Hoàn tất xuất kho → WRO = RELEASED
+  // Gán tuyến khi đang PACKING (gán sau RELEASED sẽ đẩy sang IN_TRANSIT)
+  await assignWroShippingRoute(wroId, payload);
+
+  // Complete từ PACKING → RELEASED (không gọi /packing trước)
   await axiosInstance.put(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/complete`,
     { items: pickingItems }
@@ -854,22 +947,27 @@ export async function createShipment(payload) {
       items
     );
     wroRequestIds = [wro.wroId];
+  } else {
+    // WRO có sẵn: gán tuyến chỉ khi chưa RELEASED/IN_TRANSIT — best-effort, không chặn shipment
+    await Promise.allSettled(
+      wroRequestIds.map((wroId) => assignWroShippingRoute(wroId, payload))
+    );
   }
 
   if (!originWarehouseId) throw new Error("Cần chọn kho xuất.");
   if (!destinationWarehouseId) throw new Error("Cần chọn kho đích.");
 
-  const methods = await listShippingMethods();
-  const method =
-    methods.find((row) => row.id === payload.shippingMethodId) ||
-    methods.find((row) => row.code === payload.shippingMethodId);
+  // CreateInternationalShipmentDto.shippingMethod = hình thức (AIR/SEA/ROAD/RAIL), không phải catalog methodId
+  const shippingMethod = upper(
+    payload.shippingMethod || payload.transportMode || ""
+  );
 
   const response = await axiosInstance.post("/api/international-shipments", {
     wroRequestIds,
     originWarehouseId,
     destinationWarehouseId,
-    carrierId: payload.carrierId || undefined,
-    shippingMethod: method?.code || method?.name || payload.shippingMethodId || undefined,
+    carrierId: text(payload.carrierId) || undefined,
+    shippingMethod: shippingMethod || undefined,
   });
   const shipment = getAdminApiData(response);
   const shipmentId = text(shipment?.shipmentId || shipment?.id || shipment?.ShipmentId);
@@ -895,7 +993,9 @@ export async function createShipment(payload) {
     originWarehouseId,
     destinationWarehouseId,
     carrierId: text(shipment?.carrierId || payload.carrierId),
-    shippingMethodId: payload.shippingMethodId,
+    shippingMethod,
+    shippingMethodId: text(payload.shippingMethodId),
+    shippingRoute: text(payload.shippingRoute),
     masterBoxIds,
     wroRequestIds,
     status: text(shipment?.status || "CREATED"),

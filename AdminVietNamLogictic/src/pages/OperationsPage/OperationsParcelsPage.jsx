@@ -31,6 +31,7 @@ import {
   listMasterBoxes,
   listShipments,
   listShippingMethods,
+  listShippingRoutes,
   listWarehouses,
   MASTER_BOX_STATUS_META,
   PACKAGE_STATUS_META,
@@ -71,6 +72,7 @@ export default function OperationsParcelsPage() {
     warehouses: [],
     carriers: [],
     shippingMethods: [],
+    shippingRoutes: [],
   });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedParcelIds, setSelectedParcelIds] = useState([]);
@@ -91,16 +93,24 @@ export default function OperationsParcelsPage() {
     refresh ? setIsRefreshing(true) : setIsLoading(true);
     setLoadError("");
     try {
-      const [warehouses, carriers, shippingMethods, inventoryRows, boxes, shipmentRows] =
-        await Promise.all([
-          listWarehouses(),
-          listCarriers(),
-          listShippingMethods(),
-          listConsolidationInventory(),
-          listMasterBoxes(),
-          listShipments(),
-        ]);
-      setLookups({ warehouses, carriers, shippingMethods });
+      const [
+        warehouses,
+        carriers,
+        shippingMethods,
+        shippingRoutes,
+        inventoryRows,
+        boxes,
+        shipmentRows,
+      ] = await Promise.all([
+        listWarehouses(),
+        listCarriers(),
+        listShippingMethods(),
+        listShippingRoutes({ isActive: true }),
+        listConsolidationInventory(),
+        listMasterBoxes(),
+        listShipments(),
+      ]);
+      setLookups({ warehouses, carriers, shippingMethods, shippingRoutes });
       setInventory(inventoryRows);
       setMasterBoxes(boxes);
       setShipments(shipmentRows);
@@ -867,6 +877,7 @@ export default function OperationsParcelsPage() {
           warehouses={lookups.warehouses}
           carriers={lookups.carriers}
           shippingMethods={lookups.shippingMethods}
+          shippingRoutes={lookups.shippingRoutes}
           onClose={() => setShipmentDraft(null)}
           onSubmit={async (payload) => {
             try {
