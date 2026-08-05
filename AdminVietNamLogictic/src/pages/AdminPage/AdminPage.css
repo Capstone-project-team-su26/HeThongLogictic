@@ -283,10 +283,23 @@
 }
 
 .admin-form-grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding-top: 8px;
+}
+
+.admin-autofill-trap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .admin-form-grid--single {
@@ -517,6 +530,98 @@
   bottom: 11px;
   color: #94a3b8;
   font-size: 18px;
+}
+
+.admin-warehouse-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-shelf {
+  margin-bottom: 12px;
+}
+
+.admin-shelf:last-child {
+  margin-bottom: 0;
+}
+
+.admin-shelf__title {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-bin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.admin-bin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 12px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.admin-bin.is-inactive {
+  opacity: 0.72;
+  background: #f8fafc;
+}
+
+.admin-bin strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 750;
+  color: #0f172a;
+}
+
+.admin-bin span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.admin-bin__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f7;
+}
+
+.admin-bin__btn.ant-btn {
+  height: 28px;
+  padding-inline: 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-bin__btn--edit.ant-btn {
+  color: #1d4ed8;
+}
+
+.admin-bin__btn--edit.ant-btn:hover {
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.admin-bin__btn--delete.ant-btn-dangerous {
+  color: #dc2626;
+}
+
+.admin-bin__btn--delete.ant-btn-dangerous:hover {
+  color: #b91c1c;
+  background: #fef2f2;
 }
 
 .admin-module-card.is-red .admin-module-card__icon { color: #dc2626; background: #fef2f2; }

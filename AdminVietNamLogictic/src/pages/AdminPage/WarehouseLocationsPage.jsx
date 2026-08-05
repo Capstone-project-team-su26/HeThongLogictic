@@ -1,11 +1,9 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import {
+  Alert,
   Button,
+  Collapse,
+  Form,
   Input,
   InputNumber,
   Modal,
@@ -13,9 +11,7 @@ import {
   Select,
   Space,
   Switch,
-  Table,
-  Tag,
-  Tooltip,
+  Typography,
 } from "antd";
 import {
   DeleteOutlined,
@@ -48,19 +44,9 @@ const INITIAL_FORM = {
 
 const getLocationId = (record) => record?.id || record?.locationId || "";
 
-const compareText = (a, b) =>
-  String(a ?? "").localeCompare(String(b ?? ""), "vi", { sensitivity: "base" });
-
-const uniqueSelectOptions = (items, getValue, getLabel = (value) => value) => {
-  const map = new Map();
-  for (const item of items) {
-    const value = getValue(item);
-    if (value == null || value === "") continue;
-    if (!map.has(value)) map.set(value, getLabel(value, item));
-  }
-  return [...map.entries()]
-    .sort((a, b) => compareText(a[1], b[1]))
-    .map(([value, label]) => ({ label: String(label), value }));
+const formatVolume = (value) => {
+  if (value == null || Number.isNaN(Number(value))) return "—";
+  return Number(value).toLocaleString("vi-VN");
 };
 
 const buildPayload = (form) => ({
@@ -72,6 +58,35 @@ const buildPayload = (form) => ({
   isActive: Boolean(form.isActive),
   note: form.note.trim() || null,
 });
+
+function groupLocations(locations) {
+  const zones = new Map();
+  for (const loc of locations || []) {
+    const zoneName = loc.zoneName || loc.zoneCode || "Chưa có zone";
+    const shelfCode = loc.shelfCode || "Chưa có shelf";
+    if (!zones.has(zoneName)) zones.set(zoneName, new Map());
+    const shelves = zones.get(zoneName);
+    if (!shelves.has(shelfCode)) shelves.set(shelfCode, []);
+    shelves.get(shelfCode).push(loc);
+  }
+
+  return [...zones.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, "vi"))
+    .map(([zoneName, shelves]) => ({
+      zoneName,
+      shelves: [...shelves.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, "vi"))
+        .map(([shelfCode, bins]) => ({
+          shelfCode,
+          bins: bins.sort((a, b) =>
+            String(a.binCode || a.code || "").localeCompare(
+              String(b.binCode || b.code || ""),
+              "vi"
+            )
+          ),
+        })),
+    }));
+}
 
 export default function WarehouseLocationsPage() {
   const [warehouses, setWarehouses] = useState([]);
@@ -125,11 +140,6 @@ export default function WarehouseLocationsPage() {
     return () => window.clearTimeout(timer);
   }, [loadLocations]);
 
-  const zoneOptions = useMemo(
-    () => uniqueSelectOptions(locations, (item) => item.zoneName),
-    [locations]
-  );
-
   const filteredLocations = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase("vi");
 
@@ -138,10 +148,45 @@ export default function WarehouseLocationsPage() {
       if (statusFilter === "true" && !item.isActive) return false;
       if (statusFilter === "false" && item.isActive) return false;
       if (!keyword) return true;
-      return [item.zoneName, item.shelfCode, item.binCode, item.note]
-        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
+      return [item.zoneName, item.shelfCode, item.binCode, item.note].some((value) =>
+        String(value ?? "").toLocaleLowerCase("vi").includes(keyword)
+      );
     });
   }, [locations, query, statusFilter, zoneFilter]);
+
+  const tree = useMemo(() => groupLocations(filteredLocations), [filteredLocations]);
+  const binCount = filteredLocations.length;
+  const zoneCount = tree.length;
+  const shelfCount = tree.reduce((sum, zone) => sum + zone.shelves.length, 0);
+
+  const zoneOptions = useMemo(() => {
+    const names = [
+      ...new Set(
+        locations
+          .map((item) => item.zoneName)
+          .filter((name) => name != null && name !== "")
+      ),
+    ].sort((a, b) => a.localeCompare(b, "vi"));
+    return names.map((name) => ({ label: name, value: name }));
+  }, [locations]);
+
+  const existingZones = useMemo(
+    () =>
+      groupLocations(locations)
+        .map((zone) => zone.zoneName)
+        .filter((name) => name !== "Chưa có zone"),
+    [locations]
+  );
+
+  const shelvesForCreateZone = useMemo(() => {
+    const zone = groupLocations(locations).find(
+      (entry) => entry.zoneName === form.zoneName.trim()
+    );
+    if (!zone) return [];
+    return zone.shelves
+      .map((shelf) => shelf.shelfCode)
+      .filter((code) => code !== "Chưa có shelf");
+  }, [locations, form.zoneName]);
 
   const openCreate = () => {
     setEditingRecord(null);
@@ -152,12 +197,12 @@ export default function WarehouseLocationsPage() {
   const openEdit = (record) => {
     setEditingRecord(record);
     setForm({
-      zoneName: record.zoneName || "",
+      zoneName: record.zoneName || record.zoneCode || "",
       shelfCode: record.shelfCode || "",
-      binCode: record.binCode || "",
-      maxVolume: record.maxVolume ?? null,
+      binCode: record.binCode || record.code || "",
+      maxVolume: record.maxVolume ?? record.capacity ?? null,
       maxWeight: record.maxWeight ?? null,
-      isActive: Boolean(record.isActive),
+      isActive: record.isActive !== false,
       note: record.note || "",
     });
     setEditorOpen(true);
@@ -168,8 +213,8 @@ export default function WarehouseLocationsPage() {
       AuthNotify.warning("Chưa chọn kho", "Vui lòng chọn kho.");
       return;
     }
-    if (!form.zoneName.trim() && !form.shelfCode.trim() && !form.binCode.trim()) {
-      AuthNotify.warning("Thiếu thông tin", "Vui lòng nhập ít nhất tên khu, mã kệ hoặc mã ô.");
+    if (!form.zoneName.trim() || !form.shelfCode.trim() || !form.binCode.trim()) {
+      AuthNotify.warning("Thiếu thông tin", "Vui lòng nhập đủ Zone, Shelf và Bin.");
       return;
     }
 
@@ -202,103 +247,20 @@ export default function WarehouseLocationsPage() {
     }
   };
 
-  const columns = useMemo(
-    () => [
-      {
-        title: "Khu",
-        dataIndex: "zoneName",
-        key: "zoneName",
-        width: 170,
-        fixed: "left",
-        sorter: (a, b) => compareText(a.zoneName, b.zoneName),
-        render: (value) => value || "—",
-      },
-      {
-        title: "Mã kệ",
-        dataIndex: "shelfCode",
-        key: "shelfCode",
-        width: 130,
-        sorter: (a, b) => compareText(a.shelfCode, b.shelfCode),
-        render: (value) => value || "—",
-      },
-      {
-        title: "Mã ô",
-        dataIndex: "binCode",
-        key: "binCode",
-        width: 130,
-        sorter: (a, b) => compareText(a.binCode, b.binCode),
-        render: (value) => value || "—",
-      },
-      {
-        title: "Thể tích tối đa",
-        dataIndex: "maxVolume",
-        key: "maxVolume",
-        width: 150,
-        sorter: (a, b) => Number(a.maxVolume ?? 0) - Number(b.maxVolume ?? 0),
-        render: (value) => value ?? "—",
-      },
-      {
-        title: "Tải trọng tối đa",
-        dataIndex: "maxWeight",
-        key: "maxWeight",
-        width: 150,
-        sorter: (a, b) => Number(a.maxWeight ?? 0) - Number(b.maxWeight ?? 0),
-        render: (value) => (value == null ? "—" : `${value} kg`),
-      },
-      {
-        title: "Ghi chú",
-        dataIndex: "note",
-        key: "note",
-        width: 220,
-        ellipsis: true,
-        sorter: (a, b) => compareText(a.note, b.note),
-        render: (value) => value || "—",
-      },
-      {
-        title: "Trạng thái",
-        dataIndex: "isActive",
-        key: "isActive",
-        width: 130,
-        sorter: (a, b) => Number(Boolean(b.isActive)) - Number(Boolean(a.isActive)),
-        render: (value) => (
-          <Tag color={value ? "success" : "default"}>{value ? "Đang dùng" : "Ngừng dùng"}</Tag>
-        ),
-      },
-      {
-        title: "Thao tác",
-        key: "actions",
-        width: 110,
-        fixed: "right",
-        align: "center",
-        render: (_, record) => (
-          <Space size={4}>
-            <Tooltip title="Chỉnh sửa">
-              <Button type="text" className="admin-action-edit" icon={<EditOutlined />} onClick={() => openEdit(record)} />
-            </Tooltip>
-            <Popconfirm title="Xóa vị trí kho?" okText="Xóa" cancelText="Hủy" onConfirm={() => remove(record)}>
-              <Tooltip title="Xóa">
-                <Button type="text" danger icon={<DeleteOutlined />} />
-              </Tooltip>
-            </Popconfirm>
-          </Space>
-        ),
-      },
-    ],
-    []
-  );
-
   return (
     <div className="admin-page">
       <section className="admin-page__hero">
         <div>
           <span>QUẢN TRỊ KHO</span>
-          <h1>Vị trí lưu trữ</h1>
-          <p>Quản lý khu, kệ, ô chứa và giới hạn lưu trữ theo từng kho.</p>
+          <h1>Sơ đồ vị trí kho</h1>
+          <p>Chọn kho, xem Zone / Shelf / Bin và chỉnh vị trí lưu trữ.</p>
         </div>
         <div className="admin-page__hero-count">
-          <strong>{locations.length}</strong>
-          <span>vị trí</span>
-          <small>UTC đồng bộ</small>
+          <strong>
+            {zoneCount} · {shelfCount} · {binCount}
+          </strong>
+          <span>zone · shelf · bin</span>
+          <small>{locations.length} vị trí tổng</small>
         </div>
       </section>
 
@@ -309,7 +271,10 @@ export default function WarehouseLocationsPage() {
             optionFilterProp="label"
             value={warehouseId || undefined}
             placeholder="Chọn kho"
-            options={warehouses.map((warehouse) => ({ value: warehouse.id, label: `${warehouse.name} (${warehouse.code || "chưa có mã"})` }))}
+            options={warehouses.map((warehouse) => ({
+              value: warehouse.id,
+              label: `${warehouse.name} (${warehouse.code || "chưa có mã"})`,
+            }))}
             onChange={setWarehouseId}
             className="admin-page__warehouse-select"
           />
@@ -340,25 +305,110 @@ export default function WarehouseLocationsPage() {
             onChange={setStatusFilter}
             className="admin-page__filter-select"
           />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={loadLocations}>Tải lại</Button>
-          <Button type="primary" icon={<PlusOutlined />} disabled={!warehouseId} onClick={openCreate}>Thêm vị trí</Button>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={loadLocations}>
+            Tải lại
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!warehouseId}
+            onClick={openCreate}
+          >
+            Thêm vị trí
+          </Button>
         </div>
 
-        <div className="admin-page__table">
-          <Table
-            rowKey={(record) => getLocationId(record)}
-            columns={columns}
-            dataSource={filteredLocations}
-            loading={loading}
-            scroll={{ x: "max-content" }}
-            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `${total} vị trí` }}
+        {!warehouseId ? (
+          <Alert type="info" showIcon message="Chọn một kho để xem sơ đồ vị trí." />
+        ) : loading ? (
+          <Typography.Text type="secondary">Đang tải vị trí…</Typography.Text>
+        ) : tree.length === 0 ? (
+          <Alert
+            type="info"
+            showIcon
+            message="Kho này chưa có vị trí khớp bộ lọc. Nhấn “Thêm vị trí” để tạo Zone / Shelf / Bin."
           />
-        </div>
+        ) : (
+          <div className="admin-warehouse-tree">
+            <Collapse
+              defaultActiveKey={tree.map((zone) => zone.zoneName)}
+              items={tree.map((zone) => ({
+                key: zone.zoneName,
+                label: (
+                  <strong>
+                    {zone.zoneName}{" "}
+                    <Typography.Text type="secondary" style={{ fontWeight: 500 }}>
+                      ({zone.shelves.reduce((n, s) => n + s.bins.length, 0)} bin)
+                    </Typography.Text>
+                  </strong>
+                ),
+                children: (
+                  <div>
+                    {zone.shelves.map((shelf) => (
+                      <div key={shelf.shelfCode} className="admin-shelf">
+                        <p className="admin-shelf__title">Shelf {shelf.shelfCode}</p>
+                        <div className="admin-bin-grid">
+                          {shelf.bins.map((bin) => {
+                            const binCode = bin.binCode || bin.code || "—";
+                            const active = bin.isActive !== false;
+                            return (
+                              <div
+                                key={getLocationId(bin) || binCode}
+                                className={`admin-bin${active ? "" : " is-inactive"}`}
+                              >
+                                <strong>Bin {binCode}</strong>
+                                <span>
+                                  Max V: {formatVolume(bin.maxVolume ?? bin.capacity)} · Max
+                                  W: {formatVolume(bin.maxWeight)}
+                                </span>
+                                <span>{active ? "Đang dùng" : "Ngừng dùng"}</span>
+                                {bin.note ? <span>{bin.note}</span> : null}
+                                <div className="admin-bin__actions">
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    className="admin-bin__btn admin-bin__btn--edit"
+                                    icon={<EditOutlined />}
+                                    onClick={() => openEdit(bin)}
+                                  >
+                                    Sửa
+                                  </Button>
+                                  <Popconfirm
+                                    title="Xóa vị trí này?"
+                                    description={`Bin ${binCode} sẽ bị xóa khỏi sơ đồ.`}
+                                    okText="Xóa"
+                                    cancelText="Hủy"
+                                    okButtonProps={{ danger: true }}
+                                    onConfirm={() => remove(bin)}
+                                  >
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      danger
+                                      className="admin-bin__btn admin-bin__btn--delete"
+                                      icon={<DeleteOutlined />}
+                                    >
+                                      Xóa
+                                    </Button>
+                                  </Popconfirm>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              }))}
+            />
+          </div>
+        )}
       </section>
 
       <Modal
         open={editorOpen}
-        title={editingRecord ? "Cập nhật vị trí kho" : "Thêm vị trí kho"}
+        title={editingRecord ? "Sửa vị trí kho" : "Thêm vị trí kho"}
         okText={editingRecord ? "Lưu thay đổi" : "Tạo vị trí"}
         cancelText="Hủy"
         confirmLoading={saving}
@@ -368,15 +418,147 @@ export default function WarehouseLocationsPage() {
         onCancel={() => !saving && setEditorOpen(false)}
         className="admin-editor-modal"
       >
-        <div className="admin-form-grid">
-          <label className="admin-form-field"><span>Tên khu</span><Input value={form.zoneName} onChange={(event) => setForm((current) => ({ ...current, zoneName: event.target.value }))} /></label>
-          <label className="admin-form-field"><span>Mã kệ</span><Input value={form.shelfCode} onChange={(event) => setForm((current) => ({ ...current, shelfCode: event.target.value }))} /></label>
-          <label className="admin-form-field"><span>Mã ô</span><Input value={form.binCode} onChange={(event) => setForm((current) => ({ ...current, binCode: event.target.value }))} /></label>
-          <label className="admin-form-field"><span>Thể tích tối đa</span><InputNumber min={0} value={form.maxVolume} style={{ width: "100%" }} onChange={(value) => setForm((current) => ({ ...current, maxVolume: value }))} /></label>
-          <label className="admin-form-field"><span>Tải trọng tối đa (kg)</span><InputNumber min={0} value={form.maxWeight} style={{ width: "100%" }} onChange={(value) => setForm((current) => ({ ...current, maxWeight: value }))} /></label>
-          <label className="admin-form-field"><span>Đang hoạt động</span><Switch checked={form.isActive} onChange={(value) => setForm((current) => ({ ...current, isActive: value }))} /></label>
-          <label className="admin-form-field admin-form-field--wide"><span>Ghi chú</span><Input.TextArea rows={3} value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} /></label>
-        </div>
+        <Form layout="vertical">
+          <Form.Item label="Zone" required>
+            {!editingRecord ? (
+              <>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="Chọn hoặc nhập zone"
+                  value={form.zoneName || undefined}
+                  options={existingZones.map((zone) => ({ value: zone, label: zone }))}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      zoneName: value || "",
+                      shelfCode: "",
+                    }))
+                  }
+                  notFoundContent={null}
+                />
+                <Input
+                  style={{ marginTop: 8 }}
+                  placeholder="Hoặc gõ tên zone mới"
+                  value={form.zoneName}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      zoneName: event.target.value,
+                    }))
+                  }
+                />
+              </>
+            ) : (
+              <Input
+                value={form.zoneName}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    zoneName: event.target.value,
+                  }))
+                }
+              />
+            )}
+          </Form.Item>
+          <Form.Item label="Shelf" required>
+            {!editingRecord ? (
+              <>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="Chọn hoặc nhập shelf"
+                  value={form.shelfCode || undefined}
+                  options={shelvesForCreateZone.map((code) => ({
+                    value: code,
+                    label: code,
+                  }))}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      shelfCode: value || "",
+                    }))
+                  }
+                  notFoundContent={null}
+                />
+                <Input
+                  style={{ marginTop: 8 }}
+                  placeholder="Hoặc gõ mã shelf mới"
+                  value={form.shelfCode}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      shelfCode: event.target.value,
+                    }))
+                  }
+                />
+              </>
+            ) : (
+              <Input
+                value={form.shelfCode}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    shelfCode: event.target.value,
+                  }))
+                }
+              />
+            )}
+          </Form.Item>
+          <Form.Item label="Bin" required>
+            <Input
+              value={form.binCode}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  binCode: event.target.value,
+                }))
+              }
+            />
+          </Form.Item>
+          <Space style={{ width: "100%" }} size="middle">
+            <Form.Item label="Max volume" style={{ marginBottom: 0, flex: 1 }}>
+              <InputNumber
+                style={{ width: "100%" }}
+                min={0}
+                value={form.maxVolume}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, maxVolume: value }))
+                }
+              />
+            </Form.Item>
+            <Form.Item label="Max weight (kg)" style={{ marginBottom: 0, flex: 1 }}>
+              <InputNumber
+                style={{ width: "100%" }}
+                min={0}
+                value={form.maxWeight}
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, maxWeight: value }))
+                }
+              />
+            </Form.Item>
+          </Space>
+          <Form.Item label="Đang hoạt động" style={{ marginTop: 16 }}>
+            <Switch
+              checked={form.isActive}
+              onChange={(value) =>
+                setForm((current) => ({ ...current, isActive: value }))
+              }
+            />
+          </Form.Item>
+          <Form.Item label="Ghi chú">
+            <Input.TextArea
+              rows={2}
+              value={form.note}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  note: event.target.value,
+                }))
+              }
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

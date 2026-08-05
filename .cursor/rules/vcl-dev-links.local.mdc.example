@@ -1,0 +1,15 @@
+---
+description: Local-only — tài khoản test VCL (không commit)
+alwaysApply: true
+---
+
+# VCL — local secrets (gitignored)
+
+Copy file này thành `vcl-dev-links.local.mdc` (đã có trong `.gitignore`).
+
+| Biến | Giá trị |
+|------|---------|
+| `VCL_TEST_ACCOUNTS_URL` | <dán link Google Sheet tài khoản test nội bộ> |
+
+- Agent đọc `VCL_TEST_ACCOUNTS_URL` khi cần acc test.
+- **Không** ghi mật khẩu vào file này nếu không cần; ưu tiên mở sheet.

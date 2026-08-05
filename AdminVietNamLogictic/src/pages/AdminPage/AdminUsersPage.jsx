@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -96,6 +97,27 @@ export default function AdminUsersPage() {
   const [detailUser, setDetailUser] = useState(null);
   const [createForm, setCreateForm] = useState(INITIAL_CREATE_FORM);
   const [roleForm, setRoleForm] = useState({ role: "", region: "" });
+  const queryRef = useRef(query);
+  const searchGuardTimersRef = useRef([]);
+
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+
+  useEffect(() => () => {
+    searchGuardTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+
+  const openCreateModal = () => {
+    const searchSnapshot = queryRef.current;
+    setCreateForm(INITIAL_CREATE_FORM);
+    setCreateOpen(true);
+
+    searchGuardTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    searchGuardTimersRef.current = [50, 200, 500].map((delay) =>
+      window.setTimeout(() => setQuery(searchSnapshot), delay)
+    );
+  };
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -389,6 +411,9 @@ export default function AdminUsersPage() {
         <div className="admin-page__toolbar">
           <Input
             allowClear
+            type="search"
+            name="admin-users-search"
+            autoComplete="off"
             prefix={<SearchOutlined />}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -425,10 +450,7 @@ export default function AdminUsersPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => {
-              setCreateForm(INITIAL_CREATE_FORM);
-              setCreateOpen(true);
-            }}
+            onClick={openCreateModal}
           >
             Thêm nhân viên
           </Button>
@@ -463,18 +485,54 @@ export default function AdminUsersPage() {
         onCancel={() => !saving && setCreateOpen(false)}
         className="admin-editor-modal"
       >
-        <div className="admin-form-grid">
+        <form
+          className="admin-form-grid"
+          autoComplete="off"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!saving) submitCreate();
+          }}
+        >
+          <input
+            type="text"
+            name="username"
+            autoComplete="username"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="admin-autofill-trap"
+          />
+          <input
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="admin-autofill-trap"
+          />
           <label className="admin-form-field">
             <span>Họ và tên <b>*</b></span>
-            <Input value={createForm.fullName} onChange={(event) => updateCreateField("fullName", event.target.value)} />
+            <Input
+              name="admin-create-fullName"
+              autoComplete="off"
+              value={createForm.fullName}
+              onChange={(event) => updateCreateField("fullName", event.target.value)}
+            />
           </label>
           <label className="admin-form-field">
             <span>Email <b>*</b></span>
-            <Input type="email" value={createForm.email} onChange={(event) => updateCreateField("email", event.target.value)} />
+            <Input
+              type="email"
+              name="admin-create-email"
+              autoComplete="off"
+              value={createForm.email}
+              onChange={(event) => updateCreateField("email", event.target.value)}
+            />
           </label>
           <label className="admin-form-field">
             <span>Số điện thoại <b>*</b></span>
             <Input
+              name="admin-create-phone"
+              autoComplete="off"
               inputMode="numeric"
               maxLength={10}
               value={createForm.phone}
@@ -483,7 +541,12 @@ export default function AdminUsersPage() {
           </label>
           <label className="admin-form-field">
             <span>Mật khẩu <b>*</b></span>
-            <Input.Password value={createForm.password} onChange={(event) => updateCreateField("password", event.target.value)} />
+            <Input.Password
+              name="admin-create-password"
+              autoComplete="new-password"
+              value={createForm.password}
+              onChange={(event) => updateCreateField("password", event.target.value)}
+            />
           </label>
           <label className="admin-form-field">
             <span>Vai trò <b>*</b></span>
@@ -491,9 +554,15 @@ export default function AdminUsersPage() {
           </label>
           <label className="admin-form-field">
             <span>Khu vực</span>
-            <Input value={createForm.region} placeholder="VN, CN, JP..." onChange={(event) => updateCreateField("region", event.target.value)} />
+            <Input
+              name="admin-create-region"
+              autoComplete="off"
+              value={createForm.region}
+              placeholder="VN, CN, JP..."
+              onChange={(event) => updateCreateField("region", event.target.value)}
+            />
           </label>
-        </div>
+        </form>
       </Modal>
 
       <Modal

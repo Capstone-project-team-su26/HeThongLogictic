@@ -1,15 +1,21 @@
 import AdminResourcePage from "./AdminResourcePage";
 import {
   createAdditionalServiceFee, createCarrier, createPackageConfiguration,
-  createPricingRule, createRestrictedItem, createServicePricing, createShippingMethod,
+  createPricingRule, createProductType, createRestrictedItem, createServicePricing,
+  createShippingMethod, createShippingRoute, createSupplier, createUnitOfMeasure,
   createWarehouse, deleteAdditionalServiceFee, deleteCarrier, deletePackageConfiguration,
-  deletePricingRule, deleteRestrictedItem, deleteServicePricing, deleteShippingMethod,
+  deletePricingRule, deleteProductType, deleteRestrictedItem, deleteServicePricing,
+  deleteShippingMethod, deleteShippingRoute, deleteSupplier, deleteUnitOfMeasure,
   deleteWarehouse, getAdditionalServiceFeeDetail, getAdditionalServiceFees,
   getCarrierDetail, getCarriers, getPackageConfigurationDetail, getPackageConfigurations,
-  getPricingRuleDetail, getPricingRules, getRestrictedItemDetail, getRestrictedItems,
+  getPricingRuleDetail, getPricingRules, getProductTypeDetail, getProductTypes,
+  getRestrictedItemDetail, getRestrictedItems,
   getServicePricingDetail, getServicePricings, getShippingMethodDetail, getShippingMethods,
+  getShippingRouteDetail, getShippingRoutes, getSupplierDetail, getSuppliers,
+  getUnitOfMeasureDetail, getUnitsOfMeasure,
   getWarehouses, updateAdditionalServiceFee, updateCarrier, updatePackageConfiguration,
-  updatePricingRule, updateRestrictedItem, updateServicePricing, updateShippingMethod,
+  updatePricingRule, updateProductType, updateRestrictedItem, updateServicePricing,
+  updateShippingMethod, updateShippingRoute, updateSupplier, updateUnitOfMeasure,
   updateWarehouse,
 } from "../../api/AdminAPI/adminService";
 
@@ -74,4 +80,32 @@ export const RestrictedItemsAdminPage = () => page({
   title: "Hàng cấm và hạn chế", singular: "mặt hàng", description: "Danh mục kiểm soát hàng hóa theo quốc gia.", searchFields: ["itemName", "country", "restrictionType", "note"], api: restrictedApi,
   columns: [{ name: "itemName", label: "Tên mặt hàng" }, { name: "country", label: "Quốc gia", filterable: true }, { name: "restrictionType", label: "Mức kiểm soát", type: "restriction" }, { name: "note", label: "Ghi chú" }, { ...boolField, type: "active" }],
   fields: [{ name: "itemName", label: "Tên mặt hàng", required: true }, { name: "country", label: "Quốc gia", required: true }, { name: "restrictionType", label: "Mức kiểm soát", type: "select", required: true, options: ["BANNED", "RESTRICTED", "WARNING"].map(value => ({ value, label: value })) }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
+});
+
+const productTypeApi = { list: getProductTypes, detail: getProductTypeDetail, create: createProductType, update: updateProductType, remove: deleteProductType };
+export const ProductTypesAdminPage = () => page({
+  title: "Loại hàng", singular: "loại hàng", description: "Danh mục loại hàng hóa và thuế nhập khẩu.", searchFields: ["name"], api: productTypeApi,
+  columns: [{ name: "name", label: "Tên loại hàng" }, { name: "importTaxRate", label: "Thuế NK", type: "number" }, { ...boolField, type: "active" }],
+  fields: [{ name: "name", label: "Tên loại hàng", required: true }, { name: "importTaxRate", label: "Thuế nhập khẩu (%)", type: "number", min: 0, max: 100 }, boolField],
+});
+
+const unitApi = { list: getUnitsOfMeasure, detail: getUnitOfMeasureDetail, create: createUnitOfMeasure, update: updateUnitOfMeasure, remove: deleteUnitOfMeasure };
+export const UnitsOfMeasureAdminPage = () => page({
+  title: "Đơn vị tính", singular: "đơn vị tính", description: "Danh mục đơn vị tính cho khai báo hàng hóa.", searchFields: ["unitCode", "unitName", "description"], api: unitApi,
+  columns: [{ name: "unitCode", label: "Mã" }, { name: "unitName", label: "Tên đơn vị" }, { name: "displayOrder", label: "Thứ tự", type: "number" }, { ...boolField, type: "active" }],
+  fields: [{ name: "unitCode", label: "Mã đơn vị", required: true }, { name: "unitName", label: "Tên đơn vị", required: true }, { name: "description", label: "Mô tả", type: "textarea", span: 2 }, { name: "displayOrder", label: "Thứ tự hiển thị", type: "number", min: 0, max: 999 }, boolField],
+});
+
+const supplierApi = { list: getSuppliers, detail: getSupplierDetail, create: createSupplier, update: updateSupplier, remove: deleteSupplier };
+export const SuppliersAdminPage = () => page({
+  title: "Nhà cung cấp", singular: "nhà cung cấp", description: "Danh mục đối tác trung chuyển và lấy hàng.", searchFields: ["supplierName", "supplierCode", "supplierType", "country", "email"], api: supplierApi,
+  columns: [{ name: "supplierName", label: "Tên nhà cung cấp" }, { name: "supplierCode", label: "Mã" }, { name: "supplierType", label: "Loại", type: "tag" }, { name: "country", label: "Quốc gia", filterable: true }, { ...boolField, type: "active" }],
+  fields: [{ name: "supplierName", label: "Tên nhà cung cấp", required: true }, { name: "supplierCode", label: "Mã nhà cung cấp", required: true }, { name: "supplierType", label: "Loại nhà cung cấp", required: true }, { name: "country", label: "Quốc gia" }, { name: "contactPerson", label: "Người liên hệ" }, { name: "phone", label: "Điện thoại" }, { name: "email", label: "Email", type: "email" }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2 }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
+});
+
+const shippingRouteApi = { list: getShippingRoutes, detail: getShippingRouteDetail, create: createShippingRoute, update: updateShippingRoute, remove: deleteShippingRoute };
+export const ShippingRoutesAdminPage = () => page({
+  title: "Tuyến vận chuyển quốc tế", singular: "tuyến vận chuyển", description: "Cấu hình tuyến, phương thức và nhà cung cấp trung chuyển.", searchFields: ["routeName", "routeCode", "transportMode", "originCountry", "destinationCountry"], api: shippingRouteApi,
+  columns: [{ name: "routeName", label: "Tên tuyến" }, { name: "routeCode", label: "Mã" }, { name: "route", label: "Tuyến", type: "route" }, { name: "transportMode", label: "Phương thức", type: "tag" }, { name: "estimatedTransitDays", label: "Số ngày", type: "number" }, { ...boolField, type: "active" }],
+  fields: [{ name: "routeName", label: "Tên tuyến", required: true }, { name: "routeCode", label: "Mã tuyến", required: true }, { name: "originCountry", label: "Nước đi", type: "select", required: true, options: [{ value: "CN", label: "CN — Trung Quốc" }, { value: "VN", label: "VN — Việt Nam" }, { value: "KR", label: "KR — Hàn Quốc" }, { value: "JP", label: "JP — Nhật Bản" }] }, { name: "destinationCountry", label: "Nước đến", type: "select", required: true, options: [{ value: "CN", label: "CN — Trung Quốc" }, { value: "VN", label: "VN — Việt Nam" }, { value: "KR", label: "KR — Hàn Quốc" }, { value: "JP", label: "JP — Nhật Bản" }] }, { name: "transportMode", label: "Phương thức vận chuyển", type: "select", required: true, options: ["AIR", "SEA", "ROAD", "RAIL"].map(value => ({ value, label: value })) }, { name: "originWarehouseId", label: "Kho đi", type: "select", optionsApi: getWarehouses, mapOption: (warehouse) => ({ value: warehouse.id || warehouse.warehouseId, label: warehouse.name || warehouse.code }) }, { name: "destinationWarehouseId", label: "Kho đến", type: "select", optionsApi: getWarehouses, mapOption: (warehouse) => ({ value: warehouse.id || warehouse.warehouseId, label: warehouse.name || warehouse.code }) }, { name: "carrierId", label: "Đơn vị vận chuyển", type: "select", optionsApi: getCarriers, mapOption: (carrier) => ({ value: carrier.id || carrier.carrierId, label: carrier.carrierName || carrier.carrierCode }) }, { name: "supplierId", label: "Nhà cung cấp", type: "select", optionsApi: getSuppliers, mapOption: (supplier) => ({ value: supplier.id || supplier.supplierId, label: supplier.supplierName || supplier.supplierCode }) }, { name: "estimatedTransitDays", label: "Số ngày vận chuyển dự kiến", type: "number", min: 0 }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
 });

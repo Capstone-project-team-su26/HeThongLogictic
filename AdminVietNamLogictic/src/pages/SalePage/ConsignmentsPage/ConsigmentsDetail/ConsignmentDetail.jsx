@@ -36,6 +36,7 @@ import {
   PhoneOutlined,
   ReloadOutlined,
   RightOutlined,
+  RobotOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
   ShoppingOutlined,
@@ -2079,6 +2080,29 @@ export default function ConsignmentDetail() {
             onClick={() => navigate(-1)}
           >
             Quay lại danh sách
+          </Button>
+
+          <Button
+            type="default"
+            icon={<RobotOutlined />}
+            onClick={() =>
+              navigate("/sale/customer-service", {
+                state: {
+                  aiOrderCode:
+                    detail?.consignmentCode || "",
+                  aiCustomerId:
+                    detail?.customer?.id ||
+                    detail?.customer?.customerId ||
+                    "",
+                  aiCustomerName:
+                    detail?.customer?.fullName || "",
+                  aiRelatedType: "CONSIGNMENT",
+                  aiRelatedId: orderId || "",
+                },
+              })
+            }
+          >
+            Hỏi AI trạng thái
           </Button>
         </div>
 

@@ -147,6 +147,40 @@ const getRecordId = (record) => {
   return record?.id || record?.resourceId || record?.configurationId || "";
 };
 
+const useAsyncOptions = (fields) => {
+  const [optionsByField, setOptionsByField] = useState({});
+
+  useEffect(() => {
+    const fieldsWithApi = (fields || []).filter((field) => field.optionsApi);
+    if (fieldsWithApi.length === 0) return undefined;
+
+    let cancelled = false;
+    const load = async () => {
+      const entries = await Promise.all(
+        fieldsWithApi.map(async (field) => {
+          try {
+            const data = await field.optionsApi();
+            const options = (data || [])
+              .map((item) => field.mapOption(item))
+              .filter((option) => option && option.value != null && option.value !== "");
+            return [field.name, options];
+          } catch {
+            return [field.name, []];
+          }
+        })
+      );
+      if (!cancelled) setOptionsByField(Object.fromEntries(entries));
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fields]);
+
+  return optionsByField;
+};
+
 const renderColumnValue = (column, value, record) => {
   if (column.type === "active") {
     return value ? <Tag color="success">Đang hoạt động</Tag> : <Tag>Ngừng hoạt động</Tag>;
@@ -189,6 +223,7 @@ export default function AdminResourcePage({
   fields,
   api,
 }) {
+  const asyncSelectOptions = useAsyncOptions(fields);
   const [items, setItems] = useState([]);
   const [query, setQuery] = useState("");
   const [toolbarFilters, setToolbarFilters] = useState({});
@@ -518,8 +553,10 @@ export default function AdminResourcePage({
               {field.type === "select" && (
                 <Select
                   value={form[field.name] || undefined}
-                  options={field.options}
+                  options={field.optionsApi ? asyncSelectOptions[field.name] || [] : field.options}
                   placeholder={field.placeholder || `Chọn ${field.label.toLowerCase()}`}
+                  loading={Boolean(field.optionsApi) && !asyncSelectOptions[field.name]}
+                  allowClear={!field.required}
                   onChange={(value) => updateField(field.name, value)}
                 />
               )}

@@ -93,7 +93,7 @@ const MENU_BY_ROLE = {
         },
         {
           key: "admin-warehouse-locations",
-          label: "Vị trí kho",
+          label: "Sơ đồ vị trí kho",
           icon: <InboxOutlined />,
           path: "/admin/warehouse-locations",
         },
@@ -115,6 +115,37 @@ const MENU_BY_ROLE = {
           label: "Phương thức vận chuyển",
           icon: <ShoppingCartOutlined />,
           path: "/admin/shipping-methods",
+        },
+        {
+          key: "admin-shipping-routes",
+          label: "Tuyến vận chuyển",
+          icon: <ShoppingCartOutlined />,
+          path: "/admin/shipping-routes",
+        },
+        {
+          key: "admin-suppliers",
+          label: "Nhà cung cấp",
+          icon: <ShoppingOutlined />,
+          path: "/admin/suppliers",
+        },
+      ],
+    },
+    {
+      key: "admin-goods-catalog",
+      label: "Danh mục hàng hóa",
+      icon: <InboxOutlined />,
+      children: [
+        {
+          key: "admin-product-types",
+          label: "Loại hàng",
+          icon: <InboxOutlined />,
+          path: "/admin/product-types",
+        },
+        {
+          key: "admin-units-of-measure",
+          label: "Đơn vị tính",
+          icon: <InboxOutlined />,
+          path: "/admin/units-of-measure",
         },
       ],
     },
@@ -170,12 +201,6 @@ const MENU_BY_ROLE = {
       label: "Gom hàng",
       icon: <InboxOutlined />,
       path: "/operations-manager/parcels",
-    },
-    {
-      key: "operations-warehouse",
-      label: "Sơ đồ vị trí kho",
-      icon: <DatabaseOutlined />,
-      path: "/operations-manager/warehouse",
     },
   ],
 
