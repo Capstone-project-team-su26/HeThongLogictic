@@ -16,6 +16,7 @@ import {
   FallOutlined,
   MinusOutlined,
   InboxOutlined,
+  FileDoneOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -241,6 +242,9 @@ export default function OperationsDashboard() {
           </div>
           <Link to="/operations-manager/parcels">
             <Button icon={<InboxOutlined />}>Trang gom hàng</Button>
+          </Link>
+          <Link to="/operations-manager/releases">
+            <Button icon={<FileDoneOutlined />}>Duyệt xuất kho</Button>
           </Link>
           <Button
             type="primary"

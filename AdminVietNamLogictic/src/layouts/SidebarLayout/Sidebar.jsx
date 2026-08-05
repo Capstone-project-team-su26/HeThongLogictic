@@ -15,6 +15,7 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   DownOutlined,
+  FileDoneOutlined,
   FileSearchOutlined,
   InboxOutlined,
   LogoutOutlined,
@@ -201,6 +202,12 @@ const MENU_BY_ROLE = {
       label: "Gom hàng",
       icon: <InboxOutlined />,
       path: "/operations-manager/parcels",
+    },
+    {
+      key: "operations-releases",
+      label: "Duyệt xuất kho",
+      icon: <FileDoneOutlined />,
+      path: "/operations-manager/releases",
     },
   ],
 

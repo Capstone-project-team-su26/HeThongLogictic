@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
+  Dropdown,
   Input,
+  Modal,
   Select,
   Space,
   Table,
@@ -11,7 +14,9 @@ import {
   Typography,
 } from "antd";
 import {
+  DeleteOutlined,
   InboxOutlined,
+  MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
   SendOutlined,
@@ -19,8 +24,11 @@ import {
 
 import {
   addParcelsToMasterBox,
+  canDeleteMasterBox,
   createMasterBox,
   createShipment,
+  deleteMasterBox,
+  enrichMasterBoxesWithInventory,
   getOperationsApiError,
   getInventoryStatusMeta,
   getPackageStatusMeta,
@@ -65,6 +73,7 @@ const sumBy = (rows, key) =>
   rows.reduce((sum, row) => sum + (Number(row?.[key]) || 0), 0);
 
 export default function OperationsParcelsPage() {
+  const navigate = useNavigate();
   const [inventory, setInventory] = useState([]);
   const [masterBoxes, setMasterBoxes] = useState([]);
   const [shipments, setShipments] = useState([]);
@@ -112,7 +121,7 @@ export default function OperationsParcelsPage() {
       ]);
       setLookups({ warehouses, carriers, shippingMethods, shippingRoutes });
       setInventory(inventoryRows);
-      setMasterBoxes(boxes);
+      setMasterBoxes(enrichMasterBoxesWithInventory(boxes, inventoryRows));
       setShipments(shipmentRows);
       setSelectedParcelIds([]);
       setSelectedBoxIds([]);
@@ -319,7 +328,7 @@ export default function OperationsParcelsPage() {
     if (!packable.length) {
       setNotice({
         type: "warning",
-        message: "Chọn ít nhất một master box đã đóng gói (PACKED) để tạo shipment.",
+        message: "Chọn ít nhất một master box đã gom (CONSOLIDATED) để tạo yêu cầu xuất kho.",
       });
       return;
     }
@@ -335,6 +344,24 @@ export default function OperationsParcelsPage() {
       `Đã thêm ${selectedParcels.length} kiện vào ${box?.code ?? "master box"}.`
     );
     setAddToBoxId("");
+  }
+
+  async function handleDeleteMasterBox(box) {
+    if (!canDeleteMasterBox(box)) {
+      setNotice({
+        type: "warning",
+        message: box?.shipmentId
+          ? "Master box đã gắn shipment — không thể xóa lô."
+          : "Chỉ xóa được master box đang nháp hoặc đã gom (chưa xuất hàng).",
+      });
+      return;
+    }
+    await runAction(
+      () => deleteMasterBox(box.id),
+      `Đã xóa lô ${box.code || box.id}.`
+    );
+    setSelectedBoxIds((ids) => ids.filter((id) => id !== box.id));
+    if (detailBoxId === box.id) setDetailBoxId(null);
   }
 
   /* ============================ Columns ============================ */
@@ -436,7 +463,11 @@ export default function OperationsParcelsPage() {
         title: "Kho đích",
         dataIndex: "destinationWarehouseId",
         key: "destinationWarehouseId",
-        render: warehouseName,
+        render: (value, row) => {
+          const name = warehouseName(value);
+          if (name !== "—") return name;
+          return row.route || "—";
+        },
       },
       {
         title: "Số kiện",
@@ -492,24 +523,67 @@ export default function OperationsParcelsPage() {
         title: "Thao tác",
         key: "actions",
         fixed: "right",
-        width: 150,
-        render: (_, row) => (
-          <Space size={4} wrap>
-            <Button size="small" type="link" onClick={() => setDetailBoxId(row.id)}>
-              Chi tiết
-            </Button>
-            {row.status === "PACKED" ? (
+        width: 128,
+        render: (_, row) => {
+          const canShip = row.status === "PACKED";
+          const canDelete = canDeleteMasterBox(row);
+          const menuItems = [
+            canShip
+              ? {
+                  key: "ship",
+                  icon: <SendOutlined />,
+                  label: "Tạo yêu cầu xuất kho",
+                  onClick: () => openCreateShipment([row]),
+                }
+              : null,
+            canDelete
+              ? {
+                  key: "delete",
+                  icon: <DeleteOutlined />,
+                  label: "Xóa lô",
+                  danger: true,
+                  onClick: () => {
+                    Modal.confirm({
+                      title: `Xóa lô ${row.code || ""}?`,
+                      content: "Kiện trong lô sẽ được trả về tồn kho chờ gom.",
+                      okText: "Xóa lô",
+                      okType: "danger",
+                      cancelText: "Hủy",
+                      onOk: () => handleDeleteMasterBox(row),
+                    });
+                  },
+                }
+              : null,
+          ].filter(Boolean);
+
+          return (
+            <div className="ops-row-actions" onClick={(e) => e.stopPropagation()}>
               <Button
-                size="small"
                 type="link"
-                icon={<SendOutlined />}
-                onClick={() => openCreateShipment([row])}
+                size="small"
+                className="ops-row-actions__primary"
+                onClick={() => setDetailBoxId(row.id)}
               >
-                Tạo shipment
+                Chi tiết
               </Button>
-            ) : null}
-          </Space>
-        ),
+              {menuItems.length ? (
+                <Dropdown
+                  menu={{ items: menuItems }}
+                  trigger={["click"]}
+                  placement="bottomRight"
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    className="ops-row-actions__more"
+                    icon={<MoreOutlined />}
+                    aria-label="Thêm thao tác"
+                  />
+                </Dropdown>
+              ) : null}
+            </div>
+          );
+        },
       },
     ],
     [warehouseName, parcelsByBoxId, shipmentById]
@@ -611,7 +685,7 @@ export default function OperationsParcelsPage() {
             disabled: row.status !== "PACKED",
             title:
               row.status !== "PACKED"
-                ? "Chỉ master box đã đóng gói mới tạo được shipment."
+                ? "Chỉ master box đã gom mới tạo được shipment."
                 : undefined,
           }),
         }}
@@ -631,7 +705,8 @@ export default function OperationsParcelsPage() {
           <span>Gom hàng</span>
           <h1>Gom hàng theo tồn kho</h1>
           <p>
-            Chọn các kiện đang tồn trong kho, gom vào master box và tạo shipment quốc tế.
+            Chọn các kiện đang tồn trong kho, gom vào master box và tạo yêu cầu xuất kho.
+            Duyệt WRO tại mục Duyệt xuất kho.
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -653,7 +728,7 @@ export default function OperationsParcelsPage() {
             icon={<SendOutlined />}
             onClick={() => openCreateShipment(selectedBoxes)}
           >
-            Tạo shipment từ master box đã chọn
+            Tạo yêu cầu xuất kho từ master box đã chọn
           </Button>
         </div>
       </section>
@@ -874,26 +949,23 @@ export default function OperationsParcelsPage() {
           open
           masterBoxes={shipmentDraft}
           parcelsByBoxId={parcelsByBoxId}
-          warehouses={lookups.warehouses}
           carriers={lookups.carriers}
-          shippingMethods={lookups.shippingMethods}
-          shippingRoutes={lookups.shippingRoutes}
           onClose={() => setShipmentDraft(null)}
           onSubmit={async (payload) => {
             try {
-              const shipment = await createShipment(payload);
+              const result = await createShipment(payload);
               setShipmentDraft(null);
               setNotice({
                 type: "success",
-                message: `Đã tạo WRO + shipment ${shipment?.code || ""} từ ${
+                message: `Đã tạo yêu cầu xuất kho ${result?.code || ""} từ ${
                   payload.masterBoxIds?.length || 0
-                } master box.`,
+                } master box. Chuyển sang trang Duyệt xuất kho.`,
               });
-              await loadData({ refresh: true });
+              navigate("/operations-manager/releases");
             } catch (error) {
               setNotice({
                 type: "error",
-                message: getOperationsApiError(error, "Không thể tạo WRO / shipment."),
+                message: getOperationsApiError(error, "Không thể tạo yêu cầu xuất kho."),
               });
               throw error;
             }
@@ -909,6 +981,9 @@ export default function OperationsParcelsPage() {
           onChanged={(message) => {
             if (message) setNotice({ type: "success", message });
             loadData({ refresh: true });
+          }}
+          onDeleted={(box) => {
+            setSelectedBoxIds((ids) => ids.filter((id) => id !== box?.id));
           }}
           onCreateShipment={(box) => {
             setDetailBoxId(null);

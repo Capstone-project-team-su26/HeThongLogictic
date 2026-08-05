@@ -393,6 +393,31 @@
   line-height: 1.4;
 }
 
+.ops-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.ops-row-actions__primary.ant-btn {
+  padding-inline: 4px;
+  height: 28px;
+  font-weight: 600;
+}
+
+.ops-row-actions__more.ant-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ops-muted);
+}
+
+.ops-row-actions__more.ant-btn:hover {
+  color: var(--ops-text);
+  background: #eef2f7;
+}
+
 .ops-bin__actions {
   display: flex;
   align-items: center;
