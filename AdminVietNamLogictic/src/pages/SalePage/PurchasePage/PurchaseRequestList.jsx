@@ -70,12 +70,24 @@ const STATUS_CONFIG = {
     label: "Đã gửi báo giá",
     className: "is-info",
   },
+  QUOTED: {
+    label: "Đã báo giá",
+    className: "is-info",
+  },
+  WAITING_PAYMENT: {
+    label: "Chờ thanh toán",
+    className: "is-warning",
+  },
   WAITING_DEPOSIT: {
     label: "Chờ đặt cọc",
     className: "is-warning",
   },
   DEPOSIT_PAID: {
     label: "Đã đặt cọc",
+    className: "is-success",
+  },
+  PAID: {
+    label: "Đã thanh toán",
     className: "is-success",
   },
   PROCESSING: {

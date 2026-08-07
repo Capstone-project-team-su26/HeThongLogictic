@@ -50,6 +50,7 @@ import {
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 
 import CreatePurchaseRequestQuotationModal from "./CreatePurchaseRequestQuotationModal";
+import ConfirmPurchaseModal from "./ConfirmPurchaseModal";
 
 import {
   apiToUtcIso,
@@ -85,12 +86,20 @@ const STATUS_CONFIG = {
     label: "Đã báo giá",
     className: "is-success",
   },
+  WAITING_PAYMENT: {
+    label: "Chờ thanh toán",
+    className: "is-warning",
+  },
   WAITING_DEPOSIT: {
     label: "Chờ đặt cọc",
     className: "is-warning",
   },
   DEPOSIT_PAID: {
     label: "Đã đặt cọc",
+    className: "is-success",
+  },
+  PAID: {
+    label: "Đã thanh toán",
     className: "is-success",
   },
   PROCESSING: {
@@ -1447,6 +1456,11 @@ export default function PurchaseRequestDetail() {
     setQuotationModalOpen,
   ] = useState(false);
 
+  const [
+    confirmPurchaseModalOpen,
+    setConfirmPurchaseModalOpen,
+  ] = useState(false);
+
   const loadDetail =
     useCallback(async () => {
       if (!purchaseRequestId) {
@@ -1834,6 +1848,21 @@ export default function PurchaseRequestDetail() {
       items.length,
     ]);
 
+  const canConfirmPurchase =
+    useMemo(() => {
+      const currentStatus =
+        normalizeUpperText(
+          detail?.status
+        );
+
+      return (
+        currentStatus === "PAID" ||
+        currentStatus === "DEPOSIT_PAID" ||
+        currentStatus === "PROCESSING" ||
+        currentStatus === "WAITING_PAYMENT"
+      );
+    }, [detail?.status]);
+
   const handleQuotationCreated =
     useCallback(async () => {
       setQuotationModalOpen(
@@ -1921,6 +1950,28 @@ export default function PurchaseRequestDetail() {
                 className="purchase-create-quotation-button"
               >
                 Tạo báo giá
+              </Button>
+            )}
+
+            {canConfirmPurchase && (
+              <Button
+                type="primary"
+                icon={
+                  <ShoppingOutlined />
+                }
+                onClick={() =>
+                  setConfirmPurchaseModalOpen(
+                    true
+                  )
+                }
+                style={{
+                  background: "linear-gradient(135deg, #16a34a, #15803d)",
+                  borderColor: "#16a34a",
+                  fontWeight: 800,
+                  boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)",
+                }}
+              >
+                Xác nhận mua hộ
               </Button>
             )}
 
@@ -2661,6 +2712,21 @@ export default function PurchaseRequestDetail() {
         pricingRules={
           pricingRules
         }
+      />
+
+      <ConfirmPurchaseModal
+        open={confirmPurchaseModalOpen}
+        onClose={() =>
+          setConfirmPurchaseModalOpen(false)
+        }
+        onSuccess={async (data) => {
+          setConfirmPurchaseModalOpen(false);
+          if (data?.status) {
+            setDetail((prev) => (prev ? { ...prev, status: data.status } : prev));
+          }
+          await loadDetail();
+        }}
+        purchaseRequest={detail}
       />
     </main>
   );
