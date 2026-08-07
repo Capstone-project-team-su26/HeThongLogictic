@@ -220,8 +220,9 @@ export default function AppRoutes() {
           </RequireAuth>
         }
       >
-        {/* Truy cập /sale */}
+        {/* Truy cập /sale hoặc /sale/dashboard */}
         <Route index element={<SaleDashboard />} />
+        <Route path="dashboard" element={<SaleDashboard />} />
 
         {/* Danh sách đơn ký gửi */}
         <Route path="consignments" element={<PendingConsignmentList />} />
