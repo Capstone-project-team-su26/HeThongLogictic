@@ -23,9 +23,11 @@ import {
   CarOutlined,
   HomeOutlined,
   ArrowRightOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 import { uploadImage } from "../../../../api/Upload/UploadImage";
+import { confirmPurchaseApi } from "../../../../api/SaleAPI/PurchaseRequestAPI/confirmPurchaseApi";
 import "./ConfirmPurchaseModal.css";
 
 const { TextArea } = Input;
@@ -34,36 +36,135 @@ const MAX_IMAGES = 3;
 
 const PURCHASE_STATUS_OPTIONS = [
   {
+    value: "NEW",
+    label: "1. Tạo đơn hàng",
+    tagColor: "blue",
+    description: "Đơn hàng mua hộ vừa được khởi tạo trên hệ thống.",
+  },
+  {
+    value: "PENDING_REVIEW",
+    label: "2. Chờ xác nhận",
+    tagColor: "orange",
+    description: "Nhân viên đang kiểm tra & đàm phán mua hàng.",
+  },
+  {
+    value: "PAID",
+    label: "3. Đã thanh toán",
+    tagColor: "cyan",
+    description: "Khách hàng đã cọc/thanh toán tiền đơn hàng.",
+  },
+  {
     value: "PURCHASED",
-    label: "Đã mua hàng (Đã đặt đơn với NCC)",
+    label: "4. Xác nhận mua hàng",
     tagColor: "green",
-    description: "Đã hoàn tất thanh toán và chốt đơn mua với Nhà cung cấp.",
+    description: "Đã hoàn tất thanh toán và đặt hàng với Nhà cung cấp.",
   },
   {
     value: "SELLER_SHIPPED",
-    label: "Nhà cung cấp đã phát hàng (Có mã vận đơn)",
+    label: "NCC đã phát hàng",
     tagColor: "processing",
     description: "Nhà cung cấp đã bàn giao đơn cho bên vận chuyển nội địa.",
   },
   {
     value: "ARRIVED_ORIGIN_WAREHOUSE",
-    label: "Đã nhập kho xuất phát (Nước ngoài)",
-    tagColor: "cyan",
+    label: "Đã về kho nước ngoài",
+    tagColor: "teal",
     description: "Hàng đã về tới kho thu gom ban đầu (Trung Quốc, Hàn Quốc...).",
   },
   {
-    value: "PROCESSING",
-    label: "Đang mua hàng (Đang xử lý mua)",
-    tagColor: "orange",
-    description: "Nhân viên đang đàm phán hoặc chờ phản hồi từ nhà cung cấp.",
-  },
-  {
     value: "COMPLETED",
-    label: "Hoàn tất nghiệp vụ mua hộ",
+    label: "Hoàn tất nghiệp vụ",
     tagColor: "purple",
     description: "Hoàn tất toàn bộ chu trình xử lý đơn hàng mua hộ.",
   },
 ];
+
+const STATUS_THEMES = {
+  NEW: {
+    gradient: "linear-gradient(135deg, #090d16 0%, #1e1b4b 45%, #3730a3 100%)",
+    badgeBg: "rgba(129, 140, 248, 0.22)",
+    badgeBorder: "rgba(165, 180, 252, 0.45)",
+    badgeColor: "#c7d2fe",
+    btnGradient: "linear-gradient(135deg, #6366f1, #4f46e5)",
+    btnShadow: "0 8px 25px rgba(99, 102, 241, 0.45)",
+    icon: <FileTextOutlined />,
+    liveTag: "✨ 1. TẠO ĐƠN HÀNG (REALTIME)",
+    actionText: "Chuyển bước 2: Chờ xác nhận ➔",
+    stepIndex: 1,
+  },
+  PENDING_REVIEW: {
+    gradient: "linear-gradient(135deg, #1c0a00 0%, #78350f 45%, #b45309 100%)",
+    badgeBg: "rgba(251, 191, 36, 0.22)",
+    badgeBorder: "rgba(252, 211, 77, 0.45)",
+    badgeColor: "#fef08a",
+    btnGradient: "linear-gradient(135deg, #f59e0b, #d97706)",
+    btnShadow: "0 8px 25px rgba(245, 158, 11, 0.45)",
+    icon: <SyncOutlined spin />,
+    liveTag: "🟠 2. CHỜ XÁC NHẬN (REALTIME)",
+    actionText: "Chuyển bước 3: Đã thanh toán ➔",
+    stepIndex: 2,
+  },
+  PAID: {
+    gradient: "linear-gradient(135deg, #041f2a 0%, #0e7490 45%, #0284c7 100%)",
+    badgeBg: "rgba(56, 189, 248, 0.22)",
+    badgeBorder: "rgba(125, 211, 252, 0.45)",
+    badgeColor: "#bae6fd",
+    btnGradient: "linear-gradient(135deg, #0ea5e9, #0284c7)",
+    btnShadow: "0 8px 25px rgba(14, 165, 233, 0.45)",
+    icon: <DollarOutlined />,
+    liveTag: "🩵 3. ĐÃ THANH TOÁN (REALTIME)",
+    actionText: "Chuyển bước 4: Xác nhận mua hàng ➔",
+    stepIndex: 3,
+  },
+  PURCHASED: {
+    gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
+    badgeBg: "rgba(52, 211, 153, 0.22)",
+    badgeBorder: "rgba(110, 231, 183, 0.45)",
+    badgeColor: "#a7f3d0",
+    btnGradient: "linear-gradient(135deg, #10b981, #059669)",
+    btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
+    icon: <CheckCircleOutlined />,
+    liveTag: "🟢 4. XÁC NHẬN MUA HÀNG (HOÀN TẤT)",
+    actionText: "Xác nhận đã mua hộ & Hoàn tất",
+    stepIndex: 4,
+  },
+  SELLER_SHIPPED: {
+    gradient: "linear-gradient(135deg, #0b132b 0%, #1c2541 45%, #2563eb 100%)",
+    badgeBg: "rgba(96, 165, 250, 0.22)",
+    badgeBorder: "rgba(147, 197, 253, 0.45)",
+    badgeColor: "#bfdbfe",
+    btnGradient: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
+    btnShadow: "0 8px 25px rgba(59, 130, 246, 0.45)",
+    icon: <CarOutlined />,
+    liveTag: "🔵 NCC ĐÃ PHÁT HÀNG (REALTIME)",
+    actionText: "Xác nhận & Hoàn tất",
+    stepIndex: 4,
+  },
+  ARRIVED_ORIGIN_WAREHOUSE: {
+    gradient: "linear-gradient(135deg, #180e29 0%, #3b0764 45%, #6b21a8 100%)",
+    badgeBg: "rgba(192, 132, 252, 0.22)",
+    badgeBorder: "rgba(216, 180, 254, 0.45)",
+    badgeColor: "#e9d5ff",
+    btnGradient: "linear-gradient(135deg, #9333ea, #7e22ce)",
+    btnShadow: "0 8px 25px rgba(147, 51, 234, 0.45)",
+    icon: <HomeOutlined />,
+    liveTag: "🩵 ĐÃ VỀ KHO NƯỚC NGOÀI (REALTIME)",
+    actionText: "Xác nhận & Hoàn tất",
+    stepIndex: 4,
+  },
+  COMPLETED: {
+    gradient: "linear-gradient(135deg, #2e1065 0%, #581c87 45%, #7e22ce 100%)",
+    badgeBg: "rgba(216, 180, 254, 0.22)",
+    badgeBorder: "rgba(233, 213, 255, 0.45)",
+    badgeColor: "#f3e8ff",
+    btnGradient: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+    btnShadow: "0 8px 25px rgba(139, 92, 246, 0.45)",
+    icon: <CheckCircleOutlined />,
+    liveTag: "🟣 HOÀN TẤT MUA HỘ (REALTIME)",
+    actionText: "Xác nhận & Hoàn tất",
+    stepIndex: 4,
+  },
+};
 
 export default function ConfirmPurchaseModal({
   open = false,
@@ -87,23 +188,10 @@ export default function ConfirmPurchaseModal({
     }));
   });
 
-  // Calculate initial target status based on current request status
+  // Always start initial status at "NEW" (Step 1: Tạo đơn hàng) when opening modal
   const initialStatus = useMemo(() => {
-    const currentStatus = String(purchaseRequest?.status || "").toUpperCase();
-    if (currentStatus === "PAID" || currentStatus === "DEPOSIT_PAID") {
-      return "PURCHASED";
-    }
-    if (currentStatus === "PURCHASED") {
-      return "SELLER_SHIPPED";
-    }
-    if (currentStatus === "SELLER_SHIPPED") {
-      return "ARRIVED_ORIGIN_WAREHOUSE";
-    }
-    if (currentStatus === "ARRIVED_ORIGIN_WAREHOUSE") {
-      return "COMPLETED";
-    }
-    return "PURCHASED";
-  }, [purchaseRequest?.status]);
+    return "NEW";
+  }, []);
 
   // State for proof images & purchase status
   const [purchaseStatus, setPurchaseStatus] = useState(initialStatus);
@@ -128,6 +216,11 @@ export default function ConfirmPurchaseModal({
       PURCHASE_STATUS_OPTIONS.find((opt) => opt.value === purchaseStatus) ||
       PURCHASE_STATUS_OPTIONS[0]
     );
+  }, [purchaseStatus]);
+
+  // Active status theme styling
+  const activeTheme = useMemo(() => {
+    return STATUS_THEMES[purchaseStatus] || STATUS_THEMES.PURCHASED;
   }, [purchaseStatus]);
 
   // Update per-item field
@@ -209,46 +302,73 @@ export default function ConfirmPurchaseModal({
     if (onClose) onClose();
   }, [onClose]);
 
-  // Handle Form Submission
+  // Handle Form Submission & Realtime Step Advancement via BE API
   const handleSubmit = async () => {
     try {
       setErrorMsg("");
       setSubmitting(true);
 
-      // Validate inputs: At least 1 tracking code or proof image
-      const hasTrackingCode = itemForms.some(
-        (form) => String(form.trackingCode || "").trim().length > 0
-      );
+      const reqId = purchaseRequest?.purchaseRequestId || purchaseRequest?.id;
 
-      if (!hasTrackingCode && imageList.length === 0) {
-        const errorText =
-          "Vui lòng nhập ít nhất 1 Mã vận đơn/Mã đơn hàng nguồn hoặc tải lên ảnh bằng chứng mua hàng.";
-        setErrorMsg(errorText);
-        AuthNotify.warning("Chưa đủ thông tin", errorText);
-        setSubmitting(false);
-        return;
-      }
-
-      // Simulate API Submission Delay
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
-      AuthNotify.success(
-        "Xác nhận mua hộ thành công",
-        `Đã lưu thông tin & trạng thái mua hộ cho đơn ${purchaseRequest?.purchaseCode || ""}`
-      );
-
-      if (onSuccess) {
-        await onSuccess({
-          purchaseRequestId: purchaseRequest?.purchaseRequestId,
-          status: purchaseStatus,
-          statusConfig: activeStatusConfig,
-          items: itemForms,
+      if (purchaseStatus === "NEW") {
+        // Step 1 -> Step 2: Update status to PENDING_REVIEW
+        const resData = await confirmPurchaseApi(reqId, {
+          status: "PENDING_REVIEW",
           proofImages: imageList.map((img) => img.url),
           generalNote,
         });
-      }
+        setPurchaseStatus("PENDING_REVIEW");
+        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 2. Chờ xác nhận");
+      } else if (purchaseStatus === "PENDING_REVIEW") {
+        // Step 2 -> Step 3: Update status to PAID
+        const resData = await confirmPurchaseApi(reqId, {
+          status: "PAID",
+          proofImages: imageList.map((img) => img.url),
+          generalNote,
+        });
+        setPurchaseStatus("PAID");
+        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 3. Đã thanh toán");
+      } else if (purchaseStatus === "PAID") {
+        // Step 3 -> Step 4: Update status to PURCHASED
+        const resData = await confirmPurchaseApi(reqId, {
+          status: "PURCHASED",
+          proofImages: imageList.map((img) => img.url),
+          generalNote,
+        });
+        setPurchaseStatus("PURCHASED");
+        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 4. Xác nhận mua hàng");
+      } else {
+        // Step 4 FINAL STEP: Submit to Real BE API endpoint PUT /api/purchase-requests/{id}/confirm-purchase & Exit Modal
+        const ALLOWED_BE_STATUSES = ["PURCHASED", "SELLER_SHIPPED", "ARRIVED_ORIGIN_WAREHOUSE", "PAID", "PENDING_REVIEW"];
+        const targetStatus = ALLOWED_BE_STATUSES.includes(purchaseStatus)
+          ? purchaseStatus
+          : "PURCHASED";
 
-      handleCloseModal();
+        const resData = await confirmPurchaseApi(reqId, {
+          status: targetStatus,
+          proofImages: imageList.map((img) => img.url),
+          generalNote,
+        });
+
+        AuthNotify.success(
+          "Xác nhận mua hộ thành công",
+          `Đã lưu thông tin & hoàn tất xác nhận mua hộ cho đơn ${resData?.purchaseCode || purchaseRequest?.purchaseCode || ""}`
+        );
+
+        if (onSuccess) {
+          await onSuccess({
+            purchaseRequestId: reqId,
+            status: targetStatus,
+            statusConfig: activeStatusConfig,
+            items: itemForms,
+            proofImages: imageList.map((img) => img.url),
+            generalNote,
+            apiResponse: resData,
+          });
+        }
+
+        handleCloseModal();
+      }
     } catch (err) {
       console.error("Confirm purchase submit error:", err);
       const msg = err?.message || "Không thể hoàn tất xác nhận mua hộ.";
@@ -271,49 +391,71 @@ export default function ConfirmPurchaseModal({
         className="confirm-purchase-modal"
         title={null}
       >
-        <div className="confirm-purchase-modal__header">
-          <div className="confirm-purchase-modal__header-icon">
-            <ShoppingOutlined />
-          </div>
-          <div>
-            <h2>Xác nhận mua hộ & Cập nhật tiến độ</h2>
-            <p>
-              Cập nhật trạng thái nghiệp vụ mua hàng, mã đơn hàng nguồn (Mã vận đơn) và bằng chứng mua hộ.
-            </p>
-          </div>
-          {purchaseRequest?.purchaseCode && (
-            <Tag color="blue" className="confirm-purchase-modal__code-tag">
-              {purchaseRequest.purchaseCode}
-            </Tag>
-          )}
-        </div>
+        <div
+          className="confirm-purchase-modal__header"
+          style={{ background: activeTheme.gradient }}
+        >
+          <div className="header-top-row">
+            <div className="confirm-purchase-modal__header-icon">
+              {activeTheme.icon}
+            </div>
 
-        {/* Dynamic Status Selection Bar */}
-        <div className="confirm-purchase-status-bar">
-          <div className="confirm-purchase-status-bar__info">
-            <SyncOutlined className="confirm-purchase-status-bar__icon" />
-            <div>
-              <span>TRẠNG THÁI MUA HÀNG</span>
-              <strong>{activeStatusConfig.description}</strong>
+            <div className="header-text-group">
+              <div
+                className="header-live-tag"
+                style={{
+                  background: activeTheme.badgeBg,
+                  borderColor: activeTheme.badgeBorder,
+                  color: activeTheme.badgeColor,
+                }}
+              >
+                <span className="live-pulse-dot" /> {activeTheme.liveTag}
+              </div>
+              <h2>Xác nhận mua hộ & Cập nhật tiến độ</h2>
+              <p>{activeStatusConfig.description}</p>
+            </div>
+
+            {purchaseRequest?.purchaseCode && (
+              <Tag className="confirm-purchase-modal__code-tag">
+                {purchaseRequest.purchaseCode}
+              </Tag>
+            )}
+          </div>
+
+          {/* Stepper Pipeline Bar - Read-Only Progress Indicator */}
+          <div className="header-pipeline-bar">
+            <div
+              className={`pipeline-step ${activeTheme.stepIndex >= 1 ? "is-active" : ""} ${activeTheme.stepIndex === 1 ? "is-selected" : ""
+                }`}
+            >
+              <span className="step-num">1</span>
+              <span className="step-label">Tạo đơn hàng</span>
+            </div>
+            <div className={`pipeline-line ${activeTheme.stepIndex >= 2 ? "is-active" : ""}`} />
+            <div
+              className={`pipeline-step ${activeTheme.stepIndex >= 2 ? "is-active" : ""} ${activeTheme.stepIndex === 2 ? "is-selected" : ""
+                }`}
+            >
+              <span className="step-num">2</span>
+              <span className="step-label">Chờ xác nhận</span>
+            </div>
+            <div className={`pipeline-line ${activeTheme.stepIndex >= 3 ? "is-active" : ""}`} />
+            <div
+              className={`pipeline-step ${activeTheme.stepIndex >= 3 ? "is-active" : ""} ${activeTheme.stepIndex === 3 ? "is-selected" : ""
+                }`}
+            >
+              <span className="step-num">3</span>
+              <span className="step-label">Đã thanh toán</span>
+            </div>
+            <div className={`pipeline-line ${activeTheme.stepIndex >= 4 ? "is-active" : ""}`} />
+            <div
+              className={`pipeline-step ${activeTheme.stepIndex >= 4 ? "is-active" : ""} ${activeTheme.stepIndex === 4 ? "is-selected" : ""
+                }`}
+            >
+              <span className="step-num">4</span>
+              <span className="step-label">Xác nhận mua hàng</span>
             </div>
           </div>
-
-          <Select
-            value={purchaseStatus}
-            onChange={setPurchaseStatus}
-            popupMatchSelectWidth={340}
-            className="confirm-purchase-status-select"
-            options={PURCHASE_STATUS_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: (
-                <Space>
-                  <Tag color={opt.tagColor} style={{ margin: 0, fontWeight: 800 }}>
-                    {opt.label}
-                  </Tag>
-                </Space>
-              ),
-            }))}
-          />
         </div>
 
         <div className="confirm-purchase-modal__body">
@@ -321,43 +463,16 @@ export default function ConfirmPurchaseModal({
             <Alert
               type="error"
               showIcon
+              title="Chưa thể xác nhận"
               message="Chưa thể xác nhận"
               description={errorMsg}
               className="confirm-purchase-modal__alert"
             />
           )}
 
-          {/* Section 1: Danh sách sản phẩm mua hộ */}
-          <section className="confirm-purchase-section">
-            <div className="confirm-purchase-section__title">
-              <BarcodeOutlined />
-              <span>NHẬP MÃ VẬN ĐƠN / MÃ ĐƠN HÀNG NGUỒN ({itemForms.length} mặt hàng)</span>
-            </div>
 
-            <div className="confirm-purchase-item-list">
-              {itemForms.map((item, index) => (
-                <div key={item.itemId} className="confirm-purchase-item-card">
-                  <div className="confirm-purchase-item-card__header">
-                    <span className="confirm-purchase-item-index">{index + 1}</span>
-                    <strong className="confirm-purchase-item-name">{item.productName}</strong>
-                    <Tag color="cyan">Số lượng: {item.quantity}</Tag>
-                  </div>
 
-                  <div className="confirm-purchase-item-card__single-input">
-                    <label>Mã vận đơn / Mã đơn hàng nguồn</label>
-                    <Input
-                      placeholder="Nhập mã đơn hàng/vận đơn mua từ nhà cung cấp (VD: PUR-CN-98231)"
-                      value={item.trackingCode}
-                      onChange={(e) => handleItemChange(index, "trackingCode", e.target.value)}
-                      prefix={<BarcodeOutlined style={{ color: "#94a3b8" }} />}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
 
-          <Divider style={{ margin: "16px 0" }} />
 
           {/* Section 2: Upload ảnh bằng chứng mua hàng */}
           <section className="confirm-purchase-section">
@@ -381,8 +496,14 @@ export default function ConfirmPurchaseModal({
                       <strong>Tải ảnh hóa đơn / màn hình đã mua hàng</strong>
                       <span>Hỗ trợ định dạng JPG, PNG, WEBP (Tối đa {MAX_IMAGES} ảnh, 10MB/ảnh)</span>
                     </div>
-                    <Button type="dashed" icon={<UploadOutlined />} loading={uploading}>
-                      Chọn ảnh từ máy tính ({imageList.length}/{MAX_IMAGES})
+                    <Button
+                      type="primary"
+                      ghost
+                      icon={<UploadOutlined />}
+                      loading={uploading}
+                      style={{ borderRadius: "12px", height: "40px", fontWeight: 800, padding: "0 24px" }}
+                    >
+                      Tải ảnh từ máy tính ({imageList.length}/{MAX_IMAGES})
                     </Button>
                   </div>
                 </Upload>
@@ -445,19 +566,28 @@ export default function ConfirmPurchaseModal({
 
         {/* Modal Footer */}
         <div className="confirm-purchase-modal__footer">
-          <Button size="large" onClick={handleCloseModal} disabled={submitting}>
+          <Button
+            size="large"
+            onClick={handleCloseModal}
+            disabled={submitting}
+            className="confirm-purchase-cancel-btn"
+          >
             Hủy bỏ
           </Button>
 
           <Button
             type="primary"
             size="large"
-            icon={<CheckCircleOutlined />}
+            icon={activeTheme.icon}
             loading={submitting}
             onClick={handleSubmit}
             className="confirm-purchase-submit-btn"
+            style={{
+              background: activeTheme.btnGradient,
+              boxShadow: activeTheme.btnShadow,
+            }}
           >
-            Xác nhận đã mua hộ
+            {activeTheme.actionText}
           </Button>
         </div>
       </Modal>

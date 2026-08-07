@@ -64,6 +64,10 @@ import {
 import "./PurchaseRequestDetail.css";
 
 const STATUS_CONFIG = {
+  NEW: {
+    label: "Tạo đơn hàng",
+    className: "is-info",
+  },
   PENDING_REVIEW: {
     label: "Chờ duyệt",
     className: "is-warning",
@@ -84,7 +88,6 @@ const STATUS_CONFIG = {
     label: "Đã gửi báo giá",
     className: "is-info",
   },
-
   QUOTED: {
     label: "Đã báo giá",
     className: "is-success",
@@ -104,6 +107,18 @@ const STATUS_CONFIG = {
   PAID: {
     label: "Đã thanh toán",
     className: "is-success",
+  },
+  PURCHASED: {
+    label: "Đã mua hàng",
+    className: "is-success",
+  },
+  SELLER_SHIPPED: {
+    label: "NCC đã phát hàng",
+    className: "is-info",
+  },
+  ARRIVED_ORIGIN_WAREHOUSE: {
+    label: "Đã về kho nước ngoài",
+    className: "is-info",
   },
   PROCESSING: {
     label: "Đang xử lý",
@@ -1851,20 +1866,19 @@ export default function PurchaseRequestDetail() {
       items.length,
     ]);
 
-  const canConfirmPurchase =
-    useMemo(() => {
-      const currentStatus =
-        normalizeUpperText(
-          detail?.status
-        );
+  const canConfirmPurchase = useMemo(() => {
+    const currentStatus = normalizeUpperText(detail?.status);
+    const COMPLETED_OR_PURCHASED_STATUSES = new Set([
+      "PURCHASED",
+      "SELLER_SHIPPED",
+      "ARRIVED_ORIGIN_WAREHOUSE",
+      "COMPLETED",
+      "CANCELLED",
+      "REJECTED",
+    ]);
 
-      return (
-        currentStatus === "PAID" ||
-        currentStatus === "DEPOSIT_PAID" ||
-        currentStatus === "PROCESSING" ||
-        currentStatus === "WAITING_PAYMENT"
-      );
-    }, [detail?.status]);
+    return !COMPLETED_OR_PURCHASED_STATUSES.has(currentStatus);
+  }, [detail?.status]);
 
   const handleQuotationCreated =
     useCallback(async () => {

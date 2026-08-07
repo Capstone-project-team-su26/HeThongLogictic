@@ -30,6 +30,10 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/purchase-requests/${encodeId(purchaseRequestId)}`,
     quotation: (purchaseRequestId) =>
       `/api/purchase-requests/${encodeId(purchaseRequestId)}/quotation`,
+    confirmPurchase: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/confirm-purchase`,
+    history: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/history`,
   }),
   deliveryAddresses: Object.freeze({
     list: "/api/delivery-addresses",
