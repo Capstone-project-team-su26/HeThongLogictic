@@ -1,16 +1,12 @@
 /**
  * Workflow "Gom hàng theo tồn kho" — wire vào BE thật.
  *
- * Mapping (Swagger Consolidation):
- * - Master box    → /api/consolidation
- *   DTO: id, masterCode, totalWeight, totalVolume(cm³), status, shipmentId, orders[]
- *   Status đọc/ghi chuẩn: DRAFT | CONSOLIDATED | SHIPPED | CANCELLED
- *     (BE cũng chấp nhận waiting/packed — FE chuẩn hoá về swagger)
- *   DELETE /api/consolidation/{id} = xóa/hủy lô
- * - Tồn kho      → GET /api/inventories ({ items } hoặc mảng)
+ * Mapping:
+ * - Tồn kho      → GET /api/inventories
+ * - Master box    → /api/consolidation (masterCode ≈ mã master box; gom theo orderIds)
  * - Lookups       → /api/warehouses|carriers|shipping-methods/active|shipping-routes
  * - Chi tiết kiện → GET /api/parcels/{parcelId}
- * - Shipment QT   → WRO pipeline → POST /api/international-shipments
+ * - Shipment QT   → WRO: AVAILABLE → RELEASE_APPROVED → picking → route@PACKING → complete(RELEASED) → POST /api/international-shipments
  */
 
 import axiosInstance from "../axiosInstance";
@@ -45,55 +41,96 @@ export const PACKAGE_STATUS_META = {
 
 export const MASTER_BOX_STATUS_META = {
   DRAFT: { label: "Nháp", tone: "warning" },
-  PACKED: { label: "Đã gom", tone: "processing" }, // UI cho CONSOLIDATED
+  PACKED: { label: "Đã đóng gói", tone: "processing" },
   SHIPPED: { label: "Đã xuất hàng", tone: "success" },
   CANCELLED: { label: "Đã hủy", tone: "error" },
 };
 
 export const SHIPMENT_STATUS_META = {
-  CREATED: { label: "Mới tạo", tone: "warning" },
-  CONFIRMED: { label: "Đã xác nhận", tone: "processing" },
-  MANIFESTED: { label: "Đã manifest", tone: "processing" },
-  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing" },
-  ARRIVED: { label: "Đã đến kho đích", tone: "success" },
-  ARRIVED_DESTINATION: { label: "Đã đến kho đích", tone: "success" },
-  CANCELLED: { label: "Đã hủy", tone: "error" },
+  CREATED: { label: "Mới tạo", tone: "warning", tab: "PREPARING" },
+  LOT_CREATED: { label: "Lô mới tạo", tone: "warning", tab: "PREPARING" },
+  PREPARING: { label: "Đang chuẩn bị", tone: "warning", tab: "PREPARING" },
+  MANIFESTED: { label: "Đã manifest", tone: "processing", tab: "PREPARING" },
+  CUSTOMS_EXPORT_PENDING: {
+    label: "Chờ thông quan xuất",
+    tone: "warning",
+    tab: "CUSTOMS",
+  },
+  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing", tab: "IN_TRANSIT" },
+  CUSTOMS_IMPORT_PENDING: {
+    label: "Chờ thông quan nhập",
+    tone: "warning",
+    tab: "CUSTOMS",
+  },
+  ARRIVED: { label: "Đã đến kho đích", tone: "success", tab: "ARRIVED" },
+  ARRIVED_DESTINATION: { label: "Đã đến kho đích", tone: "success", tab: "ARRIVED" },
+  ARRIVED_IN_VN: { label: "Đã đến kho VN", tone: "success", tab: "ARRIVED" },
+  CUSTOMS_REJECTED: { label: "Hải quan từ chối", tone: "error", tab: "ISSUE" },
+  HOLD: { label: "Tạm giữ", tone: "error", tab: "ISSUE" },
+  ISSUE: { label: "Sự cố", tone: "error", tab: "ISSUE" },
+  CANCELLED: { label: "Đã hủy", tone: "error", tab: "ISSUE" },
 };
+
+/** 5 tab màn Vận chuyển — khớp BE statusTab. */
+export const SHIPMENT_STATUS_TABS = [
+  { key: "PREPARING", label: "Đang chuẩn bị" },
+  { key: "IN_TRANSIT", label: "Đang đi" },
+  { key: "CUSTOMS", label: "Thông quan" },
+  { key: "ARRIVED", label: "Đã đến" },
+  { key: "ISSUE", label: "Sự cố" },
+];
+
+/** targetStatus → các status hiện tại được phép chuyển tới (mirror BE). */
+const SHIPMENT_ALLOWED_FROM = {
+  MANIFESTED: ["CREATED"],
+  CUSTOMS_EXPORT_PENDING: ["MANIFESTED", "CUSTOMS_REJECTED", "HOLD"],
+  IN_TRANSIT: ["CUSTOMS_EXPORT_PENDING", "MANIFESTED", "HOLD"],
+  CUSTOMS_IMPORT_PENDING: ["IN_TRANSIT", "CUSTOMS_REJECTED", "HOLD"],
+  ARRIVED_DESTINATION: ["CUSTOMS_IMPORT_PENDING", "IN_TRANSIT"],
+  CUSTOMS_REJECTED: ["CUSTOMS_EXPORT_PENDING", "CUSTOMS_IMPORT_PENDING"],
+  HOLD: [
+    "CREATED",
+    "MANIFESTED",
+    "CUSTOMS_EXPORT_PENDING",
+    "IN_TRANSIT",
+    "CUSTOMS_IMPORT_PENDING",
+    "CUSTOMS_REJECTED",
+  ],
+  ISSUE: [
+    "CREATED",
+    "MANIFESTED",
+    "CUSTOMS_EXPORT_PENDING",
+    "IN_TRANSIT",
+    "CUSTOMS_IMPORT_PENDING",
+    "CUSTOMS_REJECTED",
+    "HOLD",
+  ],
+};
+
+export function mapShipmentStatusToTab(status) {
+  const key = upper(status);
+  return SHIPMENT_STATUS_META[key]?.tab || "PREPARING";
+}
+
+export function getNextShipmentStatuses(currentStatus) {
+  const current = upper(currentStatus);
+  return Object.entries(SHIPMENT_ALLOWED_FROM)
+    .filter(([, from]) => from.some((item) => upper(item) === current))
+    .map(([target]) => target);
+}
 
 export const WRO_STATUS_META = {
-  PENDING: { label: "Chờ duyệt", tone: "warning" },
-  PENDING_REVIEW: { label: "Chờ xem xét", tone: "warning" },
-  RELEASE_PENDING: { label: "Chờ duyệt xuất kho", tone: "warning" },
-  RELEASE_APPROVED: { label: "Đã duyệt xuất kho", tone: "processing" },
+  RELEASE_PENDING: { label: "Chờ duyệt", tone: "warning" },
+  RELEASE_APPROVED: { label: "Đã duyệt", tone: "processing" },
+  RELEASE_REJECTED: { label: "Từ chối", tone: "error" },
   PICKING: { label: "Đang lấy hàng", tone: "processing" },
+  PICKED: { label: "Đã lấy hàng", tone: "processing" },
   PACKING: { label: "Đang đóng gói", tone: "processing" },
+  PACKED: { label: "Đã đóng gói", tone: "processing" },
   RELEASED: { label: "Đã xuất kho", tone: "success" },
-  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing" },
   HANDED_OVER: { label: "Đã bàn giao", tone: "success" },
-  COMPLETED: { label: "Hoàn tất", tone: "success" },
-  REJECTED: { label: "Đã từ chối", tone: "error" },
-  CANCELLED: { label: "Đã hủy", tone: "error" },
+  IN_TRANSIT: { label: "Đang vận chuyển", tone: "default" },
 };
-
-/** Status còn cần OP duyệt / từ chối (BE thật: WarehouseTQ gửi RELEASE_PENDING / PENDING_REVIEW). */
-export const WRO_NEEDS_APPROVAL_STATUSES = new Set([
-  "PENDING",
-  "PENDING_REVIEW",
-  "RELEASE_PENDING",
-]);
-
-export function wroNeedsApproval(status) {
-  return WRO_NEEDS_APPROVAL_STATUSES.has(upper(status));
-}
-
-export function getWroStatusMeta(status) {
-  return (
-    WRO_STATUS_META[upper(status)] ?? {
-      label: status || "—",
-      tone: "default",
-    }
-  );
-}
 
 const ELIGIBLE_INVENTORY_STATUSES = new Set(["AVAILABLE", "READY_FOR_CONSOLIDATION"]);
 const BLOCKED_PACKAGE_STATUSES = {
@@ -136,35 +173,17 @@ function detectShippingMode(method) {
   return "";
 }
 
-/**
- * Chuẩn hoá status consolidation BE → DRAFT | PACKED | SHIPPED | CANCELLED.
- * Swagger ví dụ: DRAFT, CONSOLIDATED. Thực tế BE còn waiting/packed/"string".
- */
+/** Chuẩn hoá status consolidation BE → DRAFT | PACKED | SHIPPED | CANCELLED */
 export function mapConsolidationStatus(status) {
   const key = upper(status);
-  if (!key || key === "STRING" || key === "NULL" || key === "UNDEFINED") {
-    return "DRAFT";
-  }
-  if (["DRAFT", "WAITING", "PENDING", "NEW", "OPEN"].includes(key)) return "DRAFT";
-  if (
-    ["PACKED", "CONSOLIDATED", "PROCESSING", "IN_PROGRESS", "CONFIRMED"].includes(key)
-  ) {
-    return "PACKED";
-  }
+  if (!key) return "DRAFT";
+  if (["DRAFT", "WAITING", "PENDING"].includes(key)) return "DRAFT";
+  if (["PACKED", "CONSOLIDATED", "PROCESSING", "IN_PROGRESS"].includes(key)) return "PACKED";
   if (["SHIPPED", "IN_TRANSIT", "COMPLETED", "DONE", "MANIFESTED"].includes(key)) {
     return "SHIPPED";
   }
   if (["CANCELLED", "CANCELED"].includes(key)) return "CANCELLED";
-  return "DRAFT";
-}
-
-/** Status gửi lên PUT/POST — khớp swagger (DRAFT / CONSOLIDATED / …). */
-export function toConsolidationApiStatus(uiOrRawStatus) {
-  const mapped = mapConsolidationStatus(uiOrRawStatus);
-  if (mapped === "PACKED") return "CONSOLIDATED";
-  if (mapped === "SHIPPED") return "SHIPPED";
-  if (mapped === "CANCELLED") return "CANCELLED";
-  return "DRAFT";
+  return key;
 }
 
 export function getPackageStatusMeta(parcel) {
@@ -423,15 +442,13 @@ function buildParcelBoxLookup(consolidations) {
 
 function mapMasterBox(row = {}) {
   const parcels = flattenConsolidationParcels(row);
-  const orders = Array.isArray(row.orders) ? row.orders : [];
   const orderIds = [
     ...new Set(
-      orders
+      (row.orders ?? [])
         .map((order) => text(order.id || order.orderId || order.consignmentId))
         .filter(Boolean)
     ),
   ];
-  const firstOrder = orders[0] || {};
   const originWarehouseId = text(
     row.originWarehouseId ||
       row.OriginWarehouseId ||
@@ -444,26 +461,22 @@ function mapMasterBox(row = {}) {
 
   const parcelVolume = parcels.reduce((sum, p) => sum + (Number(p.volume) || 0), 0);
   const rawTotalVolume = num(row.totalVolume);
-  // Swagger/BE: ConsolidationResponseDto.totalVolume là cm³ (vd 64000 → 0.064 m³).
+  // BE consolidation.totalVolume đang là cm³ (vd 82801).
   const totalVolume =
     parcelVolume ||
     (rawTotalVolume != null ? toCubicMeters(rawTotalVolume) : 0) ||
     0;
-
-  const status = mapConsolidationStatus(row.status);
 
   return {
     id: text(row.id),
     code: text(row.masterCode || row.code),
     originWarehouseId,
     destinationWarehouseId,
-    route: text(firstOrder.route || row.route || ""),
     shippingMethodId: text(row.shippingMethodId || ""),
     carrierId: text(row.carrierId || ""),
     note: text(row.note || ""),
-    status,
+    status: mapConsolidationStatus(row.status),
     rawStatus: text(row.status),
-    apiStatus: toConsolidationApiStatus(status),
     shipmentId: text(row.shipmentId) || null,
     orderIds,
     parcels,
@@ -472,35 +485,6 @@ function mapMasterBox(row = {}) {
     createdAt: row.createdAt || row.CreatedAt || null,
     raw: row,
   };
-}
-
-/** Bổ sung kho xuất từ inventory — ConsolidationResponseDto không có warehouseId. */
-export function enrichMasterBoxesWithInventory(boxes, inventory = []) {
-  const byParcelId = new Map();
-  const byCode = new Map();
-  for (const row of inventory) {
-    if (row.parcelId) byParcelId.set(text(row.parcelId), row);
-    if (row.parcelCode) byCode.set(upper(row.parcelCode), row);
-  }
-
-  return (boxes || []).map((box) => {
-    if (box.originWarehouseId) return box;
-    const fromParcels = (box.parcels || [])
-      .map(
-        (parcel) =>
-          byParcelId.get(text(parcel.parcelId || parcel.id)) ||
-          byCode.get(upper(parcel.parcelCode))
-      )
-      .find(Boolean);
-    const fromLookup =
-      fromParcels ||
-      inventory.find((row) => row.masterBoxId && row.masterBoxId === box.id);
-    if (!fromLookup?.warehouseId) return box;
-    return {
-      ...box,
-      originWarehouseId: text(fromLookup.warehouseId),
-    };
-  });
 }
 
 /* =========================== Validation =========================== */
@@ -611,18 +595,7 @@ export async function getMasterBoxDetail(boxId) {
   const response = await axiosInstance.get(
     `/api/consolidation/${encodeURIComponent(boxId)}`
   );
-  let box = mapMasterBox(getAdminApiData(response));
-  if (!box.originWarehouseId && box.parcels?.length) {
-    try {
-      const inventoryResponse = await axiosInstance.get("/api/inventories");
-      const inventory = getAdminApiList(inventoryResponse).map((row) =>
-        mapInventoryRow(row)
-      );
-      box = enrichMasterBoxesWithInventory([box], inventory)[0] || box;
-    } catch {
-      // optional enrich
-    }
-  }
+  const box = mapMasterBox(getAdminApiData(response));
   return {
     box,
     parcels: box.parcels,
@@ -647,26 +620,133 @@ export async function getParcelDetail(parcelId) {
   return mapInventoryRow(getAdminApiData(response));
 }
 
-/** Không có GET list shipment — suy ra từ consolidation.shipmentId. */
-export async function listShipments() {
-  const boxes = await listMasterBoxes();
-  const map = new Map();
-  for (const box of boxes) {
-    if (!box.shipmentId || map.has(box.shipmentId)) continue;
-    map.set(box.shipmentId, {
-      id: box.shipmentId,
-      code: box.shipmentId,
-      originWarehouseId: box.originWarehouseId,
-      destinationWarehouseId: box.destinationWarehouseId,
-      carrierId: box.carrierId,
-      shippingMethodId: box.shippingMethodId,
-      masterBoxIds: boxes.filter((row) => row.shipmentId === box.shipmentId).map((row) => row.id),
-      status: "CREATED",
-      seaDetails: null,
-      createdAt: box.createdAt,
-    });
+function mapShipment(row) {
+  const status = upper(row?.status || row?.Status);
+  const id = text(row?.shipmentId || row?.id || row?.ShipmentId);
+  return {
+    id,
+    code: text(row?.shipmentCode || row?.ShipmentCode || id),
+    status,
+    statusTab: text(row?.statusTab || row?.StatusTab) || mapShipmentStatusToTab(status),
+    originWarehouseId: text(row?.originWarehouseId || row?.OriginWarehouseId),
+    originWarehouseName: text(row?.originWarehouseName || row?.OriginWarehouseName),
+    destinationWarehouseId: text(
+      row?.destinationWarehouseId || row?.DestinationWarehouseId
+    ),
+    destinationWarehouseName: text(
+      row?.destinationWarehouseName || row?.DestinationWarehouseName
+    ),
+    carrierId: text(row?.carrierId || row?.CarrierId) || null,
+    carrierName: text(row?.carrierName || row?.CarrierName),
+    shippingMethod: text(row?.shippingMethod || row?.ShippingMethod),
+    shippingRouteId: text(row?.shippingRouteId || row?.ShippingRouteId) || null,
+    shippingRouteName: text(row?.shippingRouteName || row?.ShippingRouteName),
+    totalPackages: num(row?.totalPackages ?? row?.TotalPackages) ?? 0,
+    totalWeight: num(row?.totalWeight ?? row?.TotalWeight) ?? 0,
+    shippedAt: row?.shippedAt || row?.ShippedAt || null,
+    deliveredAt: row?.deliveredAt || row?.DeliveredAt || null,
+    pdfUrls: Array.isArray(row?.pdfUrls)
+      ? row.pdfUrls.filter(Boolean)
+      : Array.isArray(row?.PdfUrls)
+        ? row.PdfUrls.filter(Boolean)
+        : [],
+    exportImageUrls: Array.isArray(row?.exportImageUrls)
+      ? row.exportImageUrls.filter(Boolean)
+      : Array.isArray(row?.ExportImageUrls)
+        ? row.ExportImageUrls.filter(Boolean)
+        : [],
+    customsDocUrls: Array.isArray(row?.customsDocUrls)
+      ? row.customsDocUrls.filter(Boolean)
+      : Array.isArray(row?.CustomsDocUrls)
+        ? row.CustomsDocUrls.filter(Boolean)
+        : [],
+    wroRequests: (row?.wroRequests || row?.WroRequests || []).map((item) => ({
+      wroRequestId: text(item?.wroRequestId || item?.WroRequestId),
+      wroCode: text(item?.wroCode || item?.WroCode),
+    })),
+    parcels: (row?.parcels || row?.Parcels || []).map((item) => ({
+      parcelId: text(item?.parcelId || item?.ParcelId),
+      packageCode: text(item?.packageCode || item?.PackageCode),
+      weight: num(item?.weight ?? item?.Weight),
+    })),
+    raw: row,
+  };
+}
+
+/** GET /api/international-shipments — có statusTab (5 tab). */
+export async function listShipments(filters = {}) {
+  const params = {
+    pageNumber: filters.pageNumber ?? 1,
+    pageSize: filters.pageSize ?? 50,
+  };
+  if (filters.statusTab) params.statusTab = filters.statusTab;
+  if (filters.status) params.status = filters.status;
+  if (filters.originWarehouseId) params.originWarehouseId = filters.originWarehouseId;
+  if (filters.search) params.search = filters.search;
+
+  try {
+    const response = await axiosInstance.get("/api/international-shipments", { params });
+    const data = getAdminApiData(response);
+    const items = Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.Items)
+        ? data.Items
+        : Array.isArray(data)
+          ? data
+          : getAdminApiList(response);
+    return {
+      items: items.map(mapShipment).filter((row) => row.id),
+      totalCount: num(data?.totalCount ?? data?.TotalCount) ?? items.length,
+      pageNumber: num(data?.pageNumber ?? data?.PageNumber) ?? params.pageNumber,
+      pageSize: num(data?.pageSize ?? data?.PageSize) ?? params.pageSize,
+    };
+  } catch {
+    // Fallback cũ: suy từ consolidation nếu API list chưa deploy.
+    const boxes = await listMasterBoxes();
+    const map = new Map();
+    for (const box of boxes) {
+      if (!box.shipmentId || map.has(box.shipmentId)) continue;
+      map.set(box.shipmentId, {
+        id: box.shipmentId,
+        code: box.shipmentId,
+        originWarehouseId: box.originWarehouseId,
+        destinationWarehouseId: box.destinationWarehouseId,
+        carrierId: box.carrierId,
+        status: "CREATED",
+        statusTab: "PREPARING",
+        pdfUrls: [],
+        exportImageUrls: [],
+        customsDocUrls: [],
+        wroRequests: [],
+        parcels: [],
+        totalPackages: 0,
+        totalWeight: 0,
+      });
+    }
+    let items = [...map.values()];
+    if (filters.statusTab) {
+      items = items.filter((row) => row.statusTab === filters.statusTab);
+    }
+    return { items, totalCount: items.length, pageNumber: 1, pageSize: items.length };
   }
-  return [...map.values()];
+}
+
+export async function getShipmentDetail(shipmentId) {
+  if (!shipmentId) throw new Error("Thiếu id lô vận chuyển.");
+  const response = await axiosInstance.get(
+    `/api/international-shipments/${encodeURIComponent(shipmentId)}`
+  );
+  return mapShipment(getAdminApiData(response));
+}
+
+export async function updateShipmentStatus(shipmentId, status, note = "") {
+  if (!shipmentId) throw new Error("Thiếu id lô vận chuyển.");
+  if (!status) throw new Error("Thiếu trạng thái mới.");
+  const response = await axiosInstance.put(
+    `/api/international-shipments/${encodeURIComponent(shipmentId)}/status`,
+    { status: upper(status), note: text(note) || undefined }
+  );
+  return getAdminApiData(response);
 }
 
 export async function listTrackings(entityType, entityId) {
@@ -680,19 +760,7 @@ export async function listTrackings(entityType, entityId) {
 }
 
 export async function suggestMasterBoxCode() {
-  // BE tự sinh dạng MBX-yyyyMMddHHmmss-###### khi POST; FE gợi ý cùng pattern để ops thấy trước.
-  const now = new Date();
-  const pad = (n, len = 2) => String(n).padStart(len, "0");
-  const stamp = [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds()),
-  ].join("");
-  const suffix = String(Math.floor(100000 + Math.random() * 900000));
-  return `MBX-${stamp}-${suffix}`;
+  return "";
 }
 
 export async function suggestShipmentCode() {
@@ -733,7 +801,7 @@ export async function createMasterBox(payload) {
 
   const createResponse = await axiosInstance.post("/api/consolidation", {
     orderIds,
-    status: "DRAFT",
+    status: payload?.status || "waiting",
   });
   let created = mapMasterBox(getAdminApiData(createResponse));
 
@@ -744,7 +812,7 @@ export async function createMasterBox(payload) {
         `/api/consolidation/${encodeURIComponent(created.id)}`,
         {
           masterCode: code,
-          status: "DRAFT",
+          status: created.rawStatus || "waiting",
           orderIds: created.orderIds.length ? created.orderIds : orderIds,
         }
       );
@@ -789,7 +857,7 @@ export async function addParcelsToMasterBox(boxId, parcelIds) {
     `/api/consolidation/${encodeURIComponent(boxId)}`,
     {
       masterCode: box.code || undefined,
-      status: toConsolidationApiStatus(box.status),
+      status: box.rawStatus || "waiting",
       orderIds: mergedOrderIds,
       shipmentId: box.shipmentId || undefined,
     }
@@ -817,14 +885,14 @@ export async function removeParcelFromMasterBox(boxId, parcelId) {
     throw new Error("Không xác định được order của kiện để cập nhật consolidation.");
   }
   if (!nextOrderIds.length) {
-    throw new Error("Không thể để master box trống order. Hãy xóa lô gom nếu cần.");
+    throw new Error("Không thể để master box trống order. Hãy hủy lô gom nếu cần.");
   }
 
   const response = await axiosInstance.put(
     `/api/consolidation/${encodeURIComponent(boxId)}`,
     {
       masterCode: box.code || undefined,
-      status: toConsolidationApiStatus(box.status),
+      status: box.rawStatus || "waiting",
       orderIds: nextOrderIds,
       shipmentId: box.shipmentId || undefined,
     }
@@ -832,7 +900,295 @@ export async function removeParcelFromMasterBox(boxId, parcelId) {
   return mapMasterBox(getAdminApiData(response));
 }
 
-/** Hủy/xóa lô gom — DELETE /api/consolidation/{id}. */
+export async function confirmMasterBoxPacking(boxId) {
+  if (!boxId) throw new Error("Thiếu id master box.");
+  const detail = await getMasterBoxDetail(boxId);
+  const box = detail.box;
+  if (box.status !== "DRAFT") {
+    throw new Error("Chỉ xác nhận đóng gói cho master box đang nháp.");
+  }
+  if (!detail.parcels.length && !box.orderIds.length) {
+    throw new Error("Master box chưa có kiện hàng nào.");
+  }
+
+  const response = await axiosInstance.put(
+    `/api/consolidation/${encodeURIComponent(boxId)}`,
+    {
+      masterCode: box.code || undefined,
+      status: "packed",
+      orderIds: box.orderIds,
+      shipmentId: box.shipmentId || undefined,
+    }
+  );
+  return mapMasterBox(getAdminApiData(response));
+}
+
+/* ============================ WRO + Shipment ============================ */
+
+/**
+ * Tạo lô quốc tế từ WRO đã RELEASED (BE bắt buộc).
+ * Op duyệt WRO riêng; kho picking/đóng gói/complete → RELEASED rồi mới gom lô.
+ */
+export async function createShipment(payload) {
+  const wroRequestIds = [...new Set(payload?.wroRequestIds ?? [])].filter(Boolean);
+  if (!wroRequestIds.length) {
+    throw new Error(
+      "Cần chọn ít nhất một phiếu WRO ở trạng thái RELEASED để gom lô."
+    );
+  }
+
+  const originWarehouseId = text(payload?.originWarehouseId);
+  const destinationWarehouseId = text(payload?.destinationWarehouseId);
+  if (!originWarehouseId) throw new Error("Cần chọn kho xuất.");
+  if (!destinationWarehouseId) throw new Error("Cần chọn kho đích.");
+
+  const shippingMethod = upper(
+    payload.shippingMethod || payload.transportMode || ""
+  );
+
+  const response = await axiosInstance.post("/api/international-shipments", {
+    wroRequestIds,
+    originWarehouseId,
+    destinationWarehouseId,
+    carrierId: text(payload.carrierId) || undefined,
+    shippingMethod: shippingMethod || undefined,
+  });
+  const shipment = mapShipment(getAdminApiData(response));
+
+  const masterBoxIds = [...new Set(payload?.masterBoxIds ?? [])].filter(Boolean);
+  if (shipment.id && masterBoxIds.length) {
+    await Promise.allSettled(
+      masterBoxIds.map(async (boxId) => {
+        const detail = await getMasterBoxDetail(boxId);
+        await axiosInstance.put(`/api/consolidation/${encodeURIComponent(boxId)}`, {
+          masterCode: detail.box.code || undefined,
+          status: detail.box.rawStatus || "shipped",
+          orderIds: detail.box.orderIds,
+          shipmentId: shipment.id,
+        });
+      })
+    );
+  }
+
+  return {
+    ...shipment,
+    shippingMethod,
+    shippingMethodId: text(payload.shippingMethodId),
+    shippingRoute: text(payload.shippingRoute),
+    masterBoxIds,
+    wroRequestIds,
+  };
+}
+
+function mapWro(row) {
+  const id = text(row?.wroId || row?.WroId || row?.id || row?.requestId);
+  const status = upper(row?.status || row?.Status);
+  return {
+    id,
+    code: text(row?.wroCode || row?.WroCode || id),
+    exportBarcode: text(row?.exportBarcode || row?.ExportBarcode),
+    status,
+    receiverName: text(row?.receiverName || row?.ReceiverName || row?.consigneeName),
+    receiverPhone: text(row?.receiverPhone || row?.ReceiverPhone || row?.consigneePhone),
+    deliveryAddress: text(
+      row?.deliveryAddress ||
+        row?.DeliveryAddress ||
+        row?.receiverAddress ||
+        row?.ReceiverAddress ||
+        row?.consigneeAddress
+    ),
+    warehouseName: text(row?.warehouseName || row?.WarehouseName),
+    customerName: text(row?.customerName || row?.CustomerName),
+    carrierId: text(row?.carrierId || row?.CarrierId) || null,
+    carrierName: text(row?.carrierName || row?.CarrierName),
+    shippingRouteId: text(row?.shippingRouteId || row?.ShippingRouteId) || null,
+    shippingRoute: text(row?.shippingRoute || row?.ShippingRoute),
+    exportReason: text(row?.exportReason || row?.ExportReason),
+    vehicleNumber: text(row?.vehicleNumber || row?.VehicleNumber),
+    trackingNumber: text(row?.trackingNumber || row?.TrackingNumber),
+    customsDocumentUrls: Array.isArray(row?.customsDocumentUrls)
+      ? row.customsDocumentUrls.filter(Boolean)
+      : Array.isArray(row?.CustomsDocumentUrls)
+        ? row.CustomsDocumentUrls.filter(Boolean)
+        : [],
+    totalQuantity: num(row?.totalQuantity ?? row?.TotalQuantity) ?? 0,
+    createdAt: row?.createdAt || row?.CreatedAt || null,
+    items: (row?.items || row?.Items || []).map((item) => ({
+      itemId: text(item?.itemId || item?.ItemId),
+      inventoryId: text(item?.inventoryId || item?.InventoryId),
+      quantity: num(item?.quantity ?? item?.Quantity) ?? 1,
+      packageCode: text(item?.packageCode || item?.PackageCode),
+      productName: text(item?.productName || item?.ProductName),
+      binCode: text(item?.binCode || item?.BinCode),
+      shelfCode: text(item?.shelfCode || item?.ShelfCode),
+    })),
+    raw: row,
+  };
+}
+
+export async function listWroRequests(filters = {}) {
+  const params = {
+    pageIndex: filters.pageIndex ?? 1,
+    pageSize: filters.pageSize ?? 50,
+  };
+  if (filters.status) params.status = filters.status;
+  if (filters.searchTerm || filters.search) {
+    params.searchTerm = filters.searchTerm || filters.search;
+  }
+
+  const response = await axiosInstance.get("/api/warehouse-release-requests", {
+    params,
+  });
+  const data = getAdminApiData(response);
+  const items = Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.Items)
+      ? data.Items
+      : getAdminApiList(response);
+
+  return {
+    items: items.map(mapWro).filter((row) => row.id),
+    totalCount: num(data?.totalCount ?? data?.TotalCount) ?? items.length,
+    pageIndex: num(data?.pageIndex ?? data?.PageIndex) ?? params.pageIndex,
+    pageSize: num(data?.pageSize ?? data?.PageSize) ?? params.pageSize,
+  };
+}
+
+export async function getWroDetail(wroId) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  const response = await axiosInstance.get(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}`
+  );
+  return mapWro(getAdminApiData(response));
+}
+
+/**
+ * Duyệt WRO — OM nhập mã chuyến bay + giấy tờ thông quan (BE bắt buộc).
+ * @param {string} wroId
+ * @param {{ vehicleNumber: string, customsDocumentUrls: string[], trackingNumber?: string, note?: string }} payload
+ */
+export async function approveWro(wroId, payload = {}) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  const vehicleNumber = text(payload.vehicleNumber || payload.flightNumber);
+  const customsDocumentUrls = [
+    ...new Set(
+      (payload.customsDocumentUrls || []).map((url) => text(url)).filter(Boolean)
+    ),
+  ];
+  if (!vehicleNumber) {
+    throw new Error("Vui lòng nhập mã chuyến bay / số hiệu chuyến.");
+  }
+  if (!customsDocumentUrls.length) {
+    throw new Error("Vui lòng upload ít nhất một giấy tờ thông quan.");
+  }
+
+  const response = await axiosInstance.put(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
+    {
+      status: "RELEASE_APPROVED",
+      vehicleNumber,
+      trackingNumber: text(payload.trackingNumber) || undefined,
+      customsDocumentUrls,
+      note: text(payload.note) || undefined,
+    }
+  );
+  return getAdminApiData(response);
+}
+
+export async function rejectWro(wroId, rejectionReason = "") {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  const response = await axiosInstance.put(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
+    {
+      status: "RELEASE_REJECTED",
+      rejectionReason: text(rejectionReason) || undefined,
+    }
+  );
+  return getAdminApiData(response);
+}
+
+/** Tạo WRO ở RELEASE_PENDING — không auto duyệt / picking. */
+export async function createWroRequest(payload) {
+  const items = (payload?.items ?? [])
+    .map((item) => ({
+      inventoryId: text(item.inventoryId || item.id),
+      quantity: Math.max(1, Number(item.quantity) || 1),
+    }))
+    .filter((item) => item.inventoryId);
+  if (!items.length) throw new Error("Cần chọn ít nhất một tồn kho để tạo WRO.");
+
+  const response = await axiosInstance.post("/api/warehouse-release-requests", {
+    shelfCode: text(payload?.shelfCode) || undefined,
+    exportReason: text(payload?.exportReason) || undefined,
+    carrierId: text(payload?.carrierId) || undefined,
+    customsDocumentUrls: Array.isArray(payload?.customsDocumentUrls)
+      ? payload.customsDocumentUrls.filter(Boolean)
+      : undefined,
+    receiverName: text(payload?.receiverName) || undefined,
+    receiverPhone: text(payload?.receiverPhone) || undefined,
+    receiverAddress: text(payload?.receiverAddress) || undefined,
+    items,
+  });
+  return mapWro(getAdminApiData(response));
+}
+
+/* ===== merged from upstream (operator-flow) ===== */
+
+export const WRO_NEEDS_APPROVAL_STATUSES = new Set([
+  "PENDING",
+  "PENDING_REVIEW",
+  "RELEASE_PENDING",
+]);
+
+export function wroNeedsApproval(status) {
+  return WRO_NEEDS_APPROVAL_STATUSES.has(upper(status));
+}
+
+export function getWroStatusMeta(status) {
+  return (
+    WRO_STATUS_META[upper(status)] ?? {
+      label: status || "—",
+      tone: "default",
+    }
+  );
+}
+
+export function toConsolidationApiStatus(uiOrRawStatus) {
+  const mapped = mapConsolidationStatus(uiOrRawStatus);
+  if (mapped === "PACKED") return "CONSOLIDATED";
+  if (mapped === "SHIPPED") return "SHIPPED";
+  if (mapped === "CANCELLED") return "CANCELLED";
+  return "DRAFT";
+}
+
+export function enrichMasterBoxesWithInventory(boxes, inventory = []) {
+  const byParcelId = new Map();
+  const byCode = new Map();
+  for (const row of inventory) {
+    if (row.parcelId) byParcelId.set(text(row.parcelId), row);
+    if (row.parcelCode) byCode.set(upper(row.parcelCode), row);
+  }
+
+  return (boxes || []).map((box) => {
+    if (box.originWarehouseId) return box;
+    const fromParcels = (box.parcels || [])
+      .map(
+        (parcel) =>
+          byParcelId.get(text(parcel.parcelId || parcel.id)) ||
+          byCode.get(upper(parcel.parcelCode))
+      )
+      .find(Boolean);
+    const fromLookup =
+      fromParcels ||
+      inventory.find((row) => row.masterBoxId && row.masterBoxId === box.id);
+    if (!fromLookup?.warehouseId) return box;
+    return {
+      ...box,
+      originWarehouseId: text(fromLookup.warehouseId),
+    };
+  });
+}
+
 export function canDeleteMasterBox(box) {
   if (!box?.id) return false;
   if (box.shipmentId) return false;
@@ -851,197 +1207,6 @@ export async function deleteMasterBox(boxId) {
   }
   await axiosInstance.delete(`/api/consolidation/${encodeURIComponent(boxId)}`);
   return box;
-}
-
-export async function confirmMasterBoxPacking(boxId) {
-  if (!boxId) throw new Error("Thiếu id master box.");
-  const detail = await getMasterBoxDetail(boxId);
-  const box = detail.box;
-  if (box.status !== "DRAFT") {
-    throw new Error("Chỉ xác nhận gom cho master box đang nháp.");
-  }
-  if (!detail.parcels.length && !box.orderIds.length) {
-    throw new Error("Master box chưa có kiện hàng nào.");
-  }
-
-  const response = await axiosInstance.put(
-    `/api/consolidation/${encodeURIComponent(boxId)}`,
-    {
-      masterCode: box.code || undefined,
-      status: "CONSOLIDATED",
-      orderIds: box.orderIds,
-      shipmentId: box.shipmentId || undefined,
-    }
-  );
-  return mapMasterBox(getAdminApiData(response));
-}
-
-/* ============================ WRO + Shipment ============================ */
-
-/**
- * Pipeline BE (đã smoke-test):
- * POST WRO từ inventory AVAILABLE       (WRO → PENDING)
- * → PUT status = RELEASE_APPROVED       (staff duyệt trên tab "Duyệt xuất kho")
- * → POST picking-list
- * → PUT picking confirm  (WRO → PACKING)
- * → PUT shipping-route   (vẫn PACKING; gán sau RELEASED sẽ nhảy IN_TRANSIT)
- * → PUT complete         (WRO → RELEASED)
- * → POST /api/international-shipments
- *
- * Lưu ý: kiện đã gom consolidation (packed) thường RESERVED — BE từ chối tạo WRO.
- */
-const WRO_CREATABLE_STATUSES = new Set(["AVAILABLE", "READY_FOR_CONSOLIDATION"]);
-
-function mapWroRow(row) {
-  const items = row?.items || row?.Items || [];
-  const mappedItems = items.map((item) => ({
-    inventoryId: text(item?.inventoryId || item?.InventoryId),
-    parcelId: text(item?.parcelId || item?.ParcelId),
-    parcelCode: text(
-      item?.parcelCode ||
-        item?.ParcelCode ||
-        item?.packageCode ||
-        item?.PackageCode
-    ),
-    productName: text(item?.productName || item?.ProductName),
-    quantity: num(item?.quantity ?? item?.Quantity) ?? 1,
-  }));
-  const totalQuantity =
-    num(row?.totalQuantity ?? row?.TotalQuantity) ??
-    mappedItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-
-  return {
-    id: text(row?.wroId || row?.id || row?.WroId || row?.requestId),
-    code: text(row?.wroCode || row?.WroCode || row?.code),
-    status: upper(row?.status || row?.Status) || "RELEASE_PENDING",
-    exportReason: text(row?.exportReason || row?.ExportReason),
-    rejectionReason: text(row?.rejectionReason || row?.RejectionReason),
-    shelfCode: text(row?.shelfCode || row?.ShelfCode),
-    carrierId: text(row?.carrierId || row?.CarrierId),
-    carrierName: text(row?.carrierName || row?.CarrierName),
-    warehouseName: text(row?.warehouseName || row?.WarehouseName),
-    customerName: text(row?.customerName || row?.CustomerName),
-    createdByName: text(row?.createdByName || row?.CreatedByName),
-    createdByUserRole: text(row?.createdByUserRole || row?.CreatedByUserRole),
-    receiverName: text(row?.receiverName || row?.consigneeName || row?.ReceiverName),
-    items: mappedItems,
-    itemCount: mappedItems.length || totalQuantity || 0,
-    totalQuantity,
-    createdAt: row?.createdAt || row?.CreatedAt || null,
-    raw: row,
-  };
-}
-
-export async function listWroRequests({ status, search, pageIndex, pageSize } = {}) {
-  const wantsApprovalOnly = upper(status) === "NEEDS_APPROVAL";
-  const response = await axiosInstance.get("/api/warehouse-release-requests", {
-    params: {
-      // BE filter 1 status; "NEEDS_APPROVAL" = lấy all rồi lọc client-side
-      Status: wantsApprovalOnly ? undefined : text(status) || undefined,
-      SearchTerm: text(search) || undefined,
-      PageIndex: pageIndex ?? 1,
-      PageSize: pageSize ?? 50,
-    },
-  });
-  let rows = getAdminApiList(response).map(mapWroRow);
-  if (wantsApprovalOnly) {
-    rows = rows.filter((row) => wroNeedsApproval(row.status));
-  }
-  return rows;
-}
-
-export async function getWroDetail(requestId) {
-  if (!requestId) throw new Error("Thiếu id yêu cầu xuất kho.");
-  const response = await axiosInstance.get(
-    `/api/warehouse-release-requests/${encodeURIComponent(requestId)}`
-  );
-  return mapWroRow(getAdminApiData(response));
-}
-
-export async function approveWro(requestId) {
-  const response = await axiosInstance.put(
-    `/api/warehouse-release-requests/${encodeURIComponent(requestId)}/status`,
-    { status: "RELEASE_APPROVED" }
-  );
-  return mapWroRow(getAdminApiData(response) ?? { wroId: requestId, status: "RELEASE_APPROVED" });
-}
-
-export async function rejectWro(requestId, rejectionReason) {
-  const reason = text(rejectionReason);
-  if (!reason) throw new Error("Cần nhập lý do từ chối.");
-  const response = await axiosInstance.put(
-    `/api/warehouse-release-requests/${encodeURIComponent(requestId)}/status`,
-    { status: "REJECTED", rejectionReason: reason }
-  );
-  return mapWroRow(getAdminApiData(response) ?? { wroId: requestId, status: "REJECTED" });
-}
-
-async function resolveAvailableInventoryForBoxes(masterBoxIds) {
-  const details = await Promise.all(masterBoxIds.map((id) => getMasterBoxDetail(id)));
-  const wantedCodes = new Set();
-  const wantedParcelIds = new Set();
-  for (const detail of details) {
-    for (const parcel of detail.parcels ?? []) {
-      if (parcel.parcelCode) wantedCodes.add(upper(parcel.parcelCode));
-      if (parcel.parcelId) wantedParcelIds.add(text(parcel.parcelId));
-    }
-  }
-  if (!wantedCodes.size && !wantedParcelIds.size) {
-    throw new Error("Các master box đã chọn chưa có kiện — không tạo được WRO.");
-  }
-
-  const response = await axiosInstance.get("/api/inventories");
-  const inventoryRows = getAdminApiList(response).map((row) => mapInventoryRow(row));
-
-  const matchesWanted = (row) =>
-    (row.parcelCode && wantedCodes.has(upper(row.parcelCode))) ||
-    (row.parcelId && wantedParcelIds.has(text(row.parcelId)));
-
-  const found = inventoryRows.filter(matchesWanted);
-  const matched = found.filter((row) =>
-    WRO_CREATABLE_STATUSES.has(row.inventoryStatus || "AVAILABLE")
-  );
-
-  if (!matched.length) {
-    if (found.length) {
-      const sample = found
-        .slice(0, 5)
-        .map((row) => `${row.parcelCode || row.parcelId}=${row.inventoryStatus || "?"}`)
-        .join(", ");
-      throw new Error(
-        `BE chỉ cho tạo WRO từ tồn AVAILABLE. Kiện trong master box đang: ${sample}. ` +
-          "Hãy tạo WRO + shipment trước khi pack consolidation, hoặc hủy/mở lại box để trả kiện về AVAILABLE."
-      );
-    }
-    throw new Error(
-      "Không tìm thấy tồn kho khớp kiện trong master box trên /api/inventories."
-    );
-  }
-
-  const matchedCodes = new Set(matched.map((row) => upper(row.parcelCode)).filter(Boolean));
-  const matchedParcelIds = new Set(matched.map((row) => text(row.parcelId)).filter(Boolean));
-  const missingCodes = [...wantedCodes].filter((code) => {
-    if (matchedCodes.has(code)) return false;
-    const row = found.find((item) => upper(item.parcelCode) === code);
-    return !(row?.parcelId && matchedParcelIds.has(text(row.parcelId)));
-  });
-  if (missingCodes.length) {
-    const blocked = found
-      .filter((row) => !WRO_CREATABLE_STATUSES.has(row.inventoryStatus || ""))
-      .map((row) => `${row.parcelCode}=${row.inventoryStatus}`)
-      .slice(0, 5);
-    throw new Error(
-      `Thiếu tồn AVAILABLE cho kiện: ${missingCodes.slice(0, 5).join(", ")}` +
-        (blocked.length ? ` (${blocked.join(", ")})` : "")
-    );
-  }
-
-  const byId = new Map();
-  for (const row of matched) {
-    const key = text(row.inventoryId || row.id);
-    if (key && !byId.has(key)) byId.set(key, row);
-  }
-  return { details, items: [...byId.values()] };
 }
 
 async function assignWroShippingRoute(wroId, payload) {
@@ -1070,33 +1235,6 @@ async function assignWroShippingRoute(wroId, payload) {
   );
 }
 
-async function createWroOnly(payload, inventoryRows) {
-  const createItems = inventoryRows.map((row) => ({
-    inventoryId: row.inventoryId || row.id,
-    quantity: Math.max(1, Number(row.quantity) || 1),
-  }));
-
-  const createResponse = await axiosInstance.post("/api/warehouse-release-requests", {
-    shelfCode: payload.shelfCode || undefined,
-    exportReason: text(payload.exportReason) || undefined,
-    carrierId: text(payload.carrierId) || undefined,
-    items: createItems,
-  });
-  const created = getAdminApiData(createResponse);
-  const wroId = text(created?.wroId || created?.id || created?.WroId);
-  if (!wroId) throw new Error("Tạo WRO thành công nhưng không nhận được wroId.");
-
-  return {
-    wroId,
-    wroCode: text(created?.wroCode || created?.WroCode),
-    status: upper(created?.status || created?.Status) || "RELEASE_PENDING",
-    items: createItems,
-  };
-}
-
-/**
- * WRO đã RELEASE_APPROVED → picking → confirm (PACKING) → gán tuyến → complete (RELEASED).
- */
 export async function processApprovedWroToReleased(wroId, payload = {}) {
   const detail = await getWroDetail(wroId);
 
@@ -1139,97 +1277,6 @@ export async function processApprovedWroToReleased(wroId, payload = {}) {
   return { wroId, items: pickingItems };
 }
 
-/**
- * Tạo shipment quốc tế.
- * - Có `wroRequestIds` (đã RELEASED) → gọi thẳng /api/international-shipments
- * - Có `masterBoxIds` → chỉ tạo WRO ở trạng thái PENDING; ops duyệt ở tab "Duyệt xuất kho"
- *   rồi mới chạy picking → RELEASED → shipment.
- */
-export async function createShipment(payload) {
-  let wroRequestIds = [...new Set(payload?.wroRequestIds ?? [])].filter(Boolean);
-  const masterBoxIds = [...new Set(payload?.masterBoxIds ?? [])].filter(Boolean);
-
-  let originWarehouseId = text(payload?.originWarehouseId);
-  let destinationWarehouseId = text(payload?.destinationWarehouseId);
-
-  if (!wroRequestIds.length) {
-    if (!masterBoxIds.length) {
-      throw new Error("Cần chọn master box hoặc truyền wroRequestIds để tạo shipment.");
-    }
-
-    const { items } = await resolveAvailableInventoryForBoxes(masterBoxIds);
-    const wro = await createWroOnly(payload, items);
-
-    return {
-      id: wro.wroId,
-      code: wro.wroCode || wro.wroId,
-      pendingWro: true,
-      wroId: wro.wroId,
-      wroCode: wro.wroCode,
-      wroRequestIds: [wro.wroId],
-      masterBoxIds,
-      status: upper(created?.status || created?.Status) || "RELEASE_PENDING",
-      raw: null,
-    };
-  }
-
-  // WRO có sẵn: gán tuyến chỉ khi chưa RELEASED/IN_TRANSIT — best-effort, không chặn shipment
-  await Promise.allSettled(
-    wroRequestIds.map((wroId) => assignWroShippingRoute(wroId, payload))
-  );
-
-  if (!originWarehouseId) throw new Error("Cần chọn kho xuất.");
-  if (!destinationWarehouseId) throw new Error("Cần chọn kho đích.");
-
-  // CreateInternationalShipmentDto.shippingMethod = hình thức (AIR/SEA/ROAD/RAIL), không phải catalog methodId
-  const shippingMethod = upper(
-    payload.shippingMethod || payload.transportMode || ""
-  );
-
-  const response = await axiosInstance.post("/api/international-shipments", {
-    wroRequestIds,
-    originWarehouseId,
-    destinationWarehouseId,
-    carrierId: text(payload.carrierId) || undefined,
-    shippingMethod: shippingMethod || undefined,
-  });
-  const shipment = getAdminApiData(response);
-  const shipmentId = text(shipment?.shipmentId || shipment?.id || shipment?.ShipmentId);
-
-  // Gắn shipmentId lại consolidation nếu có
-  if (shipmentId && masterBoxIds.length) {
-    await Promise.allSettled(
-      masterBoxIds.map(async (boxId) => {
-        const detail = await getMasterBoxDetail(boxId);
-        await axiosInstance.put(`/api/consolidation/${encodeURIComponent(boxId)}`, {
-          masterCode: detail.box.code || undefined,
-          status: "SHIPPED",
-          orderIds: detail.box.orderIds,
-          shipmentId,
-        });
-      })
-    );
-  }
-
-  return {
-    id: shipmentId,
-    code: text(shipment?.shipmentCode || shipment?.ShipmentCode || shipmentId),
-    originWarehouseId,
-    destinationWarehouseId,
-    carrierId: text(shipment?.carrierId || payload.carrierId),
-    shippingMethod,
-    shippingMethodId: text(payload.shippingMethodId),
-    shippingRoute: text(payload.shippingRoute),
-    masterBoxIds,
-    wroRequestIds,
-    status: text(shipment?.status || "CREATED"),
-    raw: shipment,
-  };
-}
-
-/**
- * WRO đã duyệt (RELEASE_APPROVED) → hoàn tất xuất kho (RELEASED) → tạo shipment quốc tế.
- */
 export async function createShipmentFromApprovedWro(wroId, payload) {
   if (!wroId) throw new Error("Thiếu id yêu cầu xuất kho.");
   await processApprovedWroToReleased(wroId, payload);

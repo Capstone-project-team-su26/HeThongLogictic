@@ -229,8 +229,8 @@ export default function OperationsDashboard() {
           <span>Trung tâm vận hành</span>
           <h1>Chào {displayName}, tổng quan hôm nay</h1>
           <p>
-            Theo dõi luồng hàng và nhận biết điểm nghẽn. Thao tác gom hàng thực
-            hiện ở trang Gom hàng.
+            Theo dõi luồng hàng và nhận biết điểm nghẽn. Duyệt WRO, gom lô và tồn
+            kho nằm ở các trang riêng.
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -240,8 +240,11 @@ export default function OperationsDashboard() {
               {analytics.totalWeight.toLocaleString("vi-VN")} kg
             </strong>
           </div>
-          <Link to="/operations-manager/parcels">
-            <Button icon={<InboxOutlined />}>Trang gom hàng</Button>
+          <Link to="/operations-manager/wro">
+            <Button>Duyệt WRO</Button>
+          </Link>
+          <Link to="/operations-manager/shipments">
+            <Button icon={<InboxOutlined />}>Lô vận chuyển</Button>
           </Link>
           <Link to="/operations-manager/releases">
             <Button icon={<FileDoneOutlined />}>Duyệt xuất kho</Button>
