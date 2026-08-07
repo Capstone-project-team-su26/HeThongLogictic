@@ -12,6 +12,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Select,
   Tag,
   Tooltip,
 } from "antd";
@@ -28,6 +29,7 @@ import {
   SafetyCertificateOutlined,
   ShoppingCartOutlined,
   ShoppingOutlined,
+  SwapOutlined,
   TruckOutlined,
 } from "@ant-design/icons";
 
@@ -38,6 +40,14 @@ import {
   getActivePricingRulesApi,
   PRICING_RULE_CODE,
 } from "../../../../api/SaleAPI/ConsignmentAPI/pricingRuleService";
+import {
+  getExchangeRatesApi,
+  convertCurrencyApi,
+  CURRENCY_NAMES,
+} from "../../../../api/SaleAPI/ExchangeRateAPI/exchangeRateService";
+import {
+  getServicePricingsApi,
+} from "../../../../api/SaleAPI/ConsignmentAPI/servicePricingService";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 
 import "./CreatePurchaseRequestQuotationModal.css";
@@ -370,23 +380,121 @@ export default function CreatePurchaseRequestQuotationModal({
         : [];
   }, [activeRules, pricingRules]);
 
-  const [itemPrices, setItemPrices] =
-    useState({});
+  const [itemPrices, setItemPrices] = useState({});
+  const [purchaseFee, setPurchaseFee] = useState(0);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
 
-  const [purchaseFee, setPurchaseFee] =
-    useState(0);
+  const routeCurrencyInfo = useMemo(() => {
+    const route = String(purchaseRequest?.route || "").toUpperCase();
+    if (route.includes("KOREA") || route.includes("HAN") || route.includes("HÀN")) {
+      return { code: "KRW", flag: "🇰🇷", name: "Won Hàn Quốc", label: "🇰🇷 KRW (Won Hàn)" };
+    }
+    if (route.includes("JAPAN") || route.includes("NHAT") || route.includes("NHẬT")) {
+      return { code: "JPY", flag: "🇯🇵", name: "Yên Nhật", label: "🇯🇵 JPY (Yên Nhật)" };
+    }
+    if (route.includes("CHINA") || route.includes("TRUNG")) {
+      return { code: "CNY", flag: "🇨🇳", name: "Nhân dân tệ", label: "🇨🇳 CNY (Nhân dân tệ)" };
+    }
+    if (route.includes("USA") || route.includes("MY") || route.includes("MỸ") || route.includes("US")) {
+      return { code: "USD", flag: "🇺🇸", name: "Đô la Mỹ", label: "🇺🇸 USD (Đô la Mỹ)" };
+    }
+    return { code: "CNY", flag: "🇨🇳", name: "Nhân dân tệ", label: "🇨🇳 CNY (Nhân dân tệ)" };
+  }, [purchaseRequest?.route]);
 
-  const [shippingFee, setShippingFee] =
-    useState(0);
+  const defaultCurrency = routeCurrencyInfo.code;
 
-  const [note, setNote] =
-    useState("");
+  const [exchangeRates, setExchangeRates] = useState([]);
+  const [loadingRates, setLoadingRates] = useState(false);
+  const [foreignInputs, setForeignInputs] = useState({});
 
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [servicePricings, setServicePricings] = useState([]);
+  const [loadingPricings, setLoadingPricings] = useState(false);
+  const [selectedPricingId, setSelectedPricingId] = useState(null);
 
-  const [formError, setFormError] =
-    useState("");
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setLoadingRates(true);
+    getExchangeRatesApi({ activeOnly: true })
+      .then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          setExchangeRates(list);
+        }
+      })
+      .catch((err) => {
+        console.error("GET EXCHANGE RATES ERROR:", err);
+      })
+      .finally(() => {
+        setLoadingRates(false);
+      });
+
+    setLoadingPricings(true);
+    getServicePricingsApi()
+      .then((list) => {
+        if (Array.isArray(list)) {
+          setServicePricings(list);
+        }
+      })
+      .catch((err) => {
+        console.error("GET SERVICE PRICINGS ERROR:", err);
+      })
+      .finally(() => {
+        setLoadingPricings(false);
+      });
+  }, [open]);
+
+  const autoMatchedServicePricing = useMemo(() => {
+    if (!Array.isArray(servicePricings) || servicePricings.length === 0) return null;
+
+    const routeText = String(purchaseRequest?.route || "").toUpperCase();
+    const shippingOptionText = String(purchaseRequest?.shippingOption || "").toUpperCase();
+
+    let targetOrigin = "";
+    if (routeText.includes("KOREA") || routeText.includes("HAN") || routeText.includes("HÀN")) {
+      targetOrigin = "KOREA";
+    } else if (routeText.includes("JAPAN") || routeText.includes("NHAT") || routeText.includes("NHẬT")) {
+      targetOrigin = "JAPAN";
+    } else if (routeText.includes("CHINA") || routeText.includes("TRUNG")) {
+      targetOrigin = "CHINA";
+    } else if (routeText.includes("USA") || routeText.includes("MY") || routeText.includes("MỸ") || routeText.includes("US")) {
+      targetOrigin = "USA";
+    }
+
+    const byRoute = servicePricings.filter((sp) => {
+      const origin = String(sp.originCountry || sp.originCountryDisplayName || "").toUpperCase();
+      if (targetOrigin === "CHINA") return origin.includes("CHINA") || origin.includes("CN") || origin.includes("TRUNG");
+      if (targetOrigin === "KOREA") return origin.includes("KOREA") || origin.includes("KR") || origin.includes("HÀN");
+      if (targetOrigin === "JAPAN") return origin.includes("JAPAN") || origin.includes("JP") || origin.includes("NHẬT");
+      if (targetOrigin === "USA") return origin.includes("USA") || origin.includes("US") || origin.includes("MỸ");
+      return true;
+    });
+
+    if (byRoute.length === 0) return null;
+
+    if (shippingOptionText) {
+      const byOption = byRoute.find((sp) => {
+        const serviceType = String(sp.serviceType || sp.serviceTypeDisplayName || "").toUpperCase();
+        return serviceType.includes(shippingOptionText) || shippingOptionText.includes(serviceType);
+      });
+      if (byOption) return byOption;
+    }
+
+    return byRoute[0];
+  }, [servicePricings, purchaseRequest?.route, purchaseRequest?.shippingOption]);
+
+  const matchedPurchaseFeeRule = useMemo(() => {
+    if (!Array.isArray(effectiveRules) || effectiveRules.length === 0) return null;
+    return effectiveRules.find((rule) => {
+      const type = String(rule?.ruleType || "").toUpperCase();
+      const code = String(rule?.ruleCode || "").toUpperCase();
+      return type === "PURCHASE_FEE" || code === "PURCHASE_FEE_FIXED" || code.includes("PURCHASE_FEE");
+    });
+  }, [effectiveRules]);
 
   useEffect(() => {
     if (!open) {
@@ -399,16 +507,86 @@ export default function CreatePurchaseRequestQuotationModal({
       )
     );
 
-    setPurchaseFee(0);
+    const defaultPurchaseFee = Number(matchedPurchaseFeeRule?.value) || 50000;
+    setPurchaseFee(defaultPurchaseFee);
     setShippingFee(0);
     setNote("");
     setFormError("");
     setSubmitting(false);
+    setForeignInputs({});
   }, [
     items,
     open,
     purchaseRequest?.purchaseRequestId,
+    matchedPurchaseFeeRule,
   ]);
+
+  // Auto-fill shipping fee from exact matched route + shippingOption
+  useEffect(() => {
+    if (!open) return;
+    if (autoMatchedServicePricing) {
+      const basePrice = Number(autoMatchedServicePricing.price) || 0;
+      const totalQty = items.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0);
+      const calculatedFee = basePrice > 0 ? basePrice * (totalQty > 0 ? totalQty : 1) : basePrice;
+      setShippingFee(calculatedFee > 0 ? calculatedFee : basePrice);
+    }
+  }, [autoMatchedServicePricing, open, items]);
+
+  const handleConvertForeignPrice = async (itemId, currency, amount) => {
+    if (!itemId) return;
+
+    const selectedCurr = currency || foreignInputs[itemId]?.currency || defaultCurrency;
+    const numAmount = Number(amount);
+
+    if (amount === null || amount === undefined || amount === "" || !Number.isFinite(numAmount) || numAmount <= 0) {
+      handlePriceChange(itemId, 0);
+      setForeignInputs((prev) => ({
+        ...prev,
+        [itemId]: {
+          currency: selectedCurr,
+          amount: null,
+          convertedVnd: 0,
+          rate: 0,
+        },
+      }));
+      return;
+    }
+
+    try {
+      const convertRes = await convertCurrencyApi(selectedCurr, numAmount);
+      const vndVal = Math.round(Number(convertRes?.amountVnd) || 0);
+
+      handlePriceChange(itemId, vndVal);
+      setForeignInputs((prev) => ({
+        ...prev,
+        [itemId]: {
+          currency: selectedCurr,
+          amount: numAmount,
+          convertedVnd: vndVal,
+          rate: Number(convertRes?.exchangeRate) || 0,
+        },
+      }));
+    } catch (err) {
+      const rateObj = exchangeRates.find((r) => r.currencyCode === selectedCurr);
+      const rate = Number(rateObj?.rateToVnd) || 0;
+      if (rate > 0) {
+        const calculatedVnd = Math.round(numAmount * rate);
+        handlePriceChange(itemId, calculatedVnd);
+        setForeignInputs((prev) => ({
+          ...prev,
+          [itemId]: {
+            currency: selectedCurr,
+            amount: numAmount,
+            convertedVnd: calculatedVnd,
+            rate,
+          },
+        }));
+      } else {
+        handlePriceChange(itemId, 0);
+        AuthNotify.error("Quy đổi thất bại", err?.message || "Không thể lấy tỷ giá quy đổi.");
+      }
+    }
+  };
 
   const itemBreakdown =
     useMemo(
@@ -928,6 +1106,8 @@ export default function CreatePurchaseRequestQuotationModal({
                       .imageUrls[0]
                     : "";
 
+                const currentForeign = foreignInputs[current.itemId] || {};
+
                 return (
                   <article
                     key={
@@ -976,52 +1156,56 @@ export default function CreatePurchaseRequestQuotationModal({
                             current.quantity
                           )}
                         </Tag>
-
-                        {/* {item
-                          ?.attributes && (
-                            <Tag>
-                              {
-                                item.attributes
-                              }
-                            </Tag>
-                          )} */}
                       </div>
                     </div>
 
                     <div className="purchase-quotation-item__price">
-                      <label>
-                        Đơn giá
+                      <label className="foreign-price-label">
+                        Nhập giá ngoại tệ ({routeCurrencyInfo.code})
                         <b>*</b>
                       </label>
 
-                      <InputNumber
-                        value={
-                          current.unitPrice
-                        }
-                        min={0}
-                        step={1000}
-                        precision={0}
-                        controls={false}
-                        formatter={
-                          moneyFormatter
-                        }
-                        parser={
-                          moneyParser
-                        }
-                        onChange={(
-                          value
-                        ) =>
-                          handlePriceChange(
-                            current.itemId,
-                            value
-                          )
-                        }
-                        addonAfter="₫"
-                        placeholder="Nhập đơn giá"
-                      />
+                      <div className="foreign-input-group">
+                        <span className="route-currency-tag">
+                          {routeCurrencyInfo.flag} {routeCurrencyInfo.code} ({routeCurrencyInfo.name})
+                        </span>
 
-                      <small>
-                        Thành tiền:{" "}
+                        <InputNumber
+                          value={currentForeign.amount ?? null}
+                          placeholder={`Nhập số tiền (${routeCurrencyInfo.code})`}
+                          min={0}
+                          controls={false}
+                          onChange={(amount) => {
+                            handleConvertForeignPrice(current.itemId, routeCurrencyInfo.code, amount);
+                          }}
+                          className="foreign-amount-input"
+                        />
+                      </div>
+
+                      <div className="converted-vnd-wrapper">
+                        <label className="vnd-read-label">
+                          Đơn giá quy đổi (VNĐ)
+                        </label>
+
+                        <InputNumber
+                          value={current.unitPrice}
+                          readOnly
+                          disabled
+                          controls={false}
+                          formatter={moneyFormatter}
+                          addonAfter="₫"
+                          className="converted-vnd-input"
+                        />
+                      </div>
+
+                      {currentForeign.convertedVnd > 0 && currentForeign.amount > 0 ? (
+                        <div className="foreign-result-note">
+                          💡 Quy đổi: {formatNumber(currentForeign.amount)} {currentForeign.currency} × {formatNumber(currentForeign.rate)} ₫ = <strong>{formatCurrency(currentForeign.convertedVnd)}</strong>
+                        </div>
+                      ) : null}
+
+                      <small className="line-total-display">
+                        Thành tiền ({current.quantity} sản phẩm):{" "}
                         <strong>
                           {formatCurrency(
                             current.lineTotal
@@ -1058,6 +1242,7 @@ export default function CreatePurchaseRequestQuotationModal({
               <label>
                 <DollarOutlined />
                 Phí mua hộ
+                <b className="required-star">*</b>
               </label>
 
               <InputNumber
@@ -1086,7 +1271,9 @@ export default function CreatePurchaseRequestQuotationModal({
               />
 
               <small>
-                Phí dịch vụ hỗ trợ mua hàng.
+                {matchedPurchaseFeeRule
+                  ? `💡 ${matchedPurchaseFeeRule.ruleName || 'Phí dịch vụ mua hộ cố định (50.000 VNĐ)'}.`
+                  : "Phí dịch vụ mua hộ cố định (50.000 VNĐ) mỗi đơn hàng."}
               </small>
             </div>
 
@@ -1094,6 +1281,7 @@ export default function CreatePurchaseRequestQuotationModal({
               <label>
                 <TruckOutlined />
                 Phí vận chuyển
+                <b className="required-star">*</b>
               </label>
 
               <InputNumber

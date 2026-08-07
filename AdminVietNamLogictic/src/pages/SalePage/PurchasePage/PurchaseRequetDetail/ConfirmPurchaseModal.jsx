@@ -267,7 +267,7 @@ export default function ConfirmPurchaseModal({
         footer={null}
         width={780}
         centered
-        destroyOnClose
+        destroyOnHidden
         className="confirm-purchase-modal"
         title={null}
       >

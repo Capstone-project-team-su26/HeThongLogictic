@@ -202,20 +202,16 @@ const formatDateUtcTitle = (
   )}`;
 };
 
-const normalizePurchaseRequestTime = (
-  item
-) => {
+const normalizePurchaseRequestTime = (item) => {
   if (!item) {
     return item;
   }
 
   return {
     ...item,
-
-    createdAtUtc:
-      normalizeApiTimeToUtc(
-        item?.createdAt
-      ),
+    createdAtUtc: normalizeApiTimeToUtc(item?.createdAt),
+    quotationCreatedAtUtc: normalizeApiTimeToUtc(item?.quotationCreatedAt),
+    statusUpdatedAtUtc: normalizeApiTimeToUtc(item?.statusUpdatedAt),
   };
 };
 
@@ -945,16 +941,61 @@ export default function PurchaseRequestList() {
                           </strong>
                         </div>
 
-                        <div>
-                          <span>
-                            Ghi chú chung
-                          </span>
-                          <strong>
-                            {item
-                              ?.generalNote ||
-                              "Không có"}
+                      </div>
+                    </div>
+
+                    <div className="card-dates-timeline-bar">
+                      <div className="timeline-bar-label">
+                        ⏱️ Tiến trình:
+                      </div>
+
+                      <div className="timeline-chips-row">
+                        <div
+                          className="date-pill"
+                          title={formatDateUtcTitle(
+                            item?.createdAtUtc || item?.createdAt
+                          )}
+                        >
+                          <span className="pill-dot is-created" />
+                          <span className="pill-title">Tạo đơn:</span>
+                          <strong className="pill-time">
+                            {formatDateTime(
+                              item?.createdAtUtc || item?.createdAt
+                            )}
                           </strong>
                         </div>
+
+                        {item?.quotationCreatedAtUtc && (
+                          <div
+                            className="date-pill"
+                            title={formatDateUtcTitle(
+                              item?.quotationCreatedAtUtc
+                            )}
+                          >
+                            <span className="pill-dot is-quoted" />
+                            <span className="pill-title">Báo giá:</span>
+                            <strong className="pill-time">
+                              {formatDateTime(item?.quotationCreatedAtUtc)}
+                            </strong>
+                          </div>
+                        )}
+
+                        {!item?.quotationCreatedAtUtc &&
+                          item?.statusUpdatedAtUtc &&
+                          item?.statusUpdatedAtUtc !== item?.createdAtUtc && (
+                            <div
+                              className="date-pill"
+                              title={formatDateUtcTitle(
+                                item?.statusUpdatedAtUtc
+                              )}
+                            >
+                              <span className="pill-dot is-updated" />
+                              <span className="pill-title">Cập nhật:</span>
+                              <strong className="pill-time">
+                                {formatDateTime(item?.statusUpdatedAtUtc)}
+                              </strong>
+                            </div>
+                          )}
                       </div>
                     </div>
                   </article>

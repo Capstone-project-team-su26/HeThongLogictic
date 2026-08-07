@@ -12,7 +12,9 @@ import {
 
 import {
   ArrowLeftOutlined,
+  CalendarOutlined,
   CheckCircleOutlined,
+  ClockCircleOutlined,
   CloseCircleOutlined,
   CopyOutlined,
   DollarOutlined,
@@ -26,6 +28,7 @@ import {
   ReloadOutlined,
   SafetyCertificateOutlined,
   ShoppingOutlined,
+  SyncOutlined,
   TagsOutlined,
   TeamOutlined,
   UserOutlined,
@@ -2037,41 +2040,101 @@ export default function PurchaseRequestDetail() {
           </div>
 
           <div className="purchase-detail-hero-meta">
-            <div>
+            <div className="hero-stat-card is-quantity">
               <ShoppingOutlined />
-              <span>
-                Tổng số lượng
-              </span>
-              <strong>
-                {formatNumber(
-                  totalQuantity
-                )}
-              </strong>
-            </div>
-
-            <div>
-              <FileTextOutlined />
-              <span>
-                Ngày tạo
-              </span>
-
-              <div
-                className="purchase-detail-date-value"
-                title={formatDateUtcTitle(
-                  detail?.createdAt
-                )}
-              >
+              <div>
+                <span>
+                  Tổng số lượng
+                </span>
                 <strong>
-                  {formatDateTime(
-                    detail?.createdAt
+                  {formatNumber(
+                    totalQuantity
                   )}
                 </strong>
-
-                <small className="purchase-detail-timezone-badge">
-                  UTC+7
-                </small>
               </div>
             </div>
+
+            <div className="hero-stat-card is-created">
+              <CalendarOutlined />
+              <div>
+                <span>
+                  Ngày tạo
+                </span>
+
+                <div
+                  className="purchase-detail-date-value"
+                  title={formatDateUtcTitle(
+                    detail?.createdAt
+                  )}
+                >
+                  <strong>
+                    {formatDateTime(
+                      detail?.createdAt
+                    )}
+                  </strong>
+
+                  <small className="purchase-detail-timezone-badge">
+                    UTC+7
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            {detail?.quotationCreatedAt && (
+              <div className="hero-stat-card is-quoted">
+                <TagsOutlined />
+                <div>
+                  <span>
+                    Báo giá
+                  </span>
+
+                  <div
+                    className="purchase-detail-date-value"
+                    title={formatDateUtcTitle(
+                      detail?.quotationCreatedAt
+                    )}
+                  >
+                    <strong>
+                      {formatDateTime(
+                        detail?.quotationCreatedAt
+                      )}
+                    </strong>
+
+                    <small className="purchase-detail-timezone-badge">
+                      UTC+7
+                    </small>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {detail?.statusUpdatedAt && detail?.statusUpdatedAt !== detail?.createdAt && (
+              <div className="hero-stat-card is-updated">
+                <SyncOutlined />
+                <div>
+                  <span>
+                    Cập nhật
+                  </span>
+
+                  <div
+                    className="purchase-detail-date-value"
+                    title={formatDateUtcTitle(
+                      detail?.statusUpdatedAt
+                    )}
+                  >
+                    <strong>
+                      {formatDateTime(
+                        detail?.statusUpdatedAt
+                      )}
+                    </strong>
+
+                    <small className="purchase-detail-timezone-badge">
+                      UTC+7
+                    </small>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
