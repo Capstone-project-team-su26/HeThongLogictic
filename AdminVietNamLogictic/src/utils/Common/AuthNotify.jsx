@@ -21,7 +21,7 @@ const open = (type, title, description) => {
 };
 
 const AuthNotify = {
-  success(title = "Đăng nhập thành công", desc = "") {
+  success(title = "Thành công", desc = "") {
     open("success", title, desc);
   },
   error(title = "Lỗi", desc = "") {
@@ -29,6 +29,9 @@ const AuthNotify = {
   },
   warning(title = "Cảnh báo", desc = "") {
     open("warning", title, desc);
+  },
+  info(title = "Thông báo", desc = "") {
+    open("info", title, desc);
   },
 };
 

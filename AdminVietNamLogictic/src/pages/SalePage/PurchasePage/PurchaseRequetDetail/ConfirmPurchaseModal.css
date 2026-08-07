@@ -1,215 +1,324 @@
 /* =========================================================
-   CONFIRM PURCHASE MODAL STYLES
+   CONFIRM PURCHASE MODAL STYLES (DYNAMIC ANIMATED DESIGN SYSTEM)
 ========================================================= */
 
+/* Entrance Pop-In Animation */
 .confirm-purchase-modal .ant-modal-content {
   padding: 0;
-  border-radius: 20px;
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
-  border: 1px solid #e2e8f0;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  animation: modalPopIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes modalPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(18px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .confirm-purchase-modal__header {
-  padding: 22px 28px;
+  padding: 28px 32px 22px;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #1e3a8a 100%);
+  flex-direction: column;
+  gap: 20px;
   color: #ffffff;
   position: relative;
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.header-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  width: 100%;
 }
 
 .confirm-purchase-modal__header-icon {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 14px;
-  font-size: 24px;
-  color: #60a5fa;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  border-radius: 18px;
+  font-size: 26px;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(12px);
+  animation: pulseHeaderIcon 3s infinite ease-in-out;
+}
+
+@keyframes pulseHeaderIcon {
+  0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); }
+  50% { transform: scale(1.05); box-shadow: 0 12px 30px rgba(255, 255, 255, 0.25); }
+}
+
+.header-text-group {
+  flex: 1;
+}
+
+.header-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+.live-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  animation: pulseDot 1.4s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.4); }
 }
 
 .confirm-purchase-modal__header h2 {
   margin: 0 0 4px;
   color: #ffffff;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: -0.02em;
 }
 
 .confirm-purchase-modal__header p {
   margin: 0;
-  color: #cbd5e1;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .confirm-purchase-modal__code-tag {
-  position: absolute;
-  top: 20px;
-  right: 24px;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  padding: 6px 14px !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+/* Stepper Pipeline Bar */
+.header-pipeline-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+  padding: 5px 12px;
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.pipeline-step.is-active {
+  opacity: 0.88;
+}
+
+.pipeline-step.is-selected {
+  opacity: 1 !important;
+  background: rgba(255, 255, 255, 0.25) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
+}
+
+.step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
   font-size: 12px;
+  font-weight: 900;
+  color: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.pipeline-step.is-selected .step-num {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.9) !important;
+  transform: scale(1.18);
+}
+
+.step-label {
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 800;
-  padding: 4px 12px;
-  border-radius: 8px;
+}
+
+.pipeline-step.is-selected .step-label {
+  color: #ffffff;
+  font-weight: 900;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.pipeline-line {
+  flex: 1;
+  height: 3px;
+  margin: 0 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: background 0.3s ease;
+}
+
+.pipeline-line.is-active {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
 
 .confirm-purchase-modal__body {
-  padding: 24px 28px;
+  padding: 28px 32px;
   max-height: 70vh;
   overflow-y: auto;
+  background: #ffffff;
 }
 
 .confirm-purchase-modal__alert {
-  margin-bottom: 20px;
-  border-radius: 12px;
+  margin-bottom: 22px;
+  border-radius: 14px;
 }
 
 .confirm-purchase-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 .confirm-purchase-section__title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #2563eb;
-  font-size: 12px;
+  gap: 10px;
+  color: #4f46e5;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.08em;
 }
 
 .confirm-purchase-section__title svg {
-  font-size: 16px;
+  font-size: 18px;
 }
 
-.confirm-purchase-item-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.confirm-purchase-item-card {
-  padding: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: all 0.2s ease;
-}
-
-.confirm-purchase-item-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
-}
-
-.confirm-purchase-item-card__header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.confirm-purchase-item-index {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  background: #0f172a;
-  color: #ffffff;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.confirm-purchase-item-name {
-  flex: 1;
-  color: #0f172a;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.confirm-purchase-item-card__inputs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.confirm-purchase-item-card__inputs label,
-.confirm-purchase-item-card__single-input label {
-  display: block;
-  margin-bottom: 5px;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-/* Upload dropzone styling */
-.confirm-purchase-upload-box {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+/* Upload dropzone styling & Micro-Animations */
+.confirm-purchase-upload-box,
+.confirm-purchase-upload-box .ant-upload-wrapper,
+.confirm-purchase-upload-box .ant-upload-select,
+.confirm-purchase-upload-box .ant-upload {
+  width: 100% !important;
+  display: block !important;
 }
 
 .confirm-purchase-upload-dropzone {
-  padding: 24px;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 32px 24px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  background: #f8fafc;
-  border: 2px dashed #cbd5e1;
-  border-radius: 16px;
+  gap: 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  border: 2px dashed #93c5fd;
+  border-radius: 20px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
 }
 
 .confirm-purchase-upload-dropzone:hover {
-  border-color: #2563eb;
-  background: #eff6ff;
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 12px 32px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
 }
 
 .confirm-purchase-upload-icon {
-  font-size: 28px;
-  color: #2563eb;
+  font-size: 34px;
+  color: #6366f1;
+  animation: floatBounce 2.5s infinite ease-in-out;
+}
+
+@keyframes floatBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 .confirm-purchase-upload-dropzone strong {
   display: block;
   color: #0f172a;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 850;
 }
 
 .confirm-purchase-upload-dropzone span {
   display: block;
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
   margin-top: 2px;
 }
 
 .confirm-purchase-image-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 14px;
 }
 
 .confirm-purchase-image-thumb {
   position: relative;
-  height: 100px;
-  border-radius: 12px;
+  height: 110px;
+  border-radius: 14px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
   background: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  transition: transform 0.25s ease;
+}
+
+.confirm-purchase-image-thumb:hover {
+  transform: scale(1.04);
 }
 
 .confirm-purchase-image-thumb img {
@@ -222,14 +331,14 @@
 .confirm-purchase-image-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease;
 }
 
 .confirm-purchase-image-thumb:hover .confirm-purchase-image-overlay {
@@ -237,8 +346,8 @@
 }
 
 .confirm-purchase-image-overlay button {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -246,13 +355,13 @@
   color: #0f172a;
   border: none;
   cursor: pointer;
-  font-size: 14px;
-  transition: transform 0.15s ease;
+  font-size: 15px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .confirm-purchase-image-overlay button:hover {
-  transform: scale(1.1);
-
+  transform: scale(1.18);
 }
 
 .confirm-purchase-image-overlay button.is-delete {
@@ -260,27 +369,95 @@
   color: #ffffff;
 }
 
+/* Modal Footer & Button Animations */
 .confirm-purchase-modal__footer {
-  padding: 16px 28px;
+  padding: 18px 32px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 14px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
 }
 
-.confirm-purchase-submit-btn {
-  height: 42px !important;
-  padding: 0 24px !important;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
-  border: none !important;
-  border-radius: 10px !important;
+/* Cancel Button Styling & Hover Spring Animation */
+.confirm-purchase-cancel-btn {
+  height: 48px !important;
+  padding: 0 26px !important;
+  border-radius: 16px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #475569 !important;
   font-weight: 800 !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.confirm-purchase-cancel-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+  transform: translateY(-2px) !important;
+}
+
+.confirm-purchase-cancel-btn:active {
+  transform: translateY(0) scale(0.97) !important;
+}
+
+/* Submit Button & Metallic Shimmer Light Sweep Animation */
+.confirm-purchase-submit-btn {
+  position: relative !important;
+  height: 48px !important;
+  padding: 0 32px !important;
+  border: none !important;
+  border-radius: 16px !important;
+  font-size: 14px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.01em !important;
+  overflow: hidden !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Shimmer Light Beam Effect */
+.confirm-purchase-submit-btn::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -80%;
+  width: 50%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  animation: shimmerSweep 3s infinite ease-in-out;
+  pointer-events: none;
+}
+
+@keyframes shimmerSweep {
+  0% {
+    left: -80%;
+  }
+  60%, 100% {
+    left: 140%;
+  }
 }
 
 .confirm-purchase-submit-btn:hover {
-  background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45) !important;
+  transform: translateY(-3px) scale(1.02) !important;
+  filter: brightness(1.15) !important;
+}
+
+.confirm-purchase-submit-btn:active {
+  transform: translateY(1px) scale(0.97) !important;
+}
+
+.confirm-purchase-submit-btn .anticon {
+  font-size: 17px !important;
+  transition: transform 0.3s ease !important;
+}
+
+.confirm-purchase-submit-btn:hover .anticon {
+  transform: scale(1.2) rotate(6deg);
 }

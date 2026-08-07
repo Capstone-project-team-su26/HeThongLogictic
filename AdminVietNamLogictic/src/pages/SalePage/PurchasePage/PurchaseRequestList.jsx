@@ -50,6 +50,10 @@ const DEFAULT_PAGE_SIZE = 10;
 const ALL_STATUS = "ALL";
 
 const STATUS_CONFIG = {
+  NEW: {
+    label: "Tạo đơn hàng",
+    className: "is-info",
+  },
   PENDING_REVIEW: {
     label: "Chờ duyệt",
     className: "is-warning",
@@ -89,6 +93,18 @@ const STATUS_CONFIG = {
   PAID: {
     label: "Đã thanh toán",
     className: "is-success",
+  },
+  PURCHASED: {
+    label: "Đã mua hàng",
+    className: "is-success",
+  },
+  SELLER_SHIPPED: {
+    label: "NCC đã phát hàng",
+    className: "is-info",
+  },
+  ARRIVED_ORIGIN_WAREHOUSE: {
+    label: "Đã về kho nước ngoài",
+    className: "is-info",
   },
   PROCESSING: {
     label: "Đang xử lý",
