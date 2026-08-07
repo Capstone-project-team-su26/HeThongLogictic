@@ -16,11 +16,12 @@ import {
   ReloadOutlined,
   SendOutlined,
 } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 
 import {
   addParcelsToMasterBox,
   createMasterBox,
-  createShipment,
+  createWroRequest,
   getOperationsApiError,
   getInventoryStatusMeta,
   getPackageStatusMeta,
@@ -29,16 +30,13 @@ import {
   listCarriers,
   listConsolidationInventory,
   listMasterBoxes,
-  listShipments,
   listShippingMethods,
-  listShippingRoutes,
   listWarehouses,
   MASTER_BOX_STATUS_META,
   PACKAGE_STATUS_META,
 } from "../../api/OperationsAPI/consolidationWorkflowService";
 import MasterBoxFormModal from "./components/MasterBoxFormModal";
 import MasterBoxDetailModal from "./components/MasterBoxDetailModal";
-import ShipmentFormModal from "./components/ShipmentFormModal";
 import ParcelDetailModal from "./components/ParcelDetailModal";
 import "./OperationsPage.css";
 
@@ -67,24 +65,19 @@ const sumBy = (rows, key) =>
 export default function OperationsParcelsPage() {
   const [inventory, setInventory] = useState([]);
   const [masterBoxes, setMasterBoxes] = useState([]);
-  const [shipments, setShipments] = useState([]);
   const [lookups, setLookups] = useState({
     warehouses: [],
     carriers: [],
     shippingMethods: [],
-    shippingRoutes: [],
   });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [selectedParcelIds, setSelectedParcelIds] = useState([]);
-  const [selectedBoxIds, setSelectedBoxIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState(null);
   const [activeTab, setActiveTab] = useState("inventory");
-
-  const [masterBoxDraft, setMasterBoxDraft] = useState(null); // parcels -> create modal
-  const [shipmentDraft, setShipmentDraft] = useState(null); // boxes -> shipment modal
+  const [masterBoxDraft, setMasterBoxDraft] = useState(null);
   const [detailBoxId, setDetailBoxId] = useState(null);
   const [detailParcel, setDetailParcel] = useState(null);
   const [addToBoxId, setAddToBoxId] = useState("");
@@ -93,31 +86,20 @@ export default function OperationsParcelsPage() {
     refresh ? setIsRefreshing(true) : setIsLoading(true);
     setLoadError("");
     try {
-      const [
-        warehouses,
-        carriers,
-        shippingMethods,
-        shippingRoutes,
-        inventoryRows,
-        boxes,
-        shipmentRows,
-      ] = await Promise.all([
-        listWarehouses(),
-        listCarriers(),
-        listShippingMethods(),
-        listShippingRoutes({ isActive: true }),
-        listConsolidationInventory(),
-        listMasterBoxes(),
-        listShipments(),
-      ]);
-      setLookups({ warehouses, carriers, shippingMethods, shippingRoutes });
+      const [warehouses, carriers, shippingMethods, inventoryRows, boxes] =
+        await Promise.all([
+          listWarehouses(),
+          listCarriers(),
+          listShippingMethods(),
+          listConsolidationInventory(),
+          listMasterBoxes(),
+        ]);
+      setLookups({ warehouses, carriers, shippingMethods });
       setInventory(inventoryRows);
       setMasterBoxes(boxes);
-      setShipments(shipmentRows);
       setSelectedParcelIds([]);
-      setSelectedBoxIds([]);
     } catch (error) {
-      setLoadError(getOperationsApiError(error, "Không thể tải dữ liệu gom hàng."));
+      setLoadError(getOperationsApiError(error, "Không thể tải dữ liệu tồn kho."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -129,8 +111,6 @@ export default function OperationsParcelsPage() {
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
-  /* ============================ Lookups ============================ */
-
   const warehouseById = useMemo(
     () => new Map(lookups.warehouses.map((row) => [row.id, row])),
     [lookups.warehouses]
@@ -139,19 +119,15 @@ export default function OperationsParcelsPage() {
     () => new Map(lookups.shippingMethods.map((row) => [row.id, row])),
     [lookups.shippingMethods]
   );
-  const shipmentById = useMemo(
-    () => new Map(shipments.map((row) => [row.id, row])),
-    [shipments]
-  );
   const parcelsByBoxId = useMemo(() => {
     const map = new Map();
     for (const box of masterBoxes) {
       map.set(box.id, box.parcels ?? []);
     }
     for (const row of inventory) {
-      if (!row.masterBoxId || map.has(row.masterBoxId)) continue;
+      if (!row.masterBoxId) continue;
       const list = map.get(row.masterBoxId) ?? [];
-      list.push(row);
+      if (!list.some((item) => item.id === row.id)) list.push(row);
       map.set(row.masterBoxId, list);
     }
     return map;
@@ -164,8 +140,6 @@ export default function OperationsParcelsPage() {
     },
     [warehouseById]
   );
-
-  /* ============================ Filters ============================ */
 
   const filteredInventory = useMemo(() => {
     const query = filters.search.trim().toLowerCase();
@@ -204,15 +178,9 @@ export default function OperationsParcelsPage() {
     };
   }, [inventory]);
 
-  /* ============================ Selection ============================ */
-
   const selectedParcels = useMemo(
     () => inventory.filter((row) => selectedParcelIds.includes(row.id)),
     [inventory, selectedParcelIds]
-  );
-  const selectedBoxes = useMemo(
-    () => masterBoxes.filter((row) => selectedBoxIds.includes(row.id)),
-    [masterBoxes, selectedBoxIds]
   );
   const selectedOriginWarehouseId = selectedParcels[0]?.warehouseId ?? "";
 
@@ -243,8 +211,6 @@ export default function OperationsParcelsPage() {
     [lookups.warehouses]
   );
 
-  /* ============================ Summary ============================ */
-
   const eligibleRows = useMemo(
     () => filteredInventory.filter((row) => getParcelBlockReason(row) == null),
     [filteredInventory]
@@ -256,30 +222,9 @@ export default function OperationsParcelsPage() {
       selected: selectedParcels.length,
       draftBoxes: masterBoxes.filter((row) => row.status === "DRAFT").length,
       chargeableWeight: sumBy(eligibleRows, "chargeableWeight"),
-      volume: sumBy(eligibleRows, "volume"),
     }),
     [eligibleRows, selectedParcels, masterBoxes]
   );
-
-  const SUMMARY_CARDS = [
-    { key: "eligible", label: "Kiện đủ điều kiện gom", hint: "Trong phạm vi bộ lọc" },
-    { key: "selected", label: "Kiện đang chọn", hint: "Chuẩn bị gom vào master box" },
-    { key: "draftBoxes", label: "Master box nháp", hint: "Có thể thêm/rút kiện" },
-    {
-      key: "chargeableWeight",
-      label: "Tổng trọng lượng tính cước",
-      suffix: " kg",
-      hint: "Của các kiện đủ điều kiện",
-    },
-    {
-      key: "volume",
-      label: "Tổng thể tích",
-      suffix: " m³",
-      hint: "Của các kiện đủ điều kiện",
-    },
-  ];
-
-  /* ============================ Actions ============================ */
 
   const runAction = useCallback(
     async (action, successMessage) => {
@@ -314,17 +259,30 @@ export default function OperationsParcelsPage() {
     setMasterBoxDraft(parcels);
   }
 
-  function openCreateShipment(boxes) {
-    const packable = boxes.filter((row) => row.status === "PACKED");
-    if (!packable.length) {
+  async function handleCreateWroFromInventory() {
+    if (!selectedParcels.length) {
+      setNotice({ type: "warning", message: "Chọn kiện tồn kho để tạo phiếu WRO." });
+      return;
+    }
+    const warehouseIds = new Set(selectedParcels.map((row) => row.warehouseId));
+    if (warehouseIds.size > 1) {
       setNotice({
         type: "warning",
-        message: "Chọn ít nhất một master box đã đóng gói (PACKED) để tạo shipment.",
+        message: "Chỉ tạo WRO từ các kiện cùng một kho xuất.",
       });
       return;
     }
-    setNotice(null);
-    setShipmentDraft(packable);
+    await runAction(
+      () =>
+        createWroRequest({
+          exportReason: "Xuất kho theo yêu cầu Ops",
+          items: selectedParcels.map((row) => ({
+            inventoryId: row.inventoryId || row.id,
+            quantity: Math.max(1, Number(row.quantity) || 1),
+          })),
+        }),
+      `Đã tạo phiếu WRO từ ${selectedParcels.length} kiện (chờ duyệt tại trang Duyệt WRO).`
+    );
   }
 
   async function handleAddToDraftBox() {
@@ -337,67 +295,37 @@ export default function OperationsParcelsPage() {
     setAddToBoxId("");
   }
 
-  /* ============================ Columns ============================ */
-
   const inventoryColumns = useMemo(
     () => [
       {
         title: "Mã kiện",
         dataIndex: "parcelCode",
-        key: "parcelCode",
         fixed: "left",
         render: (value) => <Typography.Text code>{value || "—"}</Typography.Text>,
       },
-      { title: "Mã đơn/ký gửi", dataIndex: "orderCode", key: "orderCode" },
-      { title: "Khách hàng", dataIndex: "customerName", key: "customerName", ellipsis: true },
+      { title: "Mã đơn", dataIndex: "orderCode" },
+      { title: "Khách hàng", dataIndex: "customerName", ellipsis: true },
       {
         title: "Kho",
-        key: "warehouse",
         render: (_, row) =>
           warehouseById.get(row.warehouseId)?.code || row.warehouseName || "—",
       },
       {
         title: "Bin / kệ",
-        key: "bin",
         render: (_, row) =>
           row.shelfCode ? `${row.binCode ?? "—"} · ${row.shelfCode}` : row.binCode || "—",
       },
-      { title: "Tuyến", dataIndex: "route", key: "route" },
-      { title: "Dịch vụ", dataIndex: "serviceType", key: "serviceType" },
-      {
-        title: "KG thực",
-        dataIndex: "actualWeight",
-        key: "actualWeight",
-        align: "right",
-        render: (value) => formatNumber(value, " kg"),
-      },
-      {
-        title: "KG quy đổi",
-        dataIndex: "volumetricWeight",
-        key: "volumetricWeight",
-        align: "right",
-        render: (value) => formatNumber(value, " kg"),
-      },
+      { title: "Tuyến", dataIndex: "route" },
       {
         title: "KG tính cước",
         dataIndex: "chargeableWeight",
-        key: "chargeableWeight",
         align: "right",
         render: (value) => (
           <Typography.Text strong>{formatNumber(value, " kg")}</Typography.Text>
         ),
       },
       {
-        title: "Thể tích",
-        dataIndex: "volume",
-        key: "volume",
-        align: "right",
-        render: (value) => formatNumber(value, " m³"),
-      },
-      {
         title: "TT kiện",
-        dataIndex: "packageStatus",
-        key: "packageStatus",
         render: (_, row) => {
           const meta = getPackageStatusMeta(row);
           return <Tag color={meta.tone}>{meta.label}</Tag>;
@@ -406,13 +334,11 @@ export default function OperationsParcelsPage() {
       {
         title: "TT tồn kho",
         dataIndex: "inventoryStatus",
-        key: "inventoryStatus",
         render: (value) => {
           const meta = getInventoryStatusMeta(value);
           return <Tag color={meta.tone}>{meta.label}</Tag>;
         },
       },
-      { title: "Ghi chú", dataIndex: "note", key: "note", ellipsis: true },
     ],
     [warehouseById]
   );
@@ -422,25 +348,21 @@ export default function OperationsParcelsPage() {
       {
         title: "Mã master box",
         dataIndex: "code",
-        key: "code",
         fixed: "left",
         render: (value) => <Typography.Text code>{value || "—"}</Typography.Text>,
       },
       {
         title: "Kho xuất",
         dataIndex: "originWarehouseId",
-        key: "originWarehouseId",
         render: warehouseName,
       },
       {
         title: "Kho đích",
         dataIndex: "destinationWarehouseId",
-        key: "destinationWarehouseId",
         render: warehouseName,
       },
       {
         title: "Số kiện",
-        key: "parcelCount",
         align: "right",
         render: (_, row) =>
           formatNumber(
@@ -449,7 +371,6 @@ export default function OperationsParcelsPage() {
       },
       {
         title: "Tổng KG",
-        key: "totalWeight",
         align: "right",
         render: (_, row) =>
           formatNumber(
@@ -459,182 +380,43 @@ export default function OperationsParcelsPage() {
           ),
       },
       {
-        title: "Tổng thể tích",
-        key: "totalVolume",
-        align: "right",
-        render: (_, row) =>
-          formatNumber(
-            row.totalVolume || sumBy(parcelsByBoxId.get(row.id) ?? [], "volume"),
-            " m³"
-          ),
-      },
-      {
         title: "Trạng thái",
         dataIndex: "status",
-        key: "status",
         render: (value) => {
           const meta = MASTER_BOX_STATUS_META[value] ?? { label: value, tone: "default" };
           return <Tag color={meta.tone}>{meta.label}</Tag>;
         },
       },
       {
-        title: "Shipment",
-        dataIndex: "shipmentId",
-        key: "shipmentId",
-        render: (value) =>
-          value ? (
-            <Typography.Text code>{shipmentById.get(value)?.code ?? value}</Typography.Text>
-          ) : (
-            "—"
-          ),
-      },
-      {
         title: "Thao tác",
         key: "actions",
         fixed: "right",
-        width: 150,
+        width: 100,
         render: (_, row) => (
-          <Space size={4} wrap>
-            <Button size="small" type="link" onClick={() => setDetailBoxId(row.id)}>
-              Chi tiết
-            </Button>
-            {row.status === "PACKED" ? (
-              <Button
-                size="small"
-                type="link"
-                icon={<SendOutlined />}
-                onClick={() => openCreateShipment([row])}
-              >
-                Tạo shipment
-              </Button>
-            ) : null}
-          </Space>
+          <Button size="small" type="link" onClick={() => setDetailBoxId(row.id)}>
+            Chi tiết
+          </Button>
         ),
       },
     ],
-    [warehouseName, parcelsByBoxId, shipmentById]
-  );
-
-  /* ============================ Render ============================ */
-
-  const inventoryTab = (
-    <div className="ops-table-card">
-      <div className="ops-table-card__head">
-        <h3>Tồn kho chờ gom</h3>
-        <span>
-          {filteredInventory.length} kiện · đã chọn {selectedParcels.length}
-        </span>
-      </div>
-
-      <div className="ops-selection-bar">
-        <Space size={8} wrap>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            disabled={!selectedParcels.length}
-            onClick={() => openCreateMasterBox(selectedParcels)}
-          >
-            Gom vào master box mới
-          </Button>
-          <Select
-            placeholder="Chọn master box nháp..."
-            style={{ minWidth: 220 }}
-            value={addToBoxId || undefined}
-            options={draftBoxesForSelection.map((row) => ({
-              value: row.id,
-              label: `${row.code} · ${warehouseById.get(row.originWarehouseId)?.code ?? ""} → ${
-                warehouseById.get(row.destinationWarehouseId)?.code ?? ""
-              }`,
-            }))}
-            onChange={setAddToBoxId}
-            disabled={!selectedParcels.length}
-            allowClear
-          />
-          <Button
-            icon={<InboxOutlined />}
-            disabled={!addToBoxId || !selectedParcels.length}
-            onClick={handleAddToDraftBox}
-          >
-            Thêm vào master box đã chọn
-          </Button>
-        </Space>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          Chỉ kiện đủ điều kiện (cùng kho xuất, đủ cân/kích thước, chưa thuộc master box
-          khác) mới chọn được.
-        </Typography.Text>
-      </div>
-
-      <Table
-        rowKey="id"
-        size="middle"
-        columns={inventoryColumns}
-        dataSource={filteredInventory}
-        loading={isLoading}
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        scroll={{ x: 1500 }}
-        rowSelection={{
-          selectedRowKeys: selectedParcelIds,
-          onChange: setSelectedParcelIds,
-          getCheckboxProps: (row) => {
-            const reason = getParcelBlockReason(row);
-            return { disabled: reason != null, title: reason ?? undefined };
-          },
-        }}
-        onRow={(row) => ({
-          onClick: () => setDetailParcel(row),
-          style: { cursor: "pointer" },
-        })}
-        locale={{ emptyText: "Không có kiện tồn kho nào khớp bộ lọc." }}
-      />
-    </div>
-  );
-
-  const masterBoxTab = (
-    <div className="ops-table-card">
-      <div className="ops-table-card__head">
-        <h3>Master boxes</h3>
-        <span>
-          {masterBoxes.length} master box · đã chọn {selectedBoxes.length}
-        </span>
-      </div>
-      <Table
-        rowKey="id"
-        columns={masterBoxColumns}
-        dataSource={masterBoxes}
-        loading={isLoading}
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        scroll={{ x: 1200 }}
-        rowSelection={{
-          selectedRowKeys: selectedBoxIds,
-          onChange: setSelectedBoxIds,
-          getCheckboxProps: (row) => ({
-            disabled: row.status !== "PACKED",
-            title:
-              row.status !== "PACKED"
-                ? "Chỉ master box đã đóng gói mới tạo được shipment."
-                : undefined,
-          }),
-        }}
-        onRow={(row) => ({
-          onClick: () => setDetailBoxId(row.id),
-          style: { cursor: "pointer" },
-        })}
-        locale={{ emptyText: "Chưa có master box nào." }}
-      />
-    </div>
+    [warehouseName, parcelsByBoxId]
   );
 
   return (
     <div className="ops-page">
       <section className="ops-page__hero">
         <div>
-          <span>Gom hàng</span>
-          <h1>Gom hàng theo tồn kho</h1>
+          <span>Tồn kho</span>
+          <h1>Tồn kho & master box</h1>
           <p>
-            Chọn các kiện đang tồn trong kho, gom vào master box và tạo shipment quốc tế.
+            Lọc kiện trong kho, gom master box nội bộ, hoặc tạo phiếu WRO để Ops duyệt
+            ở trang riêng.
           </p>
         </div>
         <div className="ops-page__hero-actions">
+          <Link to="/operations-manager/wro">
+            <Button>Sang duyệt WRO</Button>
+          </Link>
           <Button
             icon={<ReloadOutlined spin={isRefreshing} />}
             disabled={isRefreshing || isLoading}
@@ -643,17 +425,11 @@ export default function OperationsParcelsPage() {
             Làm mới
           </Button>
           <Button
+            type="primary"
             icon={<PlusOutlined />}
             onClick={() => openCreateMasterBox(selectedParcels)}
           >
             Tạo master box
-          </Button>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={() => openCreateShipment(selectedBoxes)}
-          >
-            Tạo shipment từ master box đã chọn
           </Button>
         </div>
       </section>
@@ -683,21 +459,46 @@ export default function OperationsParcelsPage() {
         />
       ) : null}
 
-      <section className="ops-kpi-grid" aria-label="Chỉ số gom hàng">
-        {SUMMARY_CARDS.map((meta) => (
-          <article key={meta.key} className="ops-kpi-card">
-            <p className="ops-kpi-card__label">{meta.label}</p>
-            <p className="ops-kpi-card__value">
-              {isLoading ? "…" : formatNumber(summary[meta.key], meta.suffix ?? "")}
-            </p>
-            <div className="ops-kpi-card__meta">
-              <p>{meta.hint}</p>
-            </div>
-          </article>
-        ))}
+      <section className="ops-kpi-grid" aria-label="Chỉ số tồn kho">
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">Kiện đủ điều kiện</p>
+          <p className="ops-kpi-card__value">
+            {isLoading ? "…" : formatNumber(summary.eligible)}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Trong bộ lọc hiện tại</p>
+          </div>
+        </article>
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">Đang chọn</p>
+          <p className="ops-kpi-card__value">
+            {isLoading ? "…" : formatNumber(summary.selected)}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Chuẩn bị gom / tạo WRO</p>
+          </div>
+        </article>
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">Master box nháp</p>
+          <p className="ops-kpi-card__value">
+            {isLoading ? "…" : formatNumber(summary.draftBoxes)}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Có thể thêm kiện</p>
+          </div>
+        </article>
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">KG tính cước</p>
+          <p className="ops-kpi-card__value">
+            {isLoading ? "…" : formatNumber(summary.chargeableWeight, " kg")}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Kiện đủ điều kiện</p>
+          </div>
+        </article>
       </section>
 
-      <section className="ops-page__filters" aria-label="Bộ lọc gom hàng">
+      <section className="ops-page__filters" aria-label="Bộ lọc tồn kho">
         <div>
           <label htmlFor="ops-f-origin">Kho xuất</label>
           <Select
@@ -728,7 +529,10 @@ export default function OperationsParcelsPage() {
               label: `${row.code} — ${row.name}`,
             }))}
             onChange={(value) =>
-              setFilters((current) => ({ ...current, destinationWarehouseId: value ?? "" }))
+              setFilters((current) => ({
+                ...current,
+                destinationWarehouseId: value ?? "",
+              }))
             }
           />
         </div>
@@ -745,7 +549,7 @@ export default function OperationsParcelsPage() {
           />
         </div>
         <div>
-          <label htmlFor="ops-f-method">Phương thức vận chuyển</label>
+          <label htmlFor="ops-f-method">Phương thức VC</label>
           <Select
             id="ops-f-method"
             style={{ width: "100%" }}
@@ -830,13 +634,102 @@ export default function OperationsParcelsPage() {
         items={[
           {
             key: "inventory",
-            label: `Tồn kho chờ gom (${filteredInventory.length})`,
-            children: inventoryTab,
+            label: `Tồn kho (${filteredInventory.length})`,
+            children: (
+              <div className="ops-table-card">
+                <div className="ops-table-card__head">
+                  <h3>Tồn kho chờ gom</h3>
+                  <span>
+                    {filteredInventory.length} kiện · đã chọn {selectedParcels.length}
+                  </span>
+                </div>
+                <div className="ops-selection-bar">
+                  <Space size={8} wrap>
+                    <Button
+                      type="primary"
+                      icon={<SendOutlined />}
+                      disabled={!selectedParcels.length}
+                      onClick={handleCreateWroFromInventory}
+                    >
+                      Tạo phiếu WRO
+                    </Button>
+                    <Button
+                      icon={<PlusOutlined />}
+                      disabled={!selectedParcels.length}
+                      onClick={() => openCreateMasterBox(selectedParcels)}
+                    >
+                      Gom master box mới
+                    </Button>
+                    <Select
+                      placeholder="Master box nháp..."
+                      style={{ minWidth: 220 }}
+                      value={addToBoxId || undefined}
+                      options={draftBoxesForSelection.map((row) => ({
+                        value: row.id,
+                        label: row.code,
+                      }))}
+                      onChange={setAddToBoxId}
+                      disabled={!selectedParcels.length}
+                      allowClear
+                    />
+                    <Button
+                      icon={<InboxOutlined />}
+                      disabled={!addToBoxId || !selectedParcels.length}
+                      onClick={handleAddToDraftBox}
+                    >
+                      Thêm vào box
+                    </Button>
+                  </Space>
+                </div>
+                <Table
+                  rowKey="id"
+                  size="middle"
+                  columns={inventoryColumns}
+                  dataSource={filteredInventory}
+                  loading={isLoading}
+                  pagination={{ pageSize: 10, showSizeChanger: false }}
+                  scroll={{ x: 1200 }}
+                  rowSelection={{
+                    selectedRowKeys: selectedParcelIds,
+                    onChange: setSelectedParcelIds,
+                    getCheckboxProps: (row) => {
+                      const reason = getParcelBlockReason(row);
+                      return { disabled: reason != null, title: reason ?? undefined };
+                    },
+                  }}
+                  onRow={(row) => ({
+                    onClick: () => setDetailParcel(row),
+                    style: { cursor: "pointer" },
+                  })}
+                  locale={{ emptyText: "Không có kiện tồn kho nào khớp bộ lọc." }}
+                />
+              </div>
+            ),
           },
           {
             key: "masterboxes",
             label: `Master boxes (${masterBoxes.length})`,
-            children: masterBoxTab,
+            children: (
+              <div className="ops-table-card">
+                <div className="ops-table-card__head">
+                  <h3>Master boxes</h3>
+                  <span>{masterBoxes.length} box</span>
+                </div>
+                <Table
+                  rowKey="id"
+                  columns={masterBoxColumns}
+                  dataSource={masterBoxes}
+                  loading={isLoading}
+                  pagination={{ pageSize: 10, showSizeChanger: false }}
+                  scroll={{ x: 1000 }}
+                  onRow={(row) => ({
+                    onClick: () => setDetailBoxId(row.id),
+                    style: { cursor: "pointer" },
+                  })}
+                  locale={{ emptyText: "Chưa có master box nào." }}
+                />
+              </div>
+            ),
           },
         ]}
       />
@@ -855,45 +748,13 @@ export default function OperationsParcelsPage() {
               setMasterBoxDraft(null);
               setNotice({
                 type: "success",
-                message: `Đã tạo consolidation từ ${payload.parcelIds.length} kiện (theo orderIds).`,
+                message: `Đã tạo consolidation từ ${payload.parcelIds.length} kiện.`,
               });
               await loadData({ refresh: true });
             } catch (error) {
               setNotice({
                 type: "error",
                 message: getOperationsApiError(error, "Không thể tạo consolidation."),
-              });
-              throw error;
-            }
-          }}
-        />
-      ) : null}
-
-      {shipmentDraft ? (
-        <ShipmentFormModal
-          open
-          masterBoxes={shipmentDraft}
-          parcelsByBoxId={parcelsByBoxId}
-          warehouses={lookups.warehouses}
-          carriers={lookups.carriers}
-          shippingMethods={lookups.shippingMethods}
-          shippingRoutes={lookups.shippingRoutes}
-          onClose={() => setShipmentDraft(null)}
-          onSubmit={async (payload) => {
-            try {
-              const shipment = await createShipment(payload);
-              setShipmentDraft(null);
-              setNotice({
-                type: "success",
-                message: `Đã tạo WRO + shipment ${shipment?.code || ""} từ ${
-                  payload.masterBoxIds?.length || 0
-                } master box.`,
-              });
-              await loadData({ refresh: true });
-            } catch (error) {
-              setNotice({
-                type: "error",
-                message: getOperationsApiError(error, "Không thể tạo WRO / shipment."),
               });
               throw error;
             }
@@ -910,9 +771,12 @@ export default function OperationsParcelsPage() {
             if (message) setNotice({ type: "success", message });
             loadData({ refresh: true });
           }}
-          onCreateShipment={(box) => {
+          onCreateShipment={() => {
             setDetailBoxId(null);
-            openCreateShipment([box]);
+            setNotice({
+              type: "info",
+              message: "Tạo lô tại trang Lô vận chuyển từ WRO đã RELEASED.",
+            });
           }}
         />
       ) : null}

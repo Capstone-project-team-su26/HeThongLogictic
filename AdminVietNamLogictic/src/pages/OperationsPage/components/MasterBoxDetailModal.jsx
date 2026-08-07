@@ -12,12 +12,14 @@ import {
   Timeline,
   Typography,
 } from "antd";
-import { FilePdfOutlined, SendOutlined } from "@ant-design/icons";
+import { FilePdfOutlined, SendOutlined, DeleteOutlined } from "@ant-design/icons";
 import { jsPDF } from "jspdf";
 
 import {
   addParcelsToMasterBox,
+  canDeleteMasterBox,
   confirmMasterBoxPacking,
+  deleteMasterBox,
   getMasterBoxDetail,
   getOperationsApiError,
   isParcelEligible,
@@ -113,6 +115,7 @@ export default function MasterBoxDetailModal({
   onClose,
   onChanged,
   onCreateShipment,
+  onDeleted,
 }) {
   const [box, setBox] = useState(null);
   const [parcels, setParcels] = useState([]);
@@ -210,6 +213,23 @@ export default function MasterBoxDetailModal({
     }
   }
 
+  async function handleDeleteLot() {
+    if (isActing || !canDeleteMasterBox(box)) return;
+    setIsActing(true);
+    setError("");
+    try {
+      await deleteMasterBox(boxId);
+      const message = `Đã xóa lô ${box?.code || boxId}.`;
+      onDeleted?.(box);
+      onChanged?.(message);
+      onClose?.();
+    } catch (err) {
+      setError(getOperationsApiError(err, "Không thể xóa lô."));
+    } finally {
+      setIsActing(false);
+    }
+  }
+
   const parcelColumns = [
     {
       title: "Mã kiện",
@@ -298,8 +318,22 @@ export default function MasterBoxDetailModal({
               icon={<SendOutlined />}
               onClick={() => onCreateShipment?.(box)}
             >
-              Tạo shipment
+              Tạo yêu cầu xuất kho
             </Button>
+          ) : null}
+          {canDeleteMasterBox(box) ? (
+            <Popconfirm
+              title={`Xóa lô ${box?.code || ""}?`}
+              description="Kiện trong lô sẽ được trả về tồn kho chờ gom."
+              okText="Xóa lô"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+              onConfirm={handleDeleteLot}
+            >
+              <Button danger icon={<DeleteOutlined />} disabled={isActing}>
+                Xóa lô
+              </Button>
+            </Popconfirm>
           ) : null}
           <Button onClick={onClose}>Đóng</Button>
         </Space>
@@ -318,7 +352,11 @@ export default function MasterBoxDetailModal({
           {box ? warehouseLabel(box.originWarehouseId) : "—"}
         </Descriptions.Item>
         <Descriptions.Item label="Kho đích">
-          {box ? warehouseLabel(box.destinationWarehouseId) : "—"}
+          {box
+            ? box.destinationWarehouseId
+              ? warehouseLabel(box.destinationWarehouseId)
+              : box.route || "—"
+            : "—"}
         </Descriptions.Item>
         <Descriptions.Item label="Phương thức">
           {lookups.shippingMethods.find((row) => row.id === box?.shippingMethodId)?.name ?? "—"}
@@ -378,15 +416,15 @@ export default function MasterBoxDetailModal({
               Thêm kiện
             </Button>
             <Popconfirm
-              title={`Xác nhận đóng gói ${box?.code}? Sau khi đóng gói không thêm/rút kiện được nữa.`}
+              title={`Xác nhận gom ${box?.code}? Sau khi xác nhận không thêm/rút kiện được nữa.`}
               okText="Xác nhận"
               cancelText="Hủy"
               onConfirm={() =>
-                run(() => confirmMasterBoxPacking(boxId), `Đã đóng gói ${box?.code}.`)
+                run(() => confirmMasterBoxPacking(boxId), `Đã gom ${box?.code}.`)
               }
             >
               <Button type="primary" disabled={isActing || !parcels.length}>
-                Xác nhận đóng gói
+                Xác nhận gom
               </Button>
             </Popconfirm>
           </Space>

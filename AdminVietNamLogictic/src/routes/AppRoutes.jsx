@@ -53,6 +53,8 @@ import {
 
 import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
 import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
+import OperationsWroPage from "../pages/OperationsPage/OperationsWroPage";
+import OperationsShipmentsPage from "../pages/OperationsPage/OperationsShipmentsPage";
 
 /* ================= ROLE CONFIG ================= */
 
@@ -286,7 +288,10 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<OperationsDashboard />} />
+        <Route path="wro" element={<OperationsWroPage />} />
+        <Route path="shipments" element={<OperationsShipmentsPage />} />
         <Route path="parcels" element={<OperationsParcelsPage />} />
+        <Route path="releases" element={<Navigate to="/operations-manager/wro" replace />} />
       </Route>
 
       {/* ================= ROOT ================= */}
