@@ -207,7 +207,14 @@ export default function MasterBoxFormModal({
         </div>
         <div>
           <label>Mã master box</label>
-          <Input value={code} onChange={(event) => setCode(event.target.value)} />
+          <Input
+            value={code}
+            placeholder="Hệ thống tự sinh…"
+            onChange={(event) => setCode(event.target.value)}
+          />
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Tự sinh theo mẫu BE (MBX-ngày giờ-số). Ops không cần nhớ — để nguyên hoặc sửa nếu muốn.
+          </Typography.Text>
         </div>
         <div>
           <label>Ghi chú nội bộ</label>
