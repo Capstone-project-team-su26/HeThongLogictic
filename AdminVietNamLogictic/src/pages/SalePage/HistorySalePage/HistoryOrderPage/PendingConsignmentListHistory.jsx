@@ -52,6 +52,10 @@ const CONSIGNMENT_STATUS_CONFIG = {
     label: "Đã duyệt",
     className: "status-approved",
   },
+  ACCEPTED: {
+    label: "Đã chấp nhận",
+    className: "status-approved",
+  },
   QUOTATION_SENT: {
     label: "Đã gửi báo giá",
     className: "status-quotation-sent",
@@ -70,6 +74,10 @@ const CONSIGNMENT_STATUS_CONFIG = {
   },
   CHECKED_IN: {
     label: "Đã nhập kho",
+    className: "status-checked-in",
+  },
+  WAREHOUSE_RECEIVED: {
+    label: "Đã nhận tại kho",
     className: "status-checked-in",
   },
   RECEIVED: {
@@ -221,9 +229,9 @@ const collectProductNames = (source) => {
 
     return collectProductNames(
       source.items ||
-        source.productNames ||
-        source.itemNames ||
-        []
+      source.productNames ||
+      source.itemNames ||
+      []
     );
   }
 
@@ -309,20 +317,20 @@ const getConsignmentPageData = (apiResult) => {
   const pageSize = Math.max(
     1,
     Number(pageData?.pageSize) ||
-      DEFAULT_PAGE_SIZE
+    DEFAULT_PAGE_SIZE
   );
 
   const totalCount = Math.max(
     0,
     Number(pageData?.totalCount) ||
-      items.length
+    items.length
   );
 
   const totalPages = Math.max(
     1,
     Number(pageData?.totalPages) ||
-      Math.ceil(totalCount / pageSize) ||
-      1
+    Math.ceil(totalCount / pageSize) ||
+    1
   );
 
   const pageNumber = Math.max(
@@ -382,7 +390,10 @@ const normalizeConsignmentTime = (item) => {
   return {
     ...item,
     createdAtUtc: normalizeApiTimeToUtc(item.createdAt),
-    updatedAtUtc: normalizeApiTimeToUtc(item.updatedAt),
+    updatedAtUtc: normalizeApiTimeToUtc(item.updatedAt || item.statusUpdatedAt),
+    quotationCreatedAtUtc: normalizeApiTimeToUtc(item.quotationCreatedAt),
+    paymentConfirmedAtUtc: normalizeApiTimeToUtc(item.paymentConfirmedAt),
+    statusUpdatedAtUtc: normalizeApiTimeToUtc(item.statusUpdatedAt),
   };
 };
 
@@ -468,8 +479,8 @@ const getConsignmentStatusCode = (
   const value =
     typeof itemOrStatus === "object"
       ? itemOrStatus?.status ??
-        itemOrStatus?.orderStatus ??
-        itemOrStatus?.consignmentStatus
+      itemOrStatus?.orderStatus ??
+      itemOrStatus?.consignmentStatus
       : itemOrStatus;
 
   return String(value || "")
@@ -497,15 +508,15 @@ const getConsignmentStatus = (
 
   const fallbackLabel = code
     ? code
-        .replace(/_/g, " ")
-        .toLocaleLowerCase("vi-VN")
-        .replace(
-          /(^|\s)\S/g,
-          (character) =>
-            character.toLocaleUpperCase(
-              "vi-VN"
-            )
-        )
+      .replace(/_/g, " ")
+      .toLocaleLowerCase("vi-VN")
+      .replace(
+        /(^|\s)\S/g,
+        (character) =>
+          character.toLocaleUpperCase(
+            "vi-VN"
+          )
+      )
     : "Chưa xác định";
 
   return {
@@ -566,10 +577,10 @@ const getUniqueConsignmentKey = (
 ) => {
   return String(
     item?.orderId ||
-      item?.consignmentCode ||
-      item?.trackingCode ||
-      item?.id ||
-      `consignment-${index}`
+    item?.consignmentCode ||
+    item?.trackingCode ||
+    item?.id ||
+    `consignment-${index}`
   ).trim();
 };
 
@@ -706,11 +717,11 @@ export default function PendingConsignmentListHistory() {
                 ) &&
                 (
                   statusFilter ===
-                    ALL_STATUS ||
+                  ALL_STATUS ||
                   statusCode ===
-                    normalizeDepositStatusFilter(
-                      statusFilter
-                    )
+                  normalizeDepositStatusFilter(
+                    statusFilter
+                  )
                 )
               );
             })
@@ -894,9 +905,9 @@ export default function PendingConsignmentListHistory() {
 
       const matchesSelectedStatus =
         normalizedStatusFilter ===
-          ALL_STATUS ||
+        ALL_STATUS ||
         currentStatus ===
-          normalizedStatusFilter;
+        normalizedStatusFilter;
 
       return (
         matchesSearch &&
@@ -921,7 +932,7 @@ export default function PendingConsignmentListHistory() {
     1,
     Math.ceil(
       filteredConsignments.length /
-        DEFAULT_PAGE_SIZE
+      DEFAULT_PAGE_SIZE
     )
   );
 
@@ -934,7 +945,7 @@ export default function PendingConsignmentListHistory() {
       return filteredConsignments.slice(
         startIndex,
         startIndex +
-          DEFAULT_PAGE_SIZE
+        DEFAULT_PAGE_SIZE
       );
     }, [
       filteredConsignments,
@@ -1067,16 +1078,16 @@ export default function PendingConsignmentListHistory() {
       String(
         item?.orderId || ""
       ).trim();
-  
+
     if (!orderId) {
       AuthNotify.warning(
         "Không thể mở lịch sử thanh toán",
         "Không tìm thấy orderId của đơn hàng."
       );
-  
+
       return;
     }
-  
+
     navigate(
       `/sale/orders/${orderId}/payments/history`,
       {
@@ -1106,8 +1117,8 @@ export default function PendingConsignmentListHistory() {
 
   const hasActiveFilter = Boolean(
     searchInput.trim() ||
-      statusFilter !== ALL_STATUS ||
-      (dateRangeInput?.[0] && dateRangeInput?.[1])
+    statusFilter !== ALL_STATUS ||
+    (dateRangeInput?.[0] && dateRangeInput?.[1])
   );
 
   /* =========================================================
@@ -1118,396 +1129,450 @@ export default function PendingConsignmentListHistory() {
     <div className="vcl-container">
       <div className="vcl-fixed-panel">
         <div className="page-header">
-        <div>
-          <h1 className="page-title">
-            DANH SÁCH YÊU CẦU KÝ GỬI
-          </h1>
+          <div>
+            <h1 className="page-title">
+              DANH SÁCH YÊU CẦU KÝ GỬI
+            </h1>
 
-          <p className="page-subtitle">
-            Theo dõi đầy đủ yêu cầu ký gửi và trạng thái xử lý trên hệ thống.
-          </p>
+            <p className="page-subtitle">
+              Theo dõi đầy đủ yêu cầu ký gửi và trạng thái xử lý trên hệ thống.
+            </p>
+          </div>
+
+          <div className="page-summary">
+            <strong>{totalCount}</strong>
+            <span>Tổng yêu cầu ký gửi</span>
+          </div>
         </div>
 
-        <div className="page-summary">
-          <strong>{totalCount}</strong>
-          <span>Tổng yêu cầu ký gửi</span>
+        <div className="filter-section">
+          <div className="filter-fields">
+            <Space size="middle" wrap>
+              <Input
+                prefix={
+                  <SearchIcon className="filter-search-icon" />
+                }
+                placeholder="Tìm mã vận đơn, khách hàng, sản phẩm..."
+                value={searchInput}
+                onChange={handleSearchChange}
+                onPressEnter={() => setPageNumber(1)}
+                allowClear
+                className="filter-search-input"
+              />
+
+              <RangePicker
+                value={dateRangeInput}
+                onChange={handleDateRangeChange}
+                disabledDate={disabledRangeDate}
+                format="DD/MM/YYYY"
+                placeholder={["Từ ngày", "Đến ngày"]}
+                allowClear
+                inputReadOnly
+                className="filter-date-picker"
+              />
+
+              <Select
+                value={statusFilter}
+                options={STATUS_OPTIONS}
+                onChange={
+                  handleStatusChange
+                }
+                className="filter-status-select"
+                popupMatchSelectWidth={290}
+                aria-label="Lọc trạng thái đặt cọc"
+              />
+            </Space>
+          </div>
+
+          <div className="filter-actions">
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<AutorenewIcon />}
+              onClick={handleResetClick}
+              disabled={loading}
+              className="filter-reset-button"
+            >
+              LÀM MỚI
+            </Button>
+          </div>
         </div>
-      </div>
-
-      <div className="filter-section">
-        <div className="filter-fields">
-          <Space size="middle" wrap>
-            <Input
-              prefix={
-                <SearchIcon className="filter-search-icon" />
-              }
-              placeholder="Tìm mã vận đơn, khách hàng, sản phẩm..."
-              value={searchInput}
-              onChange={handleSearchChange}
-              onPressEnter={() => setPageNumber(1)}
-              allowClear
-              className="filter-search-input"
-            />
-
-            <RangePicker
-              value={dateRangeInput}
-              onChange={handleDateRangeChange}
-              disabledDate={disabledRangeDate}
-              format="DD/MM/YYYY"
-              placeholder={["Từ ngày", "Đến ngày"]}
-              allowClear
-              inputReadOnly
-              className="filter-date-picker"
-            />
-
-            <Select
-              value={statusFilter}
-              options={STATUS_OPTIONS}
-              onChange={
-                handleStatusChange
-              }
-              className="filter-status-select"
-              popupMatchSelectWidth={290}
-              aria-label="Lọc trạng thái đặt cọc"
-            />
-          </Space>
-        </div>
-
-        <div className="filter-actions">
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<AutorenewIcon />}
-            onClick={handleResetClick}
-            disabled={loading}
-            className="filter-reset-button"
-          >
-            LÀM MỚI
-          </Button>
-        </div>
-      </div>
       </div>
 
       <div className="vcl-data-panel">
-      {loading ? (
-        <div className="vcl-loading-box">
-          <CircularProgress size={38} />
-          <div>Đang tải danh sách yêu cầu ký gửi...</div>
-        </div>
-      ) : (
-        <>
-          <div className="card-list">
-            {visibleConsignments.length === 0 ? (
-              <div className="empty-container">
-                <div className="empty-icon">📭</div>
+        {loading ? (
+          <div className="vcl-loading-box">
+            <CircularProgress size={38} />
+            <div>Đang tải danh sách yêu cầu ký gửi...</div>
+          </div>
+        ) : (
+          <>
+            <div className="card-list">
+              {visibleConsignments.length === 0 ? (
+                <div className="empty-container">
+                  <div className="empty-icon">📭</div>
 
-                <h3>Không có yêu cầu ký gửi phù hợp</h3>
+                  <h3>Không có yêu cầu ký gửi phù hợp</h3>
 
-                <p>
-                  Chỉ hiển thị đơn chờ đặt cọc hoặc đã đặt cọc. Hãy thay đổi từ khóa, khoảng ngày hoặc làm mới dữ liệu.
-                </p>
+                  <p>
+                    Chỉ hiển thị đơn chờ đặt cọc hoặc đã đặt cọc. Hãy thay đổi từ khóa, khoảng ngày hoặc làm mới dữ liệu.
+                  </p>
 
-                {hasActiveFilter && (
-                  <Button
-                    variant="outlined"
-                    color="inherit"
-                    startIcon={<AutorenewIcon />}
-                    onClick={handleResetClick}
-                    className="empty-reset-button"
-                  >
-                    Xóa bộ lọc
-                  </Button>
-                )}
-              </div>
-            ) : (
-              visibleConsignments.map((item) => {
-                const productNames = getProductNames(item);
-                const trackingCode = getTrackingCode(item);
-                const statusInfo =
-                  getConsignmentStatus(
-                    item
-                  );
+                  {hasActiveFilter && (
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      startIcon={<AutorenewIcon />}
+                      onClick={handleResetClick}
+                      className="empty-reset-button"
+                    >
+                      Xóa bộ lọc
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                visibleConsignments.map((item) => {
+                  const productNames = getProductNames(item);
+                  const trackingCode = getTrackingCode(item);
+                  const statusInfo =
+                    getConsignmentStatus(
+                      item
+                    );
 
-                return (
-                  <article
-                    key={item.orderId}
-                    className="consignment-card"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      handleViewPaymentHistory(
-                        item
-                      )
-                    }
-                    onKeyDown={(event) =>
-                      handleCardKeyDown(event, item)
-                    }
-                    aria-label={`Xem lịch sử thanh toán của đơn ${trackingCode}`}
-                  >
-                    <div className="card-header">
-                      <div className="header-left">
-                        <div className="tracking-code-block">
-                          <span className="tracking-code-label">
-                            MÃ VẬN ĐƠN
-                          </span>
+                  return (
+                    <article
+                      key={item.orderId}
+                      className="consignment-card"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        handleViewPaymentHistory(
+                          item
+                        )
+                      }
+                      onKeyDown={(event) =>
+                        handleCardKeyDown(event, item)
+                      }
+                      aria-label={`Xem lịch sử thanh toán của đơn ${trackingCode}`}
+                    >
+                      <div className="card-header">
+                        <div className="header-left">
+                          <div className="tracking-code-block">
+                            <span className="tracking-code-label">
+                              MÃ VẬN ĐƠN
+                            </span>
 
-                          <div className="tracking-code-row">
-                            <strong className="order-code">
-                              {trackingCode}
-                            </strong>
+                            <div className="tracking-code-row">
+                              <strong className="order-code">
+                                {trackingCode}
+                              </strong>
 
-                            <button
-                              type="button"
-                              className={[
-                                "copy-tracking-button",
-                                copiedTrackingCode === trackingCode &&
+                              <button
+                                type="button"
+                                className={[
+                                  "copy-tracking-button",
+                                  copiedTrackingCode === trackingCode &&
                                   "is-copied",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                              title="Sao chép mã vận đơn"
-                              aria-label={`Sao chép mã vận đơn ${trackingCode}`}
-                              onClick={(event) =>
-                                handleCopyTrackingCode(event, item)
-                              }
-                            >
-                              {copiedTrackingCode === trackingCode ? (
-                                <>
-                                  <CheckRoundedIcon />
-                                  <span>Đã chép</span>
-                                </>
-                              ) : (
-                                <>
-                                  <ContentCopyRoundedIcon />
-                                  <span>Sao chép</span>
-                                </>
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                title="Sao chép mã vận đơn"
+                                aria-label={`Sao chép mã vận đơn ${trackingCode}`}
+                                onClick={(event) =>
+                                  handleCopyTrackingCode(event, item)
+                                }
+                              >
+                                {copiedTrackingCode === trackingCode ? (
+                                  <>
+                                    <CheckRoundedIcon />
+                                    <span>Đã chép</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ContentCopyRoundedIcon />
+                                    <span>Sao chép</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="header-tags">
+                            <span className="tag-type">
+                              {getConsignmentTypeLabel(
+                                item.consignmentType
                               )}
-                            </button>
+                            </span>
+
+                            <span className="tag-count">
+                              Tuyến {item.route || "-"}
+                            </span>
+
+                            <span
+                              className={`tag-status-header ${statusInfo.className}`}
+                              title={`Trạng thái API: ${statusInfo.code}`}
+                            >
+                              {statusInfo.label}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="header-tags">
-                          <span className="tag-type">
-                            {getConsignmentTypeLabel(
-                              item.consignmentType
-                            )}
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          endIcon={<ArrowForwardIcon />}
+                          onClick={(event) => {
+                            event.stopPropagation();
+
+                            handleViewPaymentHistory(
+                              item
+                            );
+                          }}
+                          className="view-detail-button"
+                        >
+                          Xem thanh toán
+                        </Button>
+                      </div>
+
+                      <div className="sub-header">
+                        <div className="sub-header-left">
+                          <span className="info-chip">
+                            👤 Khách hàng: <strong>{item.customerName || "-"}</strong>
                           </span>
 
-                          <span className="tag-count">
-                            Tuyến {item.route || "-"}
+                          <span className="info-chip">
+                            📦 Người nhận: <strong>{item.receiverName || "-"}</strong>
+                            {item.receiverPhone && <small className="phone-small"> ({item.receiverPhone})</small>}
                           </span>
 
+                          {item.warehouseName && (
+                            <span className="info-chip warehouse-chip">
+                              🏬 Kho: <strong>{item.warehouseName}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="sub-header-right">
+                          <span className="inspection-badge-header">
+                            Kiểm hàng:{" "}
+                            <b
+                              className={
+                                item.requiresInspection
+                                  ? "inspection-yes"
+                                  : "inspection-no"
+                              }
+                            >
+                              {item.requiresInspection ? "Có" : "Không"}
+                            </b>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="card-body">
+                        <div className="body-left">
+                          <div className="box-icon">📦</div>
+
+                          <div className="product-info">
+                            <div className="product-name-group">
+                              <div className="product-name-heading">
+                                <span className="product-name-label">
+                                  SẢN PHẨM
+                                </span>
+
+                                {productNames.length > 1 && (
+                                  <span className="product-name-count">
+                                    {productNames.length} sản phẩm
+                                  </span>
+                                )}
+                              </div>
+
+                              {productNames.length > 0 ? (
+                                <div
+                                  className={[
+                                    "product-name-list",
+                                    productNames.length === 1 &&
+                                    "is-single",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" ")}
+                                >
+                                  {productNames.map(
+                                    (productName, productIndex) => (
+                                      <div
+                                        key={`${item.orderId}-${productName}-${productIndex}`}
+                                        className="product-name-item"
+                                      >
+                                        {productNames.length > 1 && (
+                                          <span className="product-name-index">
+                                            {productIndex + 1}
+                                          </span>
+                                        )}
+
+                                        <strong
+                                          className="product-name-value"
+                                          title={productName}
+                                        >
+                                          {productName}
+                                        </strong>
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              ) : (
+                                <strong className="product-name-empty">
+                                  Chưa có tên sản phẩm
+                                </strong>
+                              )}
+                            </div>
+
+                            <div className="sku-tag">
+                              Mã đơn: {getOrderCode(item)}
+                            </div>
+
+                            <div className="receiver-phone">
+                              <span>Số điện thoại:</span>{" "}
+                              <strong>{item.receiverPhone || "-"}</strong>
+                            </div>
+
+                            <div className="receiver-address">
+                              <span>📍 Địa chỉ:</span>{" "}
+                              <strong>{item.receiverAddress || "-"}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="body-right">
                           <span
-                            className={`tag-status-header ${statusInfo.className}`}
+                            className={`status-badge-center ${statusInfo.className}`}
                             title={`Trạng thái API: ${statusInfo.code}`}
                           >
                             {statusInfo.label}
                           </span>
-                        </div>
-                      </div>
 
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        endIcon={<ArrowForwardIcon />}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                          <div className="shipping-type">
+                            <span>LOẠI VẬN CHUYỂN</span>
 
-                          handleViewPaymentHistory(
-                            item
-                          );
-                        }}
-                        className="view-detail-button"
-                      >
-                        Xem thanh toán
-                      </Button>
-                    </div>
-
-                    <div className="sub-header">
-                      <span>
-                        Khách hàng:{" "}
-                        <strong>{item.customerName || "-"}</strong>
-                      </span>
-
-                      <span>
-                        Người nhận:{" "}
-                        <strong>{item.receiverName || "-"}</strong>
-                      </span>
-
-                      <span
-                        title={formatDateUtcTitle(
-                          item.createdAtUtc || item.createdAt
-                        )}
-                      >
-                        📅 Ngày tạo:{" "}
-                        <strong>
-                          {formatDate(
-                            item.createdAtUtc || item.createdAt
-                          )}
-                        </strong>{" "}
-                        <small className="utc-display-label">
-                          UTC+7
-                        </small>
-                      </span>
-
-                      <span className="price-total-header">
-                        KIỂM HÀNG:{" "}
-                        <b
-                          className={
-                            item.requiresInspection
-                              ? "inspection-yes"
-                              : "inspection-no"
-                          }
-                        >
-                          {item.requiresInspection ? "Có" : "Không"}
-                        </b>
-                      </span>
-                    </div>
-
-                    <div className="card-body">
-                      <div className="body-left">
-                        <div className="box-icon">📦</div>
-
-                        <div className="product-info">
-                          <div className="product-name-group">
-                            <div className="product-name-heading">
-                              <span className="product-name-label">
-                                SẢN PHẨM
-                              </span>
-
-                              {productNames.length > 1 && (
-                                <span className="product-name-count">
-                                  {productNames.length} sản phẩm
-                                </span>
+                            <strong>
+                              {getConsignmentTypeLabel(
+                                item.consignmentType
                               )}
+                            </strong>
+                          </div>
+
+                          <div className="specs-list">
+                            <span>
+                              Khối lượng:{" "}
+                              <strong>
+                                {formatWeight(
+                                  item.totalWeight ?? item.weightKg
+                                )}
+                              </strong>
+                            </span>
+
+                            <span>
+                              Thể tích:{" "}
+                              <strong>
+                                {formatVolumeCm3(
+                                  getTotalVolumeCm3(item)
+                                )}
+                              </strong>
+                            </span>
+                          </div>
+
+                          <div className="date-timeline-grid">
+                            <div
+                              className="date-chip"
+                              title={formatDateUtcTitle(
+                                item.createdAtUtc || item.createdAt
+                              )}
+                            >
+                              <span className="date-chip-label">📅 Ngày tạo</span>
+                              <span className="date-chip-value">
+                                {formatDate(
+                                  item.createdAtUtc || item.createdAt
+                                )}
+                              </span>
                             </div>
 
-                            {productNames.length > 0 ? (
+                            {item.quotationCreatedAtUtc && (
                               <div
-                                className={[
-                                  "product-name-list",
-                                  productNames.length === 1 &&
-                                    "is-single",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ")}
-                              >
-                                {productNames.map(
-                                  (productName, productIndex) => (
-                                    <div
-                                      key={`${item.orderId}-${productName}-${productIndex}`}
-                                      className="product-name-item"
-                                    >
-                                      {productNames.length > 1 && (
-                                        <span className="product-name-index">
-                                          {productIndex + 1}
-                                        </span>
-                                      )}
-
-                                      <strong
-                                        className="product-name-value"
-                                        title={productName}
-                                      >
-                                        {productName}
-                                      </strong>
-                                    </div>
-                                  )
+                                className="date-chip"
+                                title={formatDateUtcTitle(
+                                  item.quotationCreatedAtUtc
                                 )}
+                              >
+                                <span className="date-chip-label">📝 Báo giá</span>
+                                <span className="date-chip-value">
+                                  {formatDate(item.quotationCreatedAtUtc)}
+                                </span>
                               </div>
-                            ) : (
-                              <strong className="product-name-empty">
-                                Chưa có tên sản phẩm
-                              </strong>
                             )}
-                          </div>
 
-                          <div className="sku-tag">
-                            Mã đơn: {getOrderCode(item)}
-                          </div>
+                            {item.paymentConfirmedAtUtc && (
+                              <div
+                                className="date-chip"
+                                title={formatDateUtcTitle(
+                                  item.paymentConfirmedAtUtc
+                                )}
+                              >
+                                <span className="date-chip-label">💳 Xác nhận cọc</span>
+                                <span className="date-chip-value">
+                                  {formatDate(item.paymentConfirmedAtUtc)}
+                                </span>
+                              </div>
+                            )}
 
-                          <div className="receiver-phone">
-                            <span>Số điện thoại:</span>{" "}
-                            <strong>{item.receiverPhone || "-"}</strong>
-                          </div>
-
-                          <div className="receiver-address">
-                            <span>Địa chỉ:</span>{" "}
-                            <strong>{item.receiverAddress || "-"}</strong>
+                            {!item.quotationCreatedAtUtc &&
+                              !item.paymentConfirmedAtUtc &&
+                              item.statusUpdatedAtUtc &&
+                              item.statusUpdatedAtUtc !== item.createdAtUtc && (
+                                <div
+                                  className="date-chip"
+                                  title={formatDateUtcTitle(
+                                    item.statusUpdatedAtUtc
+                                  )}
+                                >
+                                  <span className="date-chip-label">🕒 Cập nhật</span>
+                                  <span className="date-chip-value">
+                                    {formatDate(item.statusUpdatedAtUtc)}
+                                  </span>
+                                </div>
+                              )}
                           </div>
                         </div>
                       </div>
-
-                      <div className="body-right">
-                        <span
-                          className={`status-badge-center ${statusInfo.className}`}
-                          title={`Trạng thái API: ${statusInfo.code}`}
-                        >
-                          {statusInfo.label}
-                        </span>
-
-                        <div className="shipping-type">
-                          <span>LOẠI VẬN CHUYỂN</span>
-
-                          <strong>
-                            {getConsignmentTypeLabel(
-                              item.consignmentType
-                            )}
-                          </strong>
-                        </div>
-
-                        <div className="specs-list">
-                          <span>
-                            Khối lượng:{" "}
-                            <strong>
-                              {formatWeight(
-                                item.totalWeight ?? item.weightKg
-                              )}
-                            </strong>
-                          </span>
-
-                          <span>
-                            Thể tích:{" "}
-                            <strong>
-                              {formatVolumeCm3(
-                                getTotalVolumeCm3(item)
-                              )}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })
-            )}
-          </div>
-
-          {filteredConsignments.length > 0 && (
-            <div className="pagination-section">
-              <span className="pagination-summary">
-                Hiển thị{" "}
-                <strong>{visibleConsignments.length}</strong>{" "}
-                yêu cầu trên trang này, tổng cộng{" "}
-                <strong>
-                  {filteredConsignments.length}
-                </strong>{" "}
-                yêu cầu đặt cọc
-              </span>
-
-              <Pagination
-                count={totalPages}
-                page={pageNumber}
-                onChange={handlePageChange}
-                disabled={loading}
-                color="primary"
-                shape="rounded"
-                showFirstButton
-                showLastButton
-              />
+                    </article>
+                  );
+                })
+              )}
             </div>
-          )}
-        </>
-      )}
+
+            {filteredConsignments.length > 0 && (
+              <div className="pagination-section">
+                <span className="pagination-summary">
+                  Hiển thị{" "}
+                  <strong>{visibleConsignments.length}</strong>{" "}
+                  yêu cầu trên trang này, tổng cộng{" "}
+                  <strong>
+                    {filteredConsignments.length}
+                  </strong>{" "}
+                  yêu cầu đặt cọc
+                </span>
+
+                <Pagination
+                  count={totalPages}
+                  page={pageNumber}
+                  onChange={handlePageChange}
+                  disabled={loading}
+                  color="primary"
+                  shape="rounded"
+                  showFirstButton
+                  showLastButton
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
