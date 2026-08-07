@@ -229,11 +229,22 @@
   box-shadow: none !important;
 }
 
-.service-pricings-table-wrapper {
+.service-pricings-content {
+  position: relative;
   width: 100%;
+}
+
+.service-pricings-table-wrapper,
+.service-pricings-package-table-wrapper {
+  width: 100%;
+  max-height: calc(100vh - 360px);
+  min-height: 380px;
   overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid #e8edf5;
   border-radius: 14px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .service-pricings-table {
@@ -828,12 +839,11 @@
 ===================================================== */
 
 .service-pricings-page {
-  height: 100%;
-  max-height: 100%;
-  min-height: 0;
+  width: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .service-pricings-hero,
@@ -842,8 +852,7 @@
 }
 
 .service-pricings-stats {
-  grid-template-columns:
-    repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .service-pricings-stat__icon.is-package {
@@ -853,10 +862,9 @@
 
 .service-pricings-card {
   flex: 1 1 auto;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .service-pricings-tabs,
@@ -864,50 +872,83 @@
   flex: 0 0 auto;
 }
 
-.service-pricings-data-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-right: 5px;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.service-pricings-data-scroll::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-
-.service-pricings-data-scroll::-webkit-scrollbar-track {
-  border-radius: 999px;
-  background: #eef2f7;
-}
-
-.service-pricings-data-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid #eef2f7;
-  border-radius: 999px;
-  background: #94a3b8;
-}
-
-.service-pricings-data-scroll::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+.service-pricings-content {
+  width: 100%;
+  position: relative;
 }
 
 .service-pricings-table-wrapper,
 .service-pricings-package-table-wrapper {
-  overflow-x: auto;
-  overflow-y: visible;
+  width: 100%;
+  max-height: 600px;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.service-pricings-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.service-pricings-rates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.service-pricings-table-wrapper,
+.service-pricings-package-table-wrapper {
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+}
+
+.service-pricings-rules-grid,
+.service-pricings-rates-grid {
+  padding-right: 6px;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar,
+.service-pricings-package-table-wrapper::-webkit-scrollbar,
+.service-pricings-rules-grid::-webkit-scrollbar,
+.service-pricings-rates-grid::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-track,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-track,
+.service-pricings-rules-grid::-webkit-scrollbar-track,
+.service-pricings-rates-grid::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-thumb,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-thumb,
+.service-pricings-rules-grid::-webkit-scrollbar-thumb,
+.service-pricings-rates-grid::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.service-pricings-table-wrapper::-webkit-scrollbar-thumb:hover,
+.service-pricings-package-table-wrapper::-webkit-scrollbar-thumb:hover,
+.service-pricings-rules-grid::-webkit-scrollbar-thumb:hover,
+.service-pricings-rates-grid::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .service-pricings-table thead th,
 .service-pricings-package-table thead th {
-  position: sticky;
+  position: sticky !important;
   top: 0;
-  z-index: 3;
-  background: #f8fafc;
-  box-shadow:
-    0 1px 0 #e8edf5;
+  z-index: 10;
+  background: #f8fafc !important;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.06);
 }
 
 /* =====================================================
@@ -1186,4 +1227,115 @@
   .service-pricings-rules-grid {
     padding-right: 2px;
   }
+}
+
+/* Foreign currency estimate pill */
+.service-pricings-price-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.foreign-estimate-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 2px 8px;
+
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+/* Exchange rates grid & cards */
+.service-pricings-rates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+  max-height: calc(100vh - 360px);
+  min-height: 380px;
+  overflow-y: auto;
+  padding-bottom: 20px;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.exchange-rate-card {
+  padding: 20px;
+
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s ease;
+}
+
+.exchange-rate-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
+}
+
+.rate-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.rate-flag {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.rate-card-header h3 {
+  margin: 0;
+
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.rate-card-header span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rate-card-body {
+  margin-bottom: 14px;
+  padding: 14px;
+
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+}
+
+.rate-label {
+  display: block;
+  margin-bottom: 4px;
+
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.rate-vnd-price {
+  color: #2563eb;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.rate-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #94a3b8;
+  font-size: 11.5px;
 }

@@ -254,64 +254,45 @@ const getApiErrorMessage = (
    NORMALIZE LIST ITEM
 ========================================================= */
 
-const normalizePurchaseRequestListItem =
-  (item = {}) => {
-    return {
-      purchaseRequestId:
-        item?.purchaseRequestId ?? "",
+const normalizePurchaseRequestListItem = (item = {}) => {
+  return {
+    ...item,
+    purchaseRequestId: item?.purchaseRequestId ?? item?.id ?? "",
 
-      purchaseCode:
-        item?.purchaseCode ?? "",
+    purchaseCode: item?.purchaseCode ?? item?.code ?? "",
 
-      customerId:
-        item?.customerId ?? "",
+    customerId: item?.customerId ?? "",
 
-      route:
-        item?.route ?? "",
+    route: item?.route ?? "",
 
-      shippingOption:
-        item?.shippingOption ?? null,
+    shippingOption: item?.shippingOption ?? null,
 
-      receiverName:
-        item?.receiverName ?? "",
+    receiverName: item?.receiverName ?? "",
 
-      itemCount:
-        Number(item?.itemCount) || 0,
+    itemCount:
+      Number(item?.itemCount) ||
+      (Array.isArray(item?.items) ? item.items.length : 0),
 
-      totalQuantity:
-        Number(
-          item?.totalQuantity
-        ) || 0,
+    totalQuantity: Number(item?.totalQuantity) || 0,
 
-      status:
-        item?.status ?? "",
+    status: item?.status ?? "",
 
-      generalNote:
-        item?.generalNote ?? "",
+    generalNote: item?.generalNote ?? "",
 
-      createdAt:
-        item?.createdAt ?? null,
+    createdAt: item?.createdAt ?? null,
+    quotationCreatedAt: item?.quotationCreatedAt ?? null,
+    statusUpdatedAt: item?.statusUpdatedAt ?? null,
 
-      items:
-        Array.isArray(item?.items)
-          ? item.items.map(
-              (
-                purchaseItem = {}
-              ) => ({
-                productName:
-                  purchaseItem
-                    ?.productName ?? "",
+    items: Array.isArray(item?.items)
+      ? item.items.map((purchaseItem = {}) => ({
+          ...purchaseItem,
+          productName: purchaseItem?.productName ?? "",
 
-                quantity:
-                  Number(
-                    purchaseItem
-                      ?.quantity
-                  ) || 0,
-              })
-            )
-          : [],
-    };
+          quantity: Number(purchaseItem?.quantity) || 0,
+        }))
+      : [],
   };
+};
 
 /* =========================================================
    NORMALIZE LIST RESPONSE
@@ -486,6 +467,10 @@ const normalizePurchaseRequestDetail =
 
       createdAt:
         data?.createdAt ?? null,
+      quotationCreatedAt:
+        data?.quotationCreatedAt ?? null,
+      statusUpdatedAt:
+        data?.statusUpdatedAt ?? null,
 
       totalQuantity:
         Number(
@@ -680,6 +665,13 @@ const validatePurchaseRequestId =
  */
 export const getPurchaseRequestsApi =
   async (filters = {}) => {
+    const searchText =
+      normalizeText(
+        filters?.search ??
+        filters?.searchKeyword ??
+        filters?.keyword
+      ) || undefined;
+
     const params =
       removeEmptyParams({
         pageNumber:
@@ -701,10 +693,8 @@ export const getPurchaseRequestsApi =
               )
             : undefined,
 
-        searchKeyword:
-          normalizeText(
-            filters?.search
-          ) || undefined,
+        searchKeyword: searchText,
+        search: searchText,
 
         customerId:
           normalizeText(

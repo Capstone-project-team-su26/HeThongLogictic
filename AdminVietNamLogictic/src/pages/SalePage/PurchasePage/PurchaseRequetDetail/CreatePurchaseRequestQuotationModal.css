@@ -559,9 +559,16 @@
   font-weight: 850;
 }
 
-.purchase-quotation-item__price
-  label b {
-  color: #dc2626;
+.purchase-quotation-item__price label b,
+.purchase-quotation-field label b,
+.foreign-price-label b,
+.required-star {
+  display: inline-block !important;
+  margin-left: 3px !important;
+  color: #dc2626 !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
 }
 
 .purchase-quotation-item__price
@@ -1223,5 +1230,224 @@
   .purchase-quotation-modal__actions {
     grid-template-columns: 1fr;
   }
+/* =========================================================
+   EXCHANGE RATES BANNER & CONVERT BOX
+========================================================= */
+
+.exchange-rates-banner {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  background: #f1f5f9;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.rates-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #334155;
+
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.rates-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rate-chip {
+  padding: 3px 9px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.rate-chip.is-recommended {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.rate-code {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.rate-val {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.rate-badge {
+  padding: 1px 5px;
+
+  color: #2563eb;
+  background: #dbeafe;
+  border-radius: 4px;
+
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.foreign-price-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 6px;
+
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 850;
+}
+
+.foreign-price-label b {
+  display: inline-block;
+  margin-left: 2px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.foreign-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.route-currency-tag {
+  height: 42px;
+  padding: 0 14px;
+  flex-shrink: 0;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+
+  font-size: 13.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.foreign-amount-input {
+  flex: 1;
+  height: 42px;
+
+  border-radius: 10px !important;
+  border-color: #2563eb !important;
+}
+
+.foreign-amount-input:focus-within {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+}
+
+.foreign-amount-input .ant-input-number-input {
+  height: 40px !important;
+
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.converted-vnd-wrapper {
+  margin-top: 6px;
+  padding: 8px 12px;
+
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.vnd-read-label {
+  display: block;
+  margin-bottom: 4px;
+
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.converted-vnd-input {
+  width: 100%;
+  height: 38px;
+
+  background: #f1f5f9 !important;
+  border-radius: 8px !important;
+}
+
+.converted-vnd-input .ant-input-number-input {
+  height: 36px !important;
+
+  color: #1d4ed8 !important;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.foreign-result-note {
+  margin-top: 6px;
+
+  color: #166534;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.foreign-result-note strong {
+  color: #15803d;
+  font-weight: 800;
+}
+
+.line-total-display {
+  display: block;
+  margin-top: 8px;
+
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.line-total-display strong {
+  color: #1d4ed8;
+  font-weight: 900;
+}
+
+.service-pricing-select-box {
+  margin-bottom: 8px;
+}
+
+.service-pricing-select-dropdown {
+  width: 100% !important;
+}
+
+.service-pricing-select-dropdown .ant-select-selector {
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
 }
 

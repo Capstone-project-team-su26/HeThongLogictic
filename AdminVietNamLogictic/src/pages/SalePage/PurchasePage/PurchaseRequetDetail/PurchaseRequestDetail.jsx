@@ -12,7 +12,9 @@ import {
 
 import {
   ArrowLeftOutlined,
+  CalendarOutlined,
   CheckCircleOutlined,
+  ClockCircleOutlined,
   CloseCircleOutlined,
   CopyOutlined,
   DollarOutlined,
@@ -26,6 +28,7 @@ import {
   ReloadOutlined,
   SafetyCertificateOutlined,
   ShoppingOutlined,
+  SyncOutlined,
   TagsOutlined,
   TeamOutlined,
   UserOutlined,
@@ -50,6 +53,7 @@ import {
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 
 import CreatePurchaseRequestQuotationModal from "./CreatePurchaseRequestQuotationModal";
+import ConfirmPurchaseModal from "./ConfirmPurchaseModal";
 
 import {
   apiToUtcIso,
@@ -85,12 +89,20 @@ const STATUS_CONFIG = {
     label: "Đã báo giá",
     className: "is-success",
   },
+  WAITING_PAYMENT: {
+    label: "Chờ thanh toán",
+    className: "is-warning",
+  },
   WAITING_DEPOSIT: {
     label: "Chờ đặt cọc",
     className: "is-warning",
   },
   DEPOSIT_PAID: {
     label: "Đã đặt cọc",
+    className: "is-success",
+  },
+  PAID: {
+    label: "Đã thanh toán",
     className: "is-success",
   },
   PROCESSING: {
@@ -1447,6 +1459,11 @@ export default function PurchaseRequestDetail() {
     setQuotationModalOpen,
   ] = useState(false);
 
+  const [
+    confirmPurchaseModalOpen,
+    setConfirmPurchaseModalOpen,
+  ] = useState(false);
+
   const loadDetail =
     useCallback(async () => {
       if (!purchaseRequestId) {
@@ -1834,6 +1851,21 @@ export default function PurchaseRequestDetail() {
       items.length,
     ]);
 
+  const canConfirmPurchase =
+    useMemo(() => {
+      const currentStatus =
+        normalizeUpperText(
+          detail?.status
+        );
+
+      return (
+        currentStatus === "PAID" ||
+        currentStatus === "DEPOSIT_PAID" ||
+        currentStatus === "PROCESSING" ||
+        currentStatus === "WAITING_PAYMENT"
+      );
+    }, [detail?.status]);
+
   const handleQuotationCreated =
     useCallback(async () => {
       setQuotationModalOpen(
@@ -1924,6 +1956,28 @@ export default function PurchaseRequestDetail() {
               </Button>
             )}
 
+            {canConfirmPurchase && (
+              <Button
+                type="primary"
+                icon={
+                  <ShoppingOutlined />
+                }
+                onClick={() =>
+                  setConfirmPurchaseModalOpen(
+                    true
+                  )
+                }
+                style={{
+                  background: "linear-gradient(135deg, #16a34a, #15803d)",
+                  borderColor: "#16a34a",
+                  fontWeight: 800,
+                  boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)",
+                }}
+              >
+                Xác nhận mua hộ
+              </Button>
+            )}
+
             <Tag
               className={`purchase-detail-status ${status.className}`}
             >
@@ -1986,41 +2040,101 @@ export default function PurchaseRequestDetail() {
           </div>
 
           <div className="purchase-detail-hero-meta">
-            <div>
+            <div className="hero-stat-card is-quantity">
               <ShoppingOutlined />
-              <span>
-                Tổng số lượng
-              </span>
-              <strong>
-                {formatNumber(
-                  totalQuantity
-                )}
-              </strong>
-            </div>
-
-            <div>
-              <FileTextOutlined />
-              <span>
-                Ngày tạo
-              </span>
-
-              <div
-                className="purchase-detail-date-value"
-                title={formatDateUtcTitle(
-                  detail?.createdAt
-                )}
-              >
+              <div>
+                <span>
+                  Tổng số lượng
+                </span>
                 <strong>
-                  {formatDateTime(
-                    detail?.createdAt
+                  {formatNumber(
+                    totalQuantity
                   )}
                 </strong>
-
-                <small className="purchase-detail-timezone-badge">
-                  UTC+7
-                </small>
               </div>
             </div>
+
+            <div className="hero-stat-card is-created">
+              <CalendarOutlined />
+              <div>
+                <span>
+                  Ngày tạo
+                </span>
+
+                <div
+                  className="purchase-detail-date-value"
+                  title={formatDateUtcTitle(
+                    detail?.createdAt
+                  )}
+                >
+                  <strong>
+                    {formatDateTime(
+                      detail?.createdAt
+                    )}
+                  </strong>
+
+                  <small className="purchase-detail-timezone-badge">
+                    UTC+7
+                  </small>
+                </div>
+              </div>
+            </div>
+
+            {detail?.quotationCreatedAt && (
+              <div className="hero-stat-card is-quoted">
+                <TagsOutlined />
+                <div>
+                  <span>
+                    Báo giá
+                  </span>
+
+                  <div
+                    className="purchase-detail-date-value"
+                    title={formatDateUtcTitle(
+                      detail?.quotationCreatedAt
+                    )}
+                  >
+                    <strong>
+                      {formatDateTime(
+                        detail?.quotationCreatedAt
+                      )}
+                    </strong>
+
+                    <small className="purchase-detail-timezone-badge">
+                      UTC+7
+                    </small>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {detail?.statusUpdatedAt && detail?.statusUpdatedAt !== detail?.createdAt && (
+              <div className="hero-stat-card is-updated">
+                <SyncOutlined />
+                <div>
+                  <span>
+                    Cập nhật
+                  </span>
+
+                  <div
+                    className="purchase-detail-date-value"
+                    title={formatDateUtcTitle(
+                      detail?.statusUpdatedAt
+                    )}
+                  >
+                    <strong>
+                      {formatDateTime(
+                        detail?.statusUpdatedAt
+                      )}
+                    </strong>
+
+                    <small className="purchase-detail-timezone-badge">
+                      UTC+7
+                    </small>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -2661,6 +2775,21 @@ export default function PurchaseRequestDetail() {
         pricingRules={
           pricingRules
         }
+      />
+
+      <ConfirmPurchaseModal
+        open={confirmPurchaseModalOpen}
+        onClose={() =>
+          setConfirmPurchaseModalOpen(false)
+        }
+        onSuccess={async (data) => {
+          setConfirmPurchaseModalOpen(false);
+          if (data?.status) {
+            setDetail((prev) => (prev ? { ...prev, status: data.status } : prev));
+          }
+          await loadDetail();
+        }}
+        purchaseRequest={detail}
       />
     </main>
   );

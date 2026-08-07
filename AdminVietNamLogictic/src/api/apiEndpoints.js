@@ -66,6 +66,10 @@ export const API_ENDPOINTS = Object.freeze({
     detail: (pricingRuleId) =>
       `/api/pricing-rules/${encodeId(pricingRuleId)}`,
   }),
+  exchangeRates: Object.freeze({
+    list: "/api/exchange-rates",
+    convert: "/api/exchange-rates/convert",
+  }),
 });
 
 export default API_ENDPOINTS;
