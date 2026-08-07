@@ -8,7 +8,7 @@ import {
   isAccessTokenExpired,
 } from "../utils/Common/authSession";
 
-/* ================= SALE ================= */
+import SaleDashboard from "../pages/SalePage/SaleDashboard/SaleDashboard";
 
 import PendingConsignmentList from "../pages/SalePage/ConsignmentsPage/PendingConsignmentList";
 
@@ -221,7 +221,7 @@ export default function AppRoutes() {
         }
       >
         {/* Truy cập /sale */}
-        <Route index element={<Navigate to="consignments" replace />} />
+        <Route index element={<SaleDashboard />} />
 
         {/* Danh sách đơn ký gửi */}
         <Route path="consignments" element={<PendingConsignmentList />} />
