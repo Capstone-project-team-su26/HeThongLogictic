@@ -62,7 +62,9 @@ function formatNumber(value, suffix = "") {
 const sumBy = (rows, key) =>
   rows.reduce((sum, row) => sum + (Number(row?.[key]) || 0), 0);
 
-export default function OperationsParcelsPage() {
+export default function OperationsParcelsPage({
+  readOnly = false,
+} = {}) {
   const [inventory, setInventory] = useState([]);
   const [masterBoxes, setMasterBoxes] = useState([]);
   const [lookups, setLookups] = useState({
@@ -409,8 +411,9 @@ export default function OperationsParcelsPage() {
           <span>Tồn kho</span>
           <h1>Tồn kho & master box</h1>
           <p>
-            Lọc kiện trong kho, gom master box nội bộ, hoặc tạo phiếu WRO để Ops duyệt
-            ở trang riêng.
+            {readOnly
+              ? "Chế độ giám sát: chỉ xem kiện tồn kho và master box."
+              : "Lọc kiện trong kho, gom master box nội bộ, hoặc tạo phiếu WRO để Ops duyệt ở trang riêng."}
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -424,13 +427,15 @@ export default function OperationsParcelsPage() {
           >
             Làm mới
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => openCreateMasterBox(selectedParcels)}
-          >
-            Tạo master box
-          </Button>
+          {!readOnly && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => openCreateMasterBox(selectedParcels)}
+            >
+              Tạo master box
+            </Button>
+          )}
         </div>
       </section>
 
@@ -643,44 +648,46 @@ export default function OperationsParcelsPage() {
                     {filteredInventory.length} kiện · đã chọn {selectedParcels.length}
                   </span>
                 </div>
-                <div className="ops-selection-bar">
-                  <Space size={8} wrap>
-                    <Button
-                      type="primary"
-                      icon={<SendOutlined />}
-                      disabled={!selectedParcels.length}
-                      onClick={handleCreateWroFromInventory}
-                    >
-                      Tạo phiếu WRO
-                    </Button>
-                    <Button
-                      icon={<PlusOutlined />}
-                      disabled={!selectedParcels.length}
-                      onClick={() => openCreateMasterBox(selectedParcels)}
-                    >
-                      Gom master box mới
-                    </Button>
-                    <Select
-                      placeholder="Master box nháp..."
-                      style={{ minWidth: 220 }}
-                      value={addToBoxId || undefined}
-                      options={draftBoxesForSelection.map((row) => ({
-                        value: row.id,
-                        label: row.code,
-                      }))}
-                      onChange={setAddToBoxId}
-                      disabled={!selectedParcels.length}
-                      allowClear
-                    />
-                    <Button
-                      icon={<InboxOutlined />}
-                      disabled={!addToBoxId || !selectedParcels.length}
-                      onClick={handleAddToDraftBox}
-                    >
-                      Thêm vào box
-                    </Button>
-                  </Space>
-                </div>
+                {!readOnly && (
+                  <div className="ops-selection-bar">
+                    <Space size={8} wrap>
+                      <Button
+                        type="primary"
+                        icon={<SendOutlined />}
+                        disabled={!selectedParcels.length}
+                        onClick={handleCreateWroFromInventory}
+                      >
+                        Tạo phiếu WRO
+                      </Button>
+                      <Button
+                        icon={<PlusOutlined />}
+                        disabled={!selectedParcels.length}
+                        onClick={() => openCreateMasterBox(selectedParcels)}
+                      >
+                        Gom master box mới
+                      </Button>
+                      <Select
+                        placeholder="Master box nháp..."
+                        style={{ minWidth: 220 }}
+                        value={addToBoxId || undefined}
+                        options={draftBoxesForSelection.map((row) => ({
+                          value: row.id,
+                          label: row.code,
+                        }))}
+                        onChange={setAddToBoxId}
+                        disabled={!selectedParcels.length}
+                        allowClear
+                      />
+                      <Button
+                        icon={<InboxOutlined />}
+                        disabled={!addToBoxId || !selectedParcels.length}
+                        onClick={handleAddToDraftBox}
+                      >
+                        Thêm vào box
+                      </Button>
+                    </Space>
+                  </div>
+                )}
                 <Table
                   rowKey="id"
                   size="middle"
@@ -689,14 +696,18 @@ export default function OperationsParcelsPage() {
                   loading={isLoading}
                   pagination={{ pageSize: 10, showSizeChanger: false }}
                   scroll={{ x: 1200 }}
-                  rowSelection={{
-                    selectedRowKeys: selectedParcelIds,
-                    onChange: setSelectedParcelIds,
-                    getCheckboxProps: (row) => {
-                      const reason = getParcelBlockReason(row);
-                      return { disabled: reason != null, title: reason ?? undefined };
-                    },
-                  }}
+                  rowSelection={
+                    readOnly
+                      ? undefined
+                      : {
+                          selectedRowKeys: selectedParcelIds,
+                          onChange: setSelectedParcelIds,
+                          getCheckboxProps: (row) => {
+                            const reason = getParcelBlockReason(row);
+                            return { disabled: reason != null, title: reason ?? undefined };
+                          },
+                        }
+                  }
                   onRow={(row) => ({
                     onClick: () => setDetailParcel(row),
                     style: { cursor: "pointer" },
@@ -734,7 +745,7 @@ export default function OperationsParcelsPage() {
         ]}
       />
 
-      {masterBoxDraft ? (
+      {masterBoxDraft && !readOnly ? (
         <MasterBoxFormModal
           open
           parcels={masterBoxDraft}

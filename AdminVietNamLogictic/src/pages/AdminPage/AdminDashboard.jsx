@@ -5,14 +5,22 @@ import {
   CarOutlined,
   DollarOutlined,
   EnvironmentOutlined,
+  FileSearchOutlined,
+  InboxOutlined,
+  MonitorOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
   TeamOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import "./AdminPage.css";
 
 const ADMIN_MODULES = [
   { path: "/admin/users", title: "Người dùng", description: "Tài khoản, phân quyền, khóa và mở khóa.", icon: <TeamOutlined />, color: "blue" },
+  { path: "/admin/consignments", title: "Đơn ký gửi (giám sát)", description: "Theo dõi toàn bộ đơn ký gửi của khách hàng.", icon: <FileSearchOutlined />, color: "purple" },
+  { path: "/admin/inventory", title: "Tồn kho (giám sát)", description: "Xem kiện đang lưu kho và master box.", icon: <InboxOutlined />, color: "green" },
+  { path: "/admin/wro", title: "Phiếu xuất kho (giám sát)", description: "Theo dõi WRO, trạng thái duyệt và chứng từ.", icon: <MonitorOutlined />, color: "cyan" },
+  { path: "/admin/cash-flow", title: "Dòng tiền", description: "Tổng thu, công nợ và tình trạng thanh toán các đơn.", icon: <WalletOutlined />, color: "gold" },
   { path: "/admin/warehouses", title: "Kho vận hành", description: "Kho nguồn, kho đích và trạng thái hoạt động.", icon: <BankOutlined />, color: "cyan" },
   { path: "/admin/warehouse-locations", title: "Sơ đồ vị trí kho", description: "Chỉnh Zone / Shelf / Bin và giới hạn lưu trữ.", icon: <EnvironmentOutlined />, color: "green" },
   { path: "/admin/carriers", title: "Đơn vị vận chuyển", description: "Đối tác vận chuyển và thông tin tích hợp.", icon: <CarOutlined />, color: "purple" },
@@ -36,7 +44,7 @@ export default function AdminDashboard() {
         <div>
           <span>VIETNAM LOGISTICS</span>
           <h1>Trung tâm quản trị</h1>
-          <p>Quản lý tập trung tài khoản, kho vận hành, đối tác và toàn bộ cấu hình giá.</p>
+          <p>Quản lý tài khoản, cấu hình giá và giám sát đơn ký gửi, tồn kho, dòng tiền.</p>
         </div>
         <div className="admin-dashboard__shield"><SafetyCertificateOutlined /></div>
       </section>

@@ -1368,7 +1368,9 @@ function DetailLoading() {
 }
 
 
-export default function ConsignmentDetail() {
+export default function ConsignmentDetail({
+  readOnly = false,
+} = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -1808,10 +1810,11 @@ export default function ConsignmentDetail() {
     "APPROVED";
 
   const canShowReviewActions =
-    canCancelPendingOrder ||
-    canConfirmDepositedOrder ||
-    isOrderCancelled ||
-    isOrderConfirmed;
+    !readOnly &&
+    (canCancelPendingOrder ||
+      canConfirmDepositedOrder ||
+      isOrderCancelled ||
+      isOrderConfirmed);
 
   const hasQuotationBeenSent =
     currentOrderStatus ===
@@ -1996,7 +1999,7 @@ export default function ConsignmentDetail() {
   ].includes(currentOrderStatus);
 
   const canOpenQuotationPage =
-    Boolean(orderId) && !terminalStatus;
+    Boolean(orderId) && !terminalStatus && !readOnly;
 
   const handleOpenQuotationPage = () => {
     if (!orderId) {
@@ -2078,28 +2081,30 @@ export default function ConsignmentDetail() {
           Quay lại danh sách
         </Button>
 
-        <Button
-          type="default"
-          icon={<RobotOutlined />}
-          onClick={() =>
-            navigate("/sale/customer-service", {
-              state: {
-                aiOrderCode:
-                  detail?.consignmentCode || "",
-                aiCustomerId:
-                  detail?.customer?.id ||
-                  detail?.customer?.customerId ||
-                  "",
-                aiCustomerName:
-                  detail?.customer?.fullName || "",
-                aiRelatedType: "CONSIGNMENT",
-                aiRelatedId: orderId || "",
-              },
-            })
-          }
-        >
-          Hỏi AI trạng thái
-        </Button>
+        {!readOnly && (
+          <Button
+            type="default"
+            icon={<RobotOutlined />}
+            onClick={() =>
+              navigate("/sale/customer-service", {
+                state: {
+                  aiOrderCode:
+                    detail?.consignmentCode || "",
+                  aiCustomerId:
+                    detail?.customer?.id ||
+                    detail?.customer?.customerId ||
+                    "",
+                  aiCustomerName:
+                    detail?.customer?.fullName || "",
+                  aiRelatedType: "CONSIGNMENT",
+                  aiRelatedId: orderId || "",
+                },
+              })
+            }
+          >
+            Hỏi AI trạng thái
+          </Button>
+        )}
       </div>
 
       {masterDataWarning && (

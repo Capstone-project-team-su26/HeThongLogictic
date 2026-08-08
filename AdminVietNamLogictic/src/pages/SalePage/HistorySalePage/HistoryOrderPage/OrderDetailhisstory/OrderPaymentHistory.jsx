@@ -308,7 +308,9 @@ function PaymentHistoryLoading() {
 
 export default function OrderPaymentHistory({
   orderId: orderIdProp,
-}) {
+  basePath = "/sale",
+  readOnly = false,
+} = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -854,12 +856,14 @@ export default function OrderPaymentHistory({
                       <Button
                         icon={<FileTextOutlined />}
                         onClick={() =>
-                          navigate(`/sale/consignments/${orderId}`, {
-                            state: {
-                              orderId,
-                              payment,
-                              paymentHistory: history,
-                            },
+                          navigate(
+                            `${basePath}/consignments/${orderId}`,
+                            {
+                              state: {
+                                orderId,
+                                payment,
+                                paymentHistory: history,
+                              },
                             }
                           )
                         }
@@ -867,13 +871,13 @@ export default function OrderPaymentHistory({
                         Xem chi tiết
                       </Button>
 
-                      {isPaymentSuccess && (
+                      {!readOnly && isPaymentSuccess && (
                         <Button
                           type="primary"
                           icon={<BankOutlined />}
                           onClick={() =>
                             navigate(
-                              `/sale/warehouse-receipts/create/${orderId}`,
+                              `${basePath}/warehouse-receipts/create/${orderId}`,
                               {
                                 state: {
                                   orderId,
