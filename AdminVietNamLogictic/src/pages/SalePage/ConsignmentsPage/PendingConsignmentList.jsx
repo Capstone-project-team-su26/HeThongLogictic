@@ -41,6 +41,14 @@ const ALL_STATUS = "ALL";
 const DEFAULT_PAGE_SIZE = 10;
 
 const CONSIGNMENT_STATUS_CONFIG = {
+  DRAFT: {
+    label: "Bản nháp",
+    className: "status-pending",
+  },
+  QUOTATION_CONFIRMED: {
+    label: "Đã xác nhận báo giá",
+    className: "status-approved",
+  },
   PENDING: {
     label: "Chờ xử lý",
     className: "status-pending",
@@ -65,6 +73,10 @@ const CONSIGNMENT_STATUS_CONFIG = {
     label: "Báo giá bị từ chối",
     className: "status-quotation-rejected",
   },
+  WAITING_PAYMENT: {
+    label: "Chờ thanh toán",
+    className: "status-waiting-deposit",
+  },
   WAITING_DEPOSIT: {
     label: "Chờ đặt cọc",
     className: "status-waiting-deposit",
@@ -73,9 +85,33 @@ const CONSIGNMENT_STATUS_CONFIG = {
     label: "Đã đặt cọc",
     className: "status-deposit-paid",
   },
+  PAID: {
+    label: "Đã thanh toán",
+    className: "status-completed",
+  },
+  WAITING_FOR_PARCEL: {
+    label: "Chờ kiện hàng",
+    className: "status-processing",
+  },
+  WAITING_PARCEL: {
+    label: "Chờ kiện hàng",
+    className: "status-processing",
+  },
   CHECKED_IN: {
     label: "Đã nhập kho",
     className: "status-checked-in",
+  },
+  STORED: {
+    label: "Đã nhập kho",
+    className: "status-checked-in",
+  },
+  WAITING_STORED: {
+    label: "Chờ nhập kho",
+    className: "status-waiting-deposit",
+  },
+  ARRIVED_ORIGIN_WAREHOUSE: {
+    label: "Đã về kho nước ngoài",
+    className: "status-in-transit",
   },
   WAREHOUSE_RECEIVED: {
     label: "Đã nhận tại kho",
@@ -112,6 +148,10 @@ const CONSIGNMENT_STATUS_CONFIG = {
   COMPLETED: {
     label: "Hoàn thành",
     className: "status-completed",
+  },
+  NEED_MORE_INFO: {
+    label: "Cần bổ sung thông tin",
+    className: "status-waiting-deposit",
   },
   REJECTED: {
     label: "Đã từ chối",
@@ -441,38 +481,35 @@ const getConsignmentStatusCode = (
 const getConsignmentStatus = (
   itemOrStatus
 ) => {
-  const code =
-    getConsignmentStatusCode(
-      itemOrStatus
-    );
+  let statusDisplayName = "";
+  let code = "";
 
-  const configuredStatus =
-    CONSIGNMENT_STATUS_CONFIG[code];
-
-  if (configuredStatus) {
-    return {
-      code,
-      ...configuredStatus,
-    };
+  if (typeof itemOrStatus === "object" && itemOrStatus !== null) {
+    code = getConsignmentStatusCode(itemOrStatus);
+    statusDisplayName = itemOrStatus?.statusDisplayName || itemOrStatus?.statusName || "";
+  } else {
+    code = getConsignmentStatusCode(itemOrStatus);
   }
 
-  const fallbackLabel = code
-    ? code
-      .replace(/_/g, " ")
-      .toLocaleLowerCase("vi-VN")
-      .replace(
-        /(^|\s)\S/g,
-        (character) =>
-          character.toLocaleUpperCase(
-            "vi-VN"
-          )
-      )
-    : "Chưa xác định";
+  const configuredStatus = CONSIGNMENT_STATUS_CONFIG[code];
+
+  const label =
+    statusDisplayName && statusDisplayName !== "string"
+      ? statusDisplayName
+      : configuredStatus?.label ||
+        (code
+          ? code
+              .replace(/_/g, " ")
+              .toLocaleLowerCase("vi-VN")
+              .replace(/(^|\s)\S/g, (character) =>
+                character.toLocaleUpperCase("vi-VN")
+              )
+          : "Chưa xác định");
 
   return {
     code: code || "UNKNOWN",
-    label: fallbackLabel,
-    className: "status-unknown",
+    label,
+    className: configuredStatus?.className || "status-unknown",
   };
 };
 
@@ -539,6 +576,41 @@ export default function PendingConsignmentList() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [copiedTrackingCode, setCopiedTrackingCode] =
     useState("");
+
+  const [availableStatusOptions, setAvailableStatusOptions] = useState([
+    { value: ALL_STATUS, label: "Tất cả trạng thái" },
+  ]);
+
+  // Load all unique status codes & statusDisplayName from entire system API dataset (pageSize: 1000)
+  useEffect(() => {
+    getConsignmentsApi({ pageNumber: 1, pageSize: 1000 })
+      .then((res) => {
+        const pageData = getConsignmentPageData(res);
+        const raw = Array.isArray(pageData?.items) ? pageData.items : [];
+        const map = new Map();
+        map.set(ALL_STATUS, "Tất cả trạng thái");
+
+        raw.forEach((item) => {
+          const code = getConsignmentStatusCode(item);
+          if (code && !map.has(code)) {
+            const statusInfo = getConsignmentStatus(item);
+            map.set(code, statusInfo.label);
+          }
+        });
+
+        const options = Array.from(map.entries()).map(([value, label]) => ({
+          value,
+          label,
+        }));
+
+        if (options.length > 1) {
+          setAvailableStatusOptions(options);
+        }
+      })
+      .catch((err) => {
+        console.error("FETCH ALL CONSIGNMENT STATUSES ERROR:", err);
+      });
+  }, [refreshKey]);
 
   const copyResetTimerRef = useRef(null);
   const dataPanelRef = useRef(null);
@@ -960,7 +1032,7 @@ export default function PendingConsignmentList() {
 
               <Select
                 value={statusFilter}
-                options={STATUS_OPTIONS}
+                options={availableStatusOptions}
                 onChange={
                   handleStatusChange
                 }
@@ -1102,6 +1174,26 @@ export default function PendingConsignmentList() {
                             >
                               {statusInfo.label}
                             </span>
+
+                            {Boolean(
+                              (item?.paymentStatus || item?.orderStatus) &&
+                              getConsignmentStatusCode(item?.paymentStatus || item?.orderStatus) !== statusInfo.code
+                            ) && (
+                              <span
+                                className={`tag-status-header ${
+                                  getConsignmentStatus(
+                                    item?.paymentStatus || item?.orderStatus
+                                  ).className
+                                }`}
+                                style={{ opacity: 0.9, marginLeft: "4px" }}
+                              >
+                                {
+                                  getConsignmentStatus(
+                                    item?.paymentStatus || item?.orderStatus
+                                  ).label
+                                }
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1214,11 +1306,6 @@ export default function PendingConsignmentList() {
                               Mã đơn: {getOrderCode(item)}
                             </div>
 
-                            <div className="receiver-phone">
-                              <span>Số điện thoại:</span>{" "}
-                              <strong>{item.receiverPhone || "-"}</strong>
-                            </div>
-
                             <div className="receiver-address">
                               <span>📍 Địa chỉ:</span>{" "}
                               <strong>{item.receiverAddress || "-"}</strong>
@@ -1227,22 +1314,6 @@ export default function PendingConsignmentList() {
                         </div>
 
                         <div className="body-right">
-                          <span
-                            className={`status-badge-center ${statusInfo.className}`}
-                            title={`Trạng thái API: ${statusInfo.code}`}
-                          >
-                            {statusInfo.label}
-                          </span>
-
-                          <div className="shipping-type">
-                            <span>LOẠI VẬN CHUYỂN</span>
-
-                            <strong>
-                              {getConsignmentTypeLabel(
-                                item.consignmentType
-                              )}
-                            </strong>
-                          </div>
 
                           <div className="specs-list">
                             <span>

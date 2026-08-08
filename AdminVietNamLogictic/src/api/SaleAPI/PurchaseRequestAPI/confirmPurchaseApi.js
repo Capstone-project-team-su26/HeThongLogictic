@@ -2,23 +2,9 @@ import axiosInstance from "../../axiosInstance";
 import { API_ENDPOINTS } from "../../apiEndpoints";
 
 /* =========================================================
-   TOKEN & AUTH HELPER
+   API XÁC NHẬN MUA HỘ & CẬP NHẬT TIẾN ĐỘ
+   PUT /api/purchase-requests/{purchaseRequestId}/confirm-purchase
 ========================================================= */
-
-const getAccessToken = () => {
-  const token = sessionStorage.getItem("accessToken");
-  if (!token) {
-    throw new Error("Không tìm thấy token đăng nhập. Vui lòng đăng nhập lại.");
-  }
-  return token;
-};
-
-const getAuthHeaders = () => {
-  return {
-    Accept: "*/*",
-    Authorization: `Bearer ${getAccessToken()}`,
-  };
-};
 
 const getApiErrorMessage = (error, fallbackMessage) => {
   return (
@@ -30,19 +16,29 @@ const getApiErrorMessage = (error, fallbackMessage) => {
   );
 };
 
-/* =========================================================
-   API XÁC NHẬN MUA HỘ & CẬP NHẬT TIẾN ĐỘ
-   PUT /api/purchase-requests/{requestId}/confirm-purchase
-========================================================= */
+const VALID_BE_PURCHASE_STATUSES = new Set([
+  "PENDING_REVIEW",
+  "DEPOSIT_PAID",
+  "PAID",
+  "PURCHASED",
+  "SELLER_SHIPPED",
+  "ARRIVED_ORIGIN_WAREHOUSE",
+  "WAITING_STORED",
+  "STORED",
+  "COMPLETED",
+]);
 
 /**
  * API Cập nhật Trạng thái & Bằng chứng Mua hộ
  *
- * @param {string} purchaseRequestId - GUID của đơn hàng mua hộ (ví dụ: f826db18-de19-4e79-9895-a69106cdfdcc)
+ * @param {string} purchaseRequestId - GUID của đơn hàng mua hộ (ví dụ: 4b8e036f-3c72-49ab-b513-9683e189cc42)
  * @param {Object} payload
- * @param {string} payload.status - PENDING_REVIEW | PAID | PURCHASED | SELLER_SHIPPED | ARRIVED_ORIGIN_WAREHOUSE
- * @param {Array<string>} payload.proofImages - Danh sách URL ảnh bằng chứng (tối đa 3 ảnh)
- * @param {string} payload.generalNote - Ghi chú xử lý mua hộ
+ * @param {string} payload.status - Status code hợp lệ trên BE
+ * @param {Array<string>} payload.proofImages - Mảng danh sách URL ảnh bằng chứng
+ * @param {string} payload.generalNote - Ghi chú mua hộ
+ * @param {string} payload.warehouseId - GUID kho nhận dự kiến
+ * @param {string} payload.destinationWarehouseId - GUID kho đích dự kiến
+ * @param {string} payload.warehouseName - Tên kho nhận dự kiến
  */
 export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
   if (!purchaseRequestId) {
@@ -50,20 +46,26 @@ export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
   }
 
   const normalizedId = String(purchaseRequestId).trim();
+  const rawStatus = String(payload?.status || "PURCHASED").trim().toUpperCase();
+
+  // Đảm bảo status thuộc mảng hợp lệ của Backend: PENDING_REVIEW, DEPOSIT_PAID, PAID, PURCHASED, SELLER_SHIPPED, ARRIVED_ORIGIN_WAREHOUSE, WAITING_STORED, STORED, COMPLETED
+  const targetStatus = VALID_BE_PURCHASE_STATUSES.has(rawStatus)
+    ? rawStatus
+    : "PURCHASED";
 
   const requestBody = {
-    status: String(payload?.status || "PURCHASED").trim().toUpperCase(),
+    status: targetStatus,
     proofImages: Array.isArray(payload?.proofImages)
       ? payload.proofImages.map((img) => String(img || "").trim()).filter(Boolean)
       : [],
-    generalNote: String(payload?.generalNote || "").trim() || null,
+    generalNote: String(payload?.generalNote || "").trim() || "",
     warehouseId: payload?.warehouseId ? String(payload.warehouseId).trim() : null,
     destinationWarehouseId: payload?.destinationWarehouseId
       ? String(payload.destinationWarehouseId).trim()
       : payload?.warehouseId
       ? String(payload.warehouseId).trim()
       : null,
-    warehouseName: payload?.warehouseName ? String(payload.warehouseName).trim() : null,
+    warehouseName: payload?.warehouseName ? String(payload.warehouseName).trim() : "",
   };
 
   const endpointUrl =
@@ -72,12 +74,13 @@ export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
       : `/api/purchase-requests/${encodeURIComponent(normalizedId)}/confirm-purchase`;
 
   try {
-    const response = await axiosInstance.put(endpointUrl, requestBody, {
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await axiosInstance.put(endpointUrl, requestBody);
+
+    if (response?.data && response?.data?.success === false) {
+      throw new Error(
+        response?.data?.message || "Cập nhật tiến độ mua hàng thất bại."
+      );
+    }
 
     return response?.data?.data ?? response?.data ?? null;
   } catch (error) {

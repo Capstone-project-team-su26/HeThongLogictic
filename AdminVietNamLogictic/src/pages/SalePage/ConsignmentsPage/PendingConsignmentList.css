@@ -2,7 +2,7 @@
    PAGE LAYOUT
    ========================================================= */
 
-.vcl-container {
+.pending-consignment-page.vcl-container {
   --vcl-primary: #2563eb;
   --vcl-primary-dark: #1d4ed8;
   --vcl-primary-soft: #eff6ff;
@@ -50,18 +50,20 @@
     #f6f8fc;
 }
 
-/* Ă„ÂĂ¡Â»â€œng bĂ¡Â»â„¢ font cho toÄ‚ n bĂ¡Â»â„¢ thÄ‚ nh phĂ¡ÂºÂ§n bÄ‚Âªn trong */
-
-.vcl-container *,
-.vcl-container *::before,
-.vcl-container *::after {
+.pending-consignment-page *,
+.pending-consignment-page *::before,
+.pending-consignment-page *::after {
   box-sizing: border-box;
 }
 
-.vcl-container button,
-.vcl-container input,
-.vcl-container textarea,
-.vcl-container select {
+.pending-consignment-page button,
+.pending-consignment-page input,
+.pending-consignment-page textarea,
+.pending-consignment-page select {
+  font-family: inherit;
+}
+
+l-container select {
   font-family: inherit;
 }
 

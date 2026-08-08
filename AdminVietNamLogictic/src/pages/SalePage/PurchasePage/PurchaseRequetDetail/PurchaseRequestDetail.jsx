@@ -51,6 +51,11 @@ import {
   getActivePricingRulesApi,
   PRICING_RULE_CODE,
 } from "../../../../api/SaleAPI/ConsignmentAPI/pricingRuleService";
+import {
+  getActiveWarehousesApi,
+  getWarehousesApi,
+} from "../../../../api/SaleAPI/ConsignmentAPI/warehouseService";
+import { getWarehouses } from "../../../../api/AdminAPI/adminService";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 
 import CreatePurchaseRequestQuotationModal from "./CreatePurchaseRequestQuotationModal";
@@ -65,6 +70,14 @@ import {
 import "./PurchaseRequestDetail.css";
 
 const STATUS_CONFIG = {
+  DRAFT: {
+    label: "Bản nháp",
+    className: "is-info",
+  },
+  QUOTATION_CONFIRMED: {
+    label: "Đã xác nhận báo giá",
+    className: "is-success",
+  },
   NEW: {
     label: "Đặt đơn hàng",
     className: "is-info",
@@ -242,7 +255,7 @@ const getQuotationStatusInfo = (
 
   return (
     QUOTATION_STATUS_CONFIG[
-      code
+    code
     ] || {
       label:
         code
@@ -319,47 +332,41 @@ const getFeeToneClass = (
   return "is-default";
 };
 
-const formatFeeCalculation = (
-  fee
-) => {
-  const calculationType =
-    normalizeUpperText(
-      fee?.calculationType
-    );
+const formatFeeCalculation = (fee) => {
+  const calculationType = normalizeUpperText(fee?.calculationType);
 
-  if (
-    calculationType ===
-    "PERCENTAGE"
-  ) {
-    return `${formatNumber(
-      fee?.value
-    )}%`;
+  if (calculationType === "PERCENTAGE") {
+    return `${formatNumber(fee?.value)}%`;
   }
 
   return "Cố định";
 };
 
-const getStatusInfo = (value) => {
-  const code =
-    normalizeUpperText(value);
+const getStatusInfo = (value, statusDisplayName) => {
+  const code = normalizeUpperText(value);
+  const matched = STATUS_CONFIG[code];
 
-  return (
-    STATUS_CONFIG[code] || {
-      label:
-        code
-          .replace(/_/g, " ")
-          .toLocaleLowerCase("vi-VN")
-          .replace(
-            /(^|\s)\S/g,
-            (character) =>
-              character.toLocaleUpperCase(
-                "vi-VN"
-              )
-          ) ||
-        "Chưa xác định",
-      className: "is-default",
-    }
-  );
+  if (matched) {
+    return {
+      ...matched,
+      label: statusDisplayName || matched.label,
+    };
+  }
+
+  return {
+    label:
+      statusDisplayName ||
+      code
+        .replace(/_/g, " ")
+        .toLocaleLowerCase("vi-VN")
+        .replace(
+          /(^|\s)\S/g,
+          (character) =>
+            character.toLocaleUpperCase("vi-VN")
+        ) ||
+      "Chưa xác định",
+    className: "is-default",
+  };
 };
 
 /*
@@ -547,7 +554,7 @@ const getPricingRuleUnitLabel = (
   return (
     map[ruleCode] ||
     (conditionType ===
-    "MIN_DECLARED_VALUE"
+      "MIN_DECLARED_VALUE"
       ? "Áp dụng theo giá trị khai báo tối thiểu"
       : "Theo cấu hình hệ thống")
   );
@@ -718,7 +725,7 @@ function CopyValue({
       AuthNotify.error(
         "Không thể sao chép",
         error?.message ||
-          "Vui lòng thử lại."
+        "Vui lòng thử lại."
       );
     }
   };
@@ -757,11 +764,10 @@ function ServiceOptionCard({
 }) {
   return (
     <article
-      className={`purchase-service-card ${
-        enabled
+      className={`purchase-service-card ${enabled
           ? "is-enabled"
           : "is-disabled"
-      }`}
+        }`}
     >
       <div className="purchase-service-card__top">
         <div className="purchase-service-card__icon">
@@ -776,11 +782,10 @@ function ServiceOptionCard({
               <CloseCircleOutlined />
             )
           }
-          className={`purchase-service-status-tag ${
-            enabled
+          className={`purchase-service-status-tag ${enabled
               ? "is-enabled"
               : "is-disabled"
-          }`}
+            }`}
         >
           {enabled
             ? "Đã chọn"
@@ -811,8 +816,8 @@ function ServiceOptionCard({
           <strong>
             {rule
               ? formatPricingRuleValue(
-                  rule
-                )
+                rule
+              )
               : fallbackValue}
           </strong>
         </div>
@@ -825,8 +830,8 @@ function ServiceOptionCard({
           <strong>
             {rule
               ? getPricingRuleUnitLabel(
-                  rule
-                )
+                rule
+              )
               : fallbackScope}
           </strong>
         </div>
@@ -909,9 +914,8 @@ function ProductImageGallery({
               <button
                 type="button"
                 key={`${url}-${idx}`}
-                className={`purchase-detail-thumbnail-item ${
-                  idx === activeIndex ? "is-active" : ""
-                }`}
+                className={`purchase-detail-thumbnail-item ${idx === activeIndex ? "is-active" : ""
+                  }`}
                 onClick={() => setActiveIndex(idx)}
               >
                 <img src={url} alt={`Thumbnail ${idx + 1}`} />
@@ -1249,7 +1253,7 @@ function QuotationView({
         </div>
 
         {quotationItems.length ===
-        0 ? (
+          0 ? (
           <Empty description="Báo giá chưa có sản phẩm" />
         ) : (
           <div className="purchase-quote-item-table">
@@ -1367,7 +1371,7 @@ function QuotationView({
         </div>
 
         {additionalFees.length ===
-        0 ? (
+          0 ? (
           <Empty description="Không có phụ phí" />
         ) : (
           <div className="purchase-quote-fee-table" role="table" aria-label="Bảng chi tiết phụ phí và thuế">
@@ -1488,6 +1492,8 @@ export default function PurchaseRequestDetail() {
     setConfirmPurchaseModalOpen,
   ] = useState(false);
 
+  const [systemWarehouses, setSystemWarehouses] = useState([]);
+
   const loadDetail =
     useCallback(async () => {
       if (!purchaseRequestId) {
@@ -1506,12 +1512,17 @@ export default function PurchaseRequestDetail() {
         const [
           detailResult,
           pricingResult,
+          activeWhRes,
+          whApiRes,
+          adminWhRes,
         ] = await Promise.allSettled([
           getPurchaseRequestDetailApi(
             purchaseRequestId
           ),
-
           getActivePricingRulesApi(),
+          getActiveWarehousesApi(),
+          getWarehousesApi(),
+          getWarehouses(),
         ]);
 
         if (
@@ -1524,6 +1535,22 @@ export default function PurchaseRequestDetail() {
         setDetail(
           detailResult.value
         );
+
+        let whList = [];
+        if (activeWhRes.status === "fulfilled" && Array.isArray(activeWhRes.value) && activeWhRes.value.length > 0) {
+          whList = activeWhRes.value;
+        } else if (whApiRes.status === "fulfilled" && Array.isArray(whApiRes.value) && whApiRes.value.length > 0) {
+          whList = whApiRes.value;
+        } else if (adminWhRes.status === "fulfilled" && Array.isArray(adminWhRes.value) && adminWhRes.value.length > 0) {
+          whList = adminWhRes.value
+            .map((w) => ({
+              id: String(w.id || w.warehouseId || ""),
+              name: String(w.name || w.warehouseName || ""),
+              code: String(w.code || w.warehouseCode || ""),
+            }))
+            .filter((w) => Boolean(w.id));
+        }
+        setSystemWarehouses(whList);
 
         if (
           pricingResult.status ===
@@ -1566,9 +1593,10 @@ export default function PurchaseRequestDetail() {
   const status = useMemo(
     () =>
       getStatusInfo(
-        detail?.status
+        detail?.status,
+        detail?.statusDisplayName
       ),
-    [detail?.status]
+    [detail?.status, detail?.statusDisplayName]
   );
 
   const items = useMemo(
@@ -1618,8 +1646,8 @@ export default function PurchaseRequestDetail() {
             detail?.pricingRuleIds
           )
             ? detail.pricingRuleIds
-                .map(normalizeText)
-                .filter(Boolean)
+              .map(normalizeText)
+              .filter(Boolean)
             : []
         );
 
@@ -1741,8 +1769,8 @@ export default function PurchaseRequestDetail() {
 
             return (
               ruleCode !==
-                PRICING_RULE_CODE
-                  .WOOD_CRATE &&
+              PRICING_RULE_CODE
+                .WOOD_CRATE &&
               (
                 ruleCode.includes(
                   "PACK"
@@ -1855,25 +1883,38 @@ export default function PurchaseRequestDetail() {
   const appliedPricingRuleCount =
     pricingRuleRows.length;
 
-  const canCreateQuotation =
-    useMemo(() => {
-      const currentStatus =
-        normalizeUpperText(
-          detail?.status
-        );
+  const canCreateQuotation = useMemo(() => {
+    const currentStatus = normalizeUpperText(detail?.status);
 
-      return (
-        !detail?.quotation &&
-        items.length > 0 &&
-        CREATE_QUOTATION_STATUSES.has(
-          currentStatus
-        )
+    return (
+      !detail?.quotation &&
+      items.length > 0 &&
+      CREATE_QUOTATION_STATUSES.has(currentStatus)
+    );
+  }, [detail?.quotation, detail?.status, items.length]);
+
+  const displayWarehouseName = useMemo(() => {
+    // 1. Dùng trực tiếp tên kho do API trả về nếu hợp lệ
+    if (detail?.warehouseName && detail.warehouseName !== "string") return detail.warehouseName;
+    if (detail?.destinationWarehouseName && detail.destinationWarehouseName !== "string") return detail.destinationWarehouseName;
+    if (detail?.originWarehouseName && detail.originWarehouseName !== "string") return detail.originWarehouseName;
+    if (detail?.warehouse?.name) return detail.warehouse.name;
+    if (detail?.destinationWarehouse?.name) return detail.destinationWarehouse.name;
+    if (detail?.originWarehouse?.name) return detail.originWarehouse.name;
+
+    // 2. Tra cứu động theo warehouseId / destinationWarehouseId trong danh sách Kho từ API hệ thống
+    const targetWhId = detail?.warehouseId || detail?.destinationWarehouseId || detail?.originWarehouseId;
+    if (targetWhId && systemWarehouses.length > 0) {
+      const foundWh = systemWarehouses.find(
+        (wh) => String(wh.id || wh.warehouseId) === String(targetWhId)
       );
-    }, [
-      detail?.quotation,
-      detail?.status,
-      items.length,
-    ]);
+      if (foundWh?.name) return foundWh.name;
+    }
+
+    if (detail?.warehouseCode) return detail.warehouseCode;
+
+    return "—";
+  }, [detail, systemWarehouses]);
 
   const canConfirmPurchase = useMemo(() => {
     if (!detail) return false;
@@ -2041,13 +2082,13 @@ export default function PurchaseRequestDetail() {
                         "Mã yêu cầu mua hộ đã được sao chép."
                       );
                     } catch (
-                      copyError
+                    copyError
                     ) {
                       AuthNotify.error(
                         "Không thể sao chép",
                         copyError
                           ?.message ||
-                          "Vui lòng thử lại."
+                        "Vui lòng thử lại."
                       );
                     }
                   }}
@@ -2222,7 +2263,8 @@ export default function PurchaseRequestDetail() {
               <strong>
                 {detail?.warehouseName ||
                   detail?.destinationWarehouseName ||
-                  detail?.warehouseCode ||
+                  detail?.originWarehouseName ||
+                  detail?.warehouse?.name ||
                   "—"}
               </strong>
             </div>
@@ -2414,6 +2456,38 @@ export default function PurchaseRequestDetail() {
                   "Không có"}
               </strong>
             </div>
+
+            {Array.isArray(detail?.proofImages) &&
+              detail.proofImages.filter((img) => Boolean(img) && img !== "string").length > 0 && (
+                <div
+                  className="purchase-service-note-card"
+                  style={{ gridColumn: "1 / -1", marginTop: "8px" }}
+                >
+                  <span style={{ marginBottom: "8px", display: "block" }}>
+                    BẰNG CHỨNG MUA HÀNG / HÓA ĐƠN ({detail.proofImages.filter((img) => Boolean(img) && img !== "string").length} ảnh)
+                  </span>
+                  <Image.PreviewGroup>
+                    <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                      {detail.proofImages
+                        .filter((img) => Boolean(img) && img !== "string")
+                        .map((imgUrl, idx) => (
+                          <Image
+                            key={idx}
+                            src={imgUrl}
+                            alt={`Bằng chứng ${idx + 1}`}
+                            width={100}
+                            height={100}
+                            style={{
+                              objectFit: "cover",
+                              borderRadius: "10px",
+                              border: "1px solid #cbd5e1",
+                            }}
+                          />
+                        ))}
+                    </div>
+                  </Image.PreviewGroup>
+                </div>
+              )}
           </div>
         </section>
 
