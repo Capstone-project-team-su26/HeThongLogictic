@@ -1,19 +1,22 @@
 import AdminResourcePage from "./AdminResourcePage";
 import {
-  createAdditionalServiceFee, createCarrier, createPackageConfiguration,
+  createAdditionalServiceFee, createCarrier, createExchangeRate, createPackageConfiguration,
   createPricingRule, createProductType, createRestrictedItem, createServicePricing,
   createShippingMethod, createShippingRoute, createSupplier, createUnitOfMeasure,
-  createWarehouse, deleteAdditionalServiceFee, deleteCarrier, deletePackageConfiguration,
+  createWarehouse, deleteAdditionalServiceFee, deleteCarrier, deleteExchangeRate,
+  deletePackageConfiguration,
   deletePricingRule, deleteProductType, deleteRestrictedItem, deleteServicePricing,
   deleteShippingMethod, deleteShippingRoute, deleteSupplier, deleteUnitOfMeasure,
   deleteWarehouse, getAdditionalServiceFeeDetail, getAdditionalServiceFees,
-  getCarrierDetail, getCarriers, getPackageConfigurationDetail, getPackageConfigurations,
+  getCarrierDetail, getCarriers, getExchangeRateDetail, getExchangeRates,
+  getPackageConfigurationDetail, getPackageConfigurations,
   getPricingRuleDetail, getPricingRules, getProductTypeDetail, getProductTypes,
   getRestrictedItemDetail, getRestrictedItems,
   getServicePricingDetail, getServicePricings, getShippingMethodDetail, getShippingMethods,
   getShippingRouteDetail, getShippingRoutes, getSupplierDetail, getSuppliers,
   getUnitOfMeasureDetail, getUnitsOfMeasure,
-  getWarehouses, updateAdditionalServiceFee, updateCarrier, updatePackageConfiguration,
+  getWarehouses, updateAdditionalServiceFee, updateCarrier, updateExchangeRate,
+  updatePackageConfiguration,
   updatePricingRule, updateProductType, updateRestrictedItem, updateServicePricing,
   updateShippingMethod, updateShippingRoute, updateSupplier, updateUnitOfMeasure,
   updateWarehouse,
@@ -73,6 +76,46 @@ export const PricingRulesAdminPage = () => page({
   title: "Quy tắc tính giá", singular: "quy tắc tính giá", description: "Quản lý điều kiện và công thức phụ phí.", searchFields: ["ruleName", "ruleCode", "ruleType", "status"], api: ruleApi,
   columns: [{ name: "ruleName", label: "Tên quy tắc" }, { name: "ruleCode", label: "Mã" }, { name: "ruleType", label: "Loại", type: "tag" }, { name: "calculationType", label: "Cách tính", type: "tag" }, { name: "value", label: "Giá trị", type: "number" }, { ...statusField, type: "status" }],
   fields: [{ name: "servicePricingId", label: "Mã bảng giá", required: true }, { name: "ruleName", label: "Tên quy tắc", required: true }, { name: "ruleCode", label: "Mã quy tắc", required: true }, { name: "ruleType", label: "Loại quy tắc", required: true }, { name: "conditionType", label: "Loại điều kiện" }, { name: "conditionValue", label: "Giá trị điều kiện" }, { name: "calculationType", label: "Cách tính", required: true }, ...["value", "minAmount", "maxAmount"].map(name => ({ name, label: ({ value: "Giá trị", minAmount: "Tối thiểu", maxAmount: "Tối đa" })[name], type: "number", min: 0 })), { name: "isRequired", label: "Bắt buộc", type: "switch" }, statusField, { name: "description", label: "Mô tả", type: "textarea", span: 2 }],
+});
+
+const exchangeRateApi = {
+  list: () => getExchangeRates({ activeOnly: false }),
+  detail: getExchangeRateDetail,
+  create: createExchangeRate,
+  update: updateExchangeRate,
+  remove: deleteExchangeRate,
+};
+export const ExchangeRatesAdminPage = () => page({
+  title: "Bảng giá tiền tệ",
+  singular: "tỷ giá",
+  description: "Cấu hình tỷ giá ngoại tệ quy đổi sang VND dùng cho báo giá mua hộ / ký gửi.",
+  searchFields: ["currencyCode", "currencyName", "note"],
+  api: exchangeRateApi,
+  columns: [
+    { name: "currencyCode", label: "Mã tiền tệ", type: "tag", filterable: true },
+    { name: "currencyName", label: "Tên tiền tệ" },
+    { name: "rateToVnd", label: "Tỷ giá → VND", type: "number" },
+    { ...boolField, type: "active" },
+    { name: "note", label: "Ghi chú" },
+  ],
+  fields: [
+    {
+      name: "currencyCode",
+      label: "Mã tiền tệ",
+      type: "select",
+      required: true,
+      options: [
+        { value: "CNY", label: "CNY — Nhân dân tệ" },
+        { value: "JPY", label: "JPY — Yên Nhật" },
+        { value: "KRW", label: "KRW — Won Hàn Quốc" },
+        { value: "USD", label: "USD — Đô la Mỹ" },
+      ],
+    },
+    { name: "currencyName", label: "Tên tiền tệ" },
+    { name: "rateToVnd", label: "Tỷ giá quy đổi sang VND", type: "number", min: 0, required: true },
+    boolField,
+    { name: "note", label: "Ghi chú", type: "textarea", span: 2 },
+  ],
 });
 
 const restrictedApi = { list: getRestrictedItems, detail: getRestrictedItemDetail, create: createRestrictedItem, update: updateRestrictedItem, remove: deleteRestrictedItem };

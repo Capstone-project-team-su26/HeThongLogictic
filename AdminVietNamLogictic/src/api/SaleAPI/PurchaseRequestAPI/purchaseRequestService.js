@@ -923,6 +923,8 @@ export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
    DEFAULT EXPORT
 ========================================================= */
 
+export { approveStorePurchaseApi } from "./confirmPurchaseApi";
+
 const purchaseRequestService = {
   normalizeCreatePurchaseRequestPayload,
   createPurchaseRequestApi,

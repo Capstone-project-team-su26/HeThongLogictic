@@ -81,10 +81,16 @@ const PURCHASE_STATUS_OPTIONS = [
     description: "Hàng đang chờ bộ phận Vận hành (Ops) kiểm kê & duyệt nhập kho.",
   },
   {
-    value: "COMPLETED",
+    value: "STORED",
     label: "5. Hàng đã nhập kho",
     tagColor: "purple",
-    description: "Bộ phận Ops đã duyệt kiểm kê, xác nhận hàng đã nhập kho & lưu kho chính thức.",
+    description: "Ops đã duyệt kiểm kê qua approve-store → STORED.",
+  },
+  {
+    value: "COMPLETED",
+    label: "5. Hàng đã nhập kho / hoàn tất",
+    tagColor: "purple",
+    description: "Đơn đã nhập kho hoặc đã thanh toán nốt (COMPLETED).",
   },
 ];
 
@@ -185,7 +191,31 @@ const STATUS_THEMES = {
     actionText: "Manager / Ops duyệt: 5. Hàng đã nhập kho ➔",
     stepIndex: 4,
   },
+  STORED: {
+    gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
+    badgeBg: "rgba(52, 211, 153, 0.22)",
+    badgeBorder: "rgba(110, 231, 183, 0.45)",
+    badgeColor: "#a7f3d0",
+    btnGradient: "linear-gradient(135deg, #10b981, #059669)",
+    btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
+    icon: <CheckCircleOutlined />,
+    liveTag: "✅ 5. HÀNG ĐÃ NHẬP KHO (OPS ĐÃ DUYỆT)",
+    actionText: "Đã nhập kho",
+    stepIndex: 5,
+  },
   COMPLETED: {
+    gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
+    badgeBg: "rgba(52, 211, 153, 0.22)",
+    badgeBorder: "rgba(110, 231, 183, 0.45)",
+    badgeColor: "#a7f3d0",
+    btnGradient: "linear-gradient(135deg, #10b981, #059669)",
+    btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
+    icon: <CheckCircleOutlined />,
+    liveTag: "✅ 5. HÀNG ĐÃ NHẬP KHO (OPS ĐÃ DUYỆT)",
+    actionText: "Đã nhập kho",
+    stepIndex: 5,
+  },
+  STORED: {
     gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
     badgeBg: "rgba(52, 211, 153, 0.22)",
     badgeBorder: "rgba(110, 231, 183, 0.45)",
@@ -346,6 +376,7 @@ export default function ConfirmPurchaseModal({
       setPurchaseStatus(initialStatus);
       setLoadingWarehouses(true);
 
+      // Sale chỉ gọi được /api/warehouses/active ( /api/warehouses → 403 ).
       Promise.allSettled([
         getActiveWarehousesApi(),
         getWarehousesApi(),
@@ -359,28 +390,6 @@ export default function ConfirmPurchaseModal({
             whList = activeWhRes.value;
           } else if (whApiRes.status === "fulfilled" && Array.isArray(whApiRes.value) && whApiRes.value.length > 0) {
             whList = whApiRes.value;
-          } else if (adminWhRes.status === "fulfilled" && Array.isArray(adminWhRes.value) && adminWhRes.value.length > 0) {
-            whList = adminWhRes.value
-              .map((w) => ({
-                id: String(w.id || w.warehouseId || ""),
-                name: String(w.name || w.warehouseName || "Kho hàng"),
-                code: String(w.code || w.warehouseCode || ""),
-                address: String(w.address || w.location || ""),
-                warehouseType: String(w.warehouseType || w.type || ""),
-                isActive: w.isActive !== false,
-              }))
-              .filter((w) => Boolean(w.id));
-          }
-
-          // Fallback warehouse list if backend endpoints return empty array
-          if (whList.length === 0) {
-            whList = [
-              { id: "WH-CN-01", name: "Kho Quảng Châu (Trung Quốc)", code: "KHO-CN", address: "Guangzhou, China", warehouseType: "ORIGIN", isActive: true },
-              { id: "WH-KR-01", name: "Kho Seoul (Hàn Quốc)", code: "KHO-KR", address: "Seoul, Korea", warehouseType: "ORIGIN", isActive: true },
-              { id: "WH-JP-01", name: "Kho Tokyo (Nhật Bản)", code: "KHO-JP", address: "Tokyo, Japan", warehouseType: "ORIGIN", isActive: true },
-              { id: "WH-VN-01", name: "Kho Tổng Hà Nội (Việt Nam)", code: "KHO-VN-HN", address: "Hà Nội, Việt Nam", warehouseType: "DESTINATION", isActive: true },
-              { id: "WH-VN-02", name: "Kho HCM (Việt Nam)", code: "KHO-VN-HCM", address: "TP. Hồ Chí Minh, Việt Nam", warehouseType: "DESTINATION", isActive: true },
-            ];
           }
 
           const rList =
@@ -621,6 +630,15 @@ export default function ConfirmPurchaseModal({
         warehouseName: selectedWh?.name || null,
       };
 
+      // Sale chỉ đẩy tới WAITING_STORED. Bước nhập kho (STORED) do Ops gọi approve-store.
+      if (["WAITING_STORED", "STORED", "COMPLETED"].includes(purchaseStatus)) {
+        const msg =
+          "Bước nhập kho do Manager / Ops duyệt qua approve-store. Sale không thao tác tiếp tại đây.";
+        setErrorMsg(msg);
+        AuthNotify.warning("Chờ Ops duyệt nhập kho", msg);
+        return;
+      }
+
       let nextStatus = "PURCHASED";
       if (isStepOne) {
         nextStatus = "PURCHASED";
@@ -628,10 +646,8 @@ export default function ConfirmPurchaseModal({
         nextStatus = "ARRIVED_ORIGIN_WAREHOUSE";
       } else if (purchaseStatus === "ARRIVED_ORIGIN_WAREHOUSE") {
         nextStatus = "WAITING_STORED";
-      } else if (purchaseStatus === "WAITING_STORED") {
-        nextStatus = "COMPLETED";
       } else {
-        nextStatus = "COMPLETED";
+        nextStatus = "PURCHASED";
       }
 
       const resData = await confirmPurchaseApi(reqId, {
@@ -779,45 +795,45 @@ export default function ConfirmPurchaseModal({
               <span>KHO NHẬN HÀNG DỰ KIẾN (KHO NHẬP) <b style={{ color: "#ef4444" }}>*</b></span>
             </div>
 
-                <div style={{ background: "#f8fafc", padding: "16px 20px", borderRadius: "16px", border: "1.5px solid #e2e8f0" }}>
-                  <label style={{ display: "block", marginBottom: "8px", fontWeight: 750, fontSize: "13px", color: "#334155" }}>
-                    Chọn kho xử lý / nhận hàng khi NCC giao đến:
-                  </label>
+            <div style={{ background: "#f8fafc", padding: "16px 20px", borderRadius: "16px", border: "1.5px solid #e2e8f0" }}>
+              <label style={{ display: "block", marginBottom: "8px", fontWeight: 750, fontSize: "13px", color: "#334155" }}>
+                Chọn kho xử lý / nhận hàng khi NCC giao đến:
+              </label>
 
-                  <Select
-                    style={{ width: "100%" }}
-                    size="large"
-                    loading={loadingWarehouses}
-                    disabled={!isWarehouseEditable}
-                    placeholder="— Chọn kho nhận hàng dự kiến —"
-                    value={selectedWarehouseId || undefined}
-                    onChange={(val) => setSelectedWarehouseId(val)}
-                    options={filteredWarehouseOptions}
-                  />
+              <Select
+                style={{ width: "100%" }}
+                size="large"
+                loading={loadingWarehouses}
+                disabled={!isWarehouseEditable}
+                placeholder="— Chọn kho nhận hàng dự kiến —"
+                value={selectedWarehouseId || undefined}
+                onChange={(val) => setSelectedWarehouseId(val)}
+                options={filteredWarehouseOptions}
+              />
 
-                  {!isWarehouseEditable && (
-                    <span style={{ fontSize: "11.5px", color: "#64748b", fontStyle: "italic", marginTop: "6px", display: "block" }}>
-                      🔒 Kho nhận hàng đã được cố định từ Bước 1 (Đặt đơn hàng) và không thể thay đổi ở các bước sau.
+              {!isWarehouseEditable && (
+                <span style={{ fontSize: "11.5px", color: "#64748b", fontStyle: "italic", marginTop: "6px", display: "block" }}>
+                  🔒 Kho nhận hàng đã được cố định từ Bước 1 (Đặt đơn hàng) và không thể thay đổi ở các bước sau.
+                </span>
+              )}
+
+              {selectedWarehouseId && (
+                <div style={{ marginTop: "12px", fontSize: "12px", color: "#334155", display: "flex", alignItems: "flex-start", gap: "10px", background: "#eff6ff", padding: "10px 14px", borderRadius: "12px", border: "1px solid #bfdbfe" }}>
+                  <BankOutlined style={{ color: "#2563eb", fontSize: "16px", marginTop: "2px" }} />
+                  <div>
+                    <strong style={{ color: "#1e40af", display: "block" }}>
+                      Định hướng về: {warehouses.find((w) => String(w.id || w.warehouseId) === String(selectedWarehouseId))?.name || "Kho đã chọn"}
+                    </strong>
+                    <span>
+                      Nghiệp vụ Sale: Đơn sẽ ở trạng thái chờ/đang giao về kho này. Khi hàng thực tế tới kho, Bộ phận Vận hành (Ops) sẽ xác nhận kiểm kê và lưu kho chính thức.
                     </span>
-                  )}
-
-                  {selectedWarehouseId && (
-                    <div style={{ marginTop: "12px", fontSize: "12px", color: "#334155", display: "flex", alignItems: "flex-start", gap: "10px", background: "#eff6ff", padding: "10px 14px", borderRadius: "12px", border: "1px solid #bfdbfe" }}>
-                      <BankOutlined style={{ color: "#2563eb", fontSize: "16px", marginTop: "2px" }} />
-                      <div>
-                        <strong style={{ color: "#1e40af", display: "block" }}>
-                          Định hướng về: {warehouses.find((w) => String(w.id || w.warehouseId) === String(selectedWarehouseId))?.name || "Kho đã chọn"}
-                        </strong>
-                        <span>
-                          Nghiệp vụ Sale: Đơn sẽ ở trạng thái chờ/đang giao về kho này. Khi hàng thực tế tới kho, Bộ phận Vận hành (Ops) sẽ xác nhận kiểm kê và lưu kho chính thức.
-                        </span>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </section>
+              )}
+            </div>
+          </section>
 
-              <Divider style={{ margin: "16px 0" }} />
+          <Divider style={{ margin: "16px 0" }} />
 
 
 
@@ -931,21 +947,32 @@ export default function ConfirmPurchaseModal({
             size="large"
             icon={activeTheme.icon}
             loading={submitting}
-            disabled={submitting || ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)}
+            disabled={
+              submitting ||
+              ["WAITING_STORED", "COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(
+                purchaseStatus
+              )
+            }
             onClick={handleSubmit}
             className="confirm-purchase-submit-btn"
             style={{
-              background: ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)
+              background: ["WAITING_STORED", "COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(
+                purchaseStatus
+              )
                 ? "#94a3b8"
                 : activeTheme.btnGradient,
-              boxShadow: ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)
+              boxShadow: ["WAITING_STORED", "COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(
+                purchaseStatus
+              )
                 ? "none"
                 : activeTheme.btnShadow,
             }}
           >
-            {["COMPLETED", "STORED"].includes(purchaseStatus)
-              ? "Đã hoàn tất nhập kho"
-              : activeTheme.actionText}
+            {purchaseStatus === "WAITING_STORED"
+              ? "Chờ Manager / Ops duyệt nhập kho"
+              : ["COMPLETED", "STORED"].includes(purchaseStatus)
+                ? "Đã hoàn tất nhập kho"
+                : activeTheme.actionText}
           </Button>
         </div>
       </Modal>
