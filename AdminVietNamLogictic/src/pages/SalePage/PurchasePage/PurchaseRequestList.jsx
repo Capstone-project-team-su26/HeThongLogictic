@@ -439,13 +439,18 @@ export default function PurchaseRequestList() {
                 : undefined,
           });
 
-        setItems(
-          Array.isArray(data?.items)
-            ? data.items.map(
-                normalizePurchaseRequestTime
-              )
-            : []
-        );
+        const rawItems = Array.isArray(data?.items)
+          ? data.items.map(normalizePurchaseRequestTime)
+          : [];
+
+        // Sap xep uu tien theo ngay tao/ngay cap nhat moi nhat len dau danh sach
+        const sortedItems = [...rawItems].sort((a, b) => {
+          const timeA = new Date(a?.createdAt || a?.statusUpdatedAt || a?.quotationCreatedAt || 0).getTime();
+          const timeB = new Date(b?.createdAt || b?.statusUpdatedAt || b?.quotationCreatedAt || 0).getTime();
+          return timeB - timeA;
+        });
+
+        setItems(sortedItems);
 
         setTotalCount(
           Number(data?.totalCount) ||

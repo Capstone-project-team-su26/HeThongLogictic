@@ -1184,16 +1184,17 @@ export default function CreatePurchaseRequestQuotationModal({
 
                       <div className="converted-vnd-wrapper">
                         <label className="vnd-read-label">
-                          Đơn giá quy đổi (VNĐ)
+                          Đơn giá quy đổi (VNĐ) <b style={{ color: "#dc2626" }}>*</b>
                         </label>
 
                         <InputNumber
-                          value={current.unitPrice}
-                          readOnly
-                          disabled
+                          value={current.unitPrice || null}
+                          placeholder="Nhập đơn giá VNĐ"
+                          min={0}
                           controls={false}
                           formatter={moneyFormatter}
                           addonAfter="₫"
+                          onChange={(val) => handlePriceChange(current.itemId, val)}
                           className="converted-vnd-input"
                         />
                       </div>

@@ -29,8 +29,8 @@ import {
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 import { uploadImage } from "../../../../api/Upload/UploadImage";
 import { confirmPurchaseApi } from "../../../../api/SaleAPI/PurchaseRequestAPI/confirmPurchaseApi";
-import { getWarehousesApi } from "../../../../api/SaleAPI/ConsignmentAPI/warehouseService";
-import { getWarehouses, getShippingRoutes } from "../../../../api/AdminAPI/adminService";
+import { getActiveWarehousesApi, getWarehousesApi } from "../../../../api/SaleAPI/ConsignmentAPI/warehouseService";
+import { getShippingRoutes, getWarehouses } from "../../../../api/AdminAPI/adminService";
 import "./ConfirmPurchaseModal.css";
 
 const { TextArea } = Input;
@@ -197,6 +197,18 @@ const STATUS_THEMES = {
     actionText: "Xác nhận & Hoàn tất",
     stepIndex: 5,
   },
+  STORED: {
+    gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
+    badgeBg: "rgba(52, 211, 153, 0.22)",
+    badgeBorder: "rgba(110, 231, 183, 0.45)",
+    badgeColor: "#a7f3d0",
+    btnGradient: "linear-gradient(135deg, #10b981, #059669)",
+    btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
+    icon: <CheckCircleOutlined />,
+    liveTag: "✅ 5. HÀNG ĐÃ NHẬP KHO (OPS ĐÃ DUYỆT)",
+    actionText: "Xác nhận & Hoàn tất",
+    stepIndex: 5,
+  },
 };
 
 export default function ConfirmPurchaseModal({
@@ -243,6 +255,13 @@ export default function ConfirmPurchaseModal({
   const [warehouses, setWarehouses] = useState([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(false);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+
+  // Chỉ cho phép chọn / đổi kho ở Bước 1: Đặt đơn hàng (PAID, DEPOSIT_PAID, NEW, PENDING_REVIEW...).
+  // Từ các bước sau (PURCHASED, SELLER_SHIPPED, ARRIVED_ORIGIN_WAREHOUSE...), ô chọn kho sẽ làm mờ (disabled).
+  const isWarehouseEditable = useMemo(() => {
+    const currentStatus = String(purchaseStatus || "").toUpperCase();
+    return ["NEW", "PENDING_REVIEW", "PAID", "DEPOSIT_PAID", "QUOTED", "IN_REVIEW", "APPROVED"].includes(currentStatus);
+  }, [purchaseStatus]);
 
   // Helper to extract origin country from route
   const getRouteOriginCountry = useCallback((routeStr) => {
@@ -328,14 +347,17 @@ export default function ConfirmPurchaseModal({
       setLoadingWarehouses(true);
 
       Promise.allSettled([
+        getActiveWarehousesApi(),
         getWarehousesApi(),
         getWarehouses(),
         getShippingRoutes(),
       ])
-        .then(([whApiRes, adminWhRes, routeRes]) => {
+        .then(([activeWhRes, whApiRes, adminWhRes, routeRes]) => {
           let whList = [];
 
-          if (whApiRes.status === "fulfilled" && Array.isArray(whApiRes.value) && whApiRes.value.length > 0) {
+          if (activeWhRes.status === "fulfilled" && Array.isArray(activeWhRes.value) && activeWhRes.value.length > 0) {
+            whList = activeWhRes.value;
+          } else if (whApiRes.status === "fulfilled" && Array.isArray(whApiRes.value) && whApiRes.value.length > 0) {
             whList = whApiRes.value;
           } else if (adminWhRes.status === "fulfilled" && Array.isArray(adminWhRes.value) && adminWhRes.value.length > 0) {
             whList = adminWhRes.value
@@ -750,14 +772,12 @@ export default function ConfirmPurchaseModal({
             />
           )}
 
-          {/* Section 1: Chọn Kho Nhận Hàng / Nhập Kho (Chỉ hiển thị ở Bước 1: Đặt đơn hàng) */}
-          {["NEW", "PENDING_REVIEW", "PAID", "DEPOSIT_PAID", "IN_REVIEW", "APPROVED"].includes(purchaseStatus) && (
-            <>
-              <section className="confirm-purchase-section">
-                <div className="confirm-purchase-section__title">
-                  <BankOutlined />
-                  <span>KHO NHẬN HÀNG DỰ KIẾN (KHO NHẬP) <b style={{ color: "#ef4444" }}>*</b></span>
-                </div>
+          {/* Section 1: Chọn Kho Nhận Hàng / Nhập Kho (Hiển thị cho tất cả các bước) */}
+          <section className="confirm-purchase-section">
+            <div className="confirm-purchase-section__title">
+              <BankOutlined />
+              <span>KHO NHẬN HÀNG DỰ KIẾN (KHO NHẬP) <b style={{ color: "#ef4444" }}>*</b></span>
+            </div>
 
                 <div style={{ background: "#f8fafc", padding: "16px 20px", borderRadius: "16px", border: "1.5px solid #e2e8f0" }}>
                   <label style={{ display: "block", marginBottom: "8px", fontWeight: 750, fontSize: "13px", color: "#334155" }}>
@@ -768,11 +788,18 @@ export default function ConfirmPurchaseModal({
                     style={{ width: "100%" }}
                     size="large"
                     loading={loadingWarehouses}
+                    disabled={!isWarehouseEditable}
                     placeholder="— Chọn kho nhận hàng dự kiến —"
                     value={selectedWarehouseId || undefined}
                     onChange={(val) => setSelectedWarehouseId(val)}
                     options={filteredWarehouseOptions}
                   />
+
+                  {!isWarehouseEditable && (
+                    <span style={{ fontSize: "11.5px", color: "#64748b", fontStyle: "italic", marginTop: "6px", display: "block" }}>
+                      🔒 Kho nhận hàng đã được cố định từ Bước 1 (Đặt đơn hàng) và không thể thay đổi ở các bước sau.
+                    </span>
+                  )}
 
                   {selectedWarehouseId && (
                     <div style={{ marginTop: "12px", fontSize: "12px", color: "#334155", display: "flex", alignItems: "flex-start", gap: "10px", background: "#eff6ff", padding: "10px 14px", borderRadius: "12px", border: "1px solid #bfdbfe" }}>
@@ -791,8 +818,6 @@ export default function ConfirmPurchaseModal({
               </section>
 
               <Divider style={{ margin: "16px 0" }} />
-            </>
-          )}
 
 
 

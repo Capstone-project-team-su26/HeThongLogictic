@@ -78,7 +78,6 @@ export const getWarehousesApi = async (
     API_ENDPOINTS.warehouses.list,
     {
       params: removeEmptyParams(filters),
-      headers: getAuthHeaders(),
     }
   );
 
@@ -100,7 +99,6 @@ export const getActiveWarehousesApi = async (
     API_ENDPOINTS.warehouses.active,
     {
       params: removeEmptyParams(filters),
-      headers: getAuthHeaders(),
     }
   );
 
@@ -111,8 +109,7 @@ export const getActiveWarehousesApi = async (
     .filter(
       (warehouse) =>
         Boolean(warehouse.id) &&
-        Boolean(warehouse.name) &&
-        warehouse.isActive === true
+        Boolean(warehouse.name)
     );
 };
 

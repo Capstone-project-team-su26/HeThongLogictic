@@ -402,11 +402,12 @@ const normalizePurchaseRequestItem =
 const normalizePurchaseRequestDetail =
   (data = {}) => {
     return {
+      ...data,
       purchaseRequestId:
-        data?.purchaseRequestId ?? "",
+        data?.purchaseRequestId ?? data?.id ?? "",
 
       purchaseCode:
-        data?.purchaseCode ?? "",
+        data?.purchaseCode ?? data?.code ?? "",
 
       customerId:
         data?.customerId ?? "",
@@ -461,6 +462,18 @@ const normalizePurchaseRequestDetail =
 
       status:
         data?.status ?? "",
+
+      statusDisplayName:
+        data?.statusDisplayName ?? "",
+
+      warehouseId:
+        data?.warehouseId ?? null,
+
+      warehouseName:
+        data?.warehouseName ?? "",
+
+      proofImages:
+        Array.isArray(data?.proofImages) ? data.proofImages : [],
 
       reason:
         data?.reason ?? null,
