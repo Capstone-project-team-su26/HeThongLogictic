@@ -12,6 +12,7 @@ import {
 
 import {
   ArrowLeftOutlined,
+  BankOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -65,19 +66,19 @@ import "./PurchaseRequestDetail.css";
 
 const STATUS_CONFIG = {
   NEW: {
-    label: "Tạo đơn hàng",
+    label: "Đặt đơn hàng",
     className: "is-info",
   },
   PENDING_REVIEW: {
-    label: "Chờ duyệt",
+    label: "Đặt đơn hàng (Chờ duyệt)",
     className: "is-warning",
   },
   IN_REVIEW: {
-    label: "Đang duyệt",
+    label: "Đặt đơn hàng (Đang duyệt)",
     className: "is-info",
   },
   APPROVED: {
-    label: "Đã duyệt",
+    label: "Đặt đơn hàng (Đã duyệt)",
     className: "is-success",
   },
   REJECTED: {
@@ -85,47 +86,55 @@ const STATUS_CONFIG = {
     className: "is-danger",
   },
   QUOTATION_SENT: {
-    label: "Đã gửi báo giá",
+    label: "Đặt đơn hàng (Đã gửi báo giá)",
     className: "is-info",
   },
   QUOTED: {
-    label: "Đã báo giá",
+    label: "Đặt đơn hàng (Đã báo giá)",
     className: "is-success",
   },
   WAITING_PAYMENT: {
-    label: "Chờ thanh toán",
+    label: "Đặt đơn hàng (Chờ thanh toán)",
     className: "is-warning",
   },
   WAITING_DEPOSIT: {
-    label: "Chờ đặt cọc",
+    label: "Đặt đơn hàng (Chờ cọc)",
     className: "is-warning",
   },
   DEPOSIT_PAID: {
-    label: "Đã đặt cọc",
+    label: "Đặt đơn hàng (Đã cọc)",
     className: "is-success",
   },
   PAID: {
-    label: "Đã thanh toán",
+    label: "Đặt đơn hàng (Đã thanh toán)",
     className: "is-success",
   },
   PURCHASED: {
-    label: "Đã mua hàng",
-    className: "is-success",
+    label: "Hàng đang đặt về",
+    className: "is-info",
   },
   SELLER_SHIPPED: {
-    label: "NCC đã phát hàng",
+    label: "Hàng đang đặt về (NCC phát)",
     className: "is-info",
   },
   ARRIVED_ORIGIN_WAREHOUSE: {
-    label: "Đã về kho nước ngoài",
+    label: "Hàng đã về kho",
     className: "is-info",
+  },
+  WAITING_STORED: {
+    label: "Hàng chờ nhập kho",
+    className: "is-warning",
+  },
+  STORED: {
+    label: "Hàng đã nhập kho",
+    className: "is-success",
   },
   PROCESSING: {
     label: "Đang xử lý",
     className: "is-info",
   },
   COMPLETED: {
-    label: "Hoàn thành",
+    label: "Hàng đã nhập kho",
     className: "is-success",
   },
   CANCELLED: {
@@ -1867,18 +1876,22 @@ export default function PurchaseRequestDetail() {
     ]);
 
   const canConfirmPurchase = useMemo(() => {
+    if (!detail) return false;
     const currentStatus = normalizeUpperText(detail?.status);
-    const COMPLETED_OR_PURCHASED_STATUSES = new Set([
+
+    // Nút "Xác nhận mua hộ" chỉ hiển thị ở các bước Sale xử lý:
+    // Đã cọc/thanh toán -> Hàng đang đặt về -> Hàng đã về kho.
+    // Khi sang bước WAITING_STORED (Hàng chờ nhập kho), nút ẩn hoàn toàn (chỉ Manager / Ops mới có quyền duyệt nhập kho).
+    const ALLOWED_PURCHASE_STATUSES = new Set([
+      "PAID",
+      "DEPOSIT_PAID",
       "PURCHASED",
       "SELLER_SHIPPED",
       "ARRIVED_ORIGIN_WAREHOUSE",
-      "COMPLETED",
-      "CANCELLED",
-      "REJECTED",
     ]);
 
-    return !COMPLETED_OR_PURCHASED_STATUSES.has(currentStatus);
-  }, [detail?.status]);
+    return ALLOWED_PURCHASE_STATUSES.has(currentStatus);
+  }, [detail]);
 
   const handleQuotationCreated =
     useCallback(async () => {
@@ -2195,6 +2208,21 @@ export default function PurchaseRequestDetail() {
               <strong>
                 {detail
                   ?.receiverName ||
+                  "—"}
+              </strong>
+            </div>
+          </article>
+
+          <article>
+            <BankOutlined />
+            <div>
+              <span>
+                Kho nhận dự kiến
+              </span>
+              <strong>
+                {detail?.warehouseName ||
+                  detail?.destinationWarehouseName ||
+                  detail?.warehouseCode ||
                   "—"}
               </strong>
             </div>
