@@ -163,6 +163,12 @@ const MENU_BY_ROLE = {
           path: "/admin/service-pricings",
         },
         {
+          key: "admin-exchange-rates",
+          label: "Bảng giá tiền tệ",
+          icon: <CalculatorOutlined />,
+          path: "/admin/exchange-rates",
+        },
+        {
           key: "admin-pricing-rules",
           label: "Quy tắc phụ phí",
           icon: <SettingOutlined />,
@@ -200,9 +206,15 @@ const MENU_BY_ROLE = {
     },
     {
       key: "operations-wro",
-      label: "Duyệt WRO",
+      label: "Phiếu xuất kho",
       icon: <CheckSquareOutlined />,
       path: "/operations-manager/wro",
+    },
+    {
+      key: "operations-purchase-store",
+      label: "Duyệt nhập kho mua hộ",
+      icon: <ShoppingCartOutlined />,
+      path: "/operations-manager/purchase-store",
     },
     {
       key: "operations-shipments",

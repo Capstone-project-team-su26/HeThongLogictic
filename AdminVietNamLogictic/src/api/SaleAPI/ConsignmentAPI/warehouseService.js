@@ -106,13 +106,14 @@ export const getActiveWarehousesApi = async (
 
   const data = getResponseData(response);
 
+  // /active đã lọc kho ngừng hoạt động; field có thể không có isActive.
   return getArrayItems(data)
     .map(normalizeWarehouse)
     .filter(
       (warehouse) =>
         Boolean(warehouse.id) &&
         Boolean(warehouse.name) &&
-        warehouse.isActive === true
+        warehouse.isActive !== false
     );
 };
 

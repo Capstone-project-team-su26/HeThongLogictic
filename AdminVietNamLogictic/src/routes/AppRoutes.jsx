@@ -37,6 +37,7 @@ import WarehouseLocationsPage from "../pages/AdminPage/WarehouseLocationsPage";
 import {
   AdditionalServiceFeesAdminPage,
   CarriersAdminPage,
+  ExchangeRatesAdminPage,
   PackageConfigurationsAdminPage,
   PricingRulesAdminPage,
   ProductTypesAdminPage,
@@ -55,6 +56,7 @@ import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
 import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
 import OperationsWroPage from "../pages/OperationsPage/OperationsWroPage";
 import OperationsShipmentsPage from "../pages/OperationsPage/OperationsShipmentsPage";
+import OperationsPurchaseStorePage from "../pages/OperationsPage/OperationsPurchaseStorePage";
 
 /* ================= ROLE CONFIG ================= */
 
@@ -205,6 +207,7 @@ export default function AppRoutes() {
         />
         <Route path="service-pricings" element={<ServicePricingsAdminPage />} />
         <Route path="pricing-rules" element={<PricingRulesAdminPage />} />
+        <Route path="exchange-rates" element={<ExchangeRatesAdminPage />} />
         <Route path="restricted-items" element={<RestrictedItemsAdminPage />} />
         <Route path="product-types" element={<ProductTypesAdminPage />} />
         <Route path="units-of-measure" element={<UnitsOfMeasureAdminPage />} />
@@ -292,6 +295,7 @@ export default function AppRoutes() {
         <Route path="wro" element={<OperationsWroPage />} />
         <Route path="shipments" element={<OperationsShipmentsPage />} />
         <Route path="parcels" element={<OperationsParcelsPage />} />
+        <Route path="purchase-store" element={<OperationsPurchaseStorePage />} />
         <Route path="releases" element={<Navigate to="/operations-manager/wro" replace />} />
       </Route>
 

@@ -89,4 +89,42 @@ export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
   }
 };
 
+/**
+ * Ops/Manager duyệt kiểm kê nhập kho.
+ * POST /api/purchase-requests/{requestId}/approve-store
+ * Chỉ khi đơn ở WAITING_STORED hoặc ARRIVED_ORIGIN_WAREHOUSE → STORED.
+ */
+export const approveStorePurchaseApi = async (purchaseRequestId, payload = {}) => {
+  if (!purchaseRequestId) {
+    throw new Error("Không tìm thấy mã ID đơn mua hộ (purchaseRequestId).");
+  }
+
+  const normalizedId = String(purchaseRequestId).trim();
+  const requestBody = {
+    note: String(payload?.note || "").trim() || null,
+    warehouseId: payload?.warehouseId ? String(payload.warehouseId).trim() : null,
+  };
+
+  const endpointUrl =
+    typeof API_ENDPOINTS?.purchaseRequests?.approveStore === "function"
+      ? API_ENDPOINTS.purchaseRequests.approveStore(normalizedId)
+      : `/api/purchase-requests/${encodeURIComponent(normalizedId)}/approve-store`;
+
+  try {
+    const response = await axiosInstance.post(endpointUrl, requestBody, {
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+    });
+    return response?.data?.data ?? response?.data ?? null;
+  } catch (error) {
+    console.error("APPROVE STORE PURCHASE API ERROR:", error);
+    throw new Error(
+      getApiErrorMessage(error, "Không thể duyệt nhập kho đơn mua hộ."),
+      { cause: error }
+    );
+  }
+};
+
 export default confirmPurchaseApi;

@@ -598,3 +598,74 @@ export const deleteWarehouseLayoutItem = async (warehouseId, layoutId, options =
   return getAdminApiData(response);
 };
 
+/* ==================== EXCHANGE RATES (bảng giá tiền tệ) ==================== */
+const normalizeExchangeRateRecord = (item = {}) => {
+  const currencyCode = normalizeText(item?.currencyCode ?? item?.currency).toUpperCase();
+  return {
+    id: item?.id ?? item?.exchangeRateId ?? "",
+    currencyCode,
+    currencyName: item?.currencyName ?? "",
+    rateToVnd: Number(item?.rateToVnd ?? item?.exchangeRate ?? 0) || 0,
+    isActive: Boolean(item?.isActive ?? true),
+    note: item?.note ?? "",
+    createdAt: item?.createdAt ?? null,
+    updatedAt: item?.updatedAt ?? null,
+  };
+};
+
+export const getExchangeRates = async (options = {}) => {
+  const activeOnly = options.activeOnly === true;
+  const response = await axiosInstance.get(
+    "/api/exchange-rates",
+    requestConfig(options, { params: { activeOnly } })
+  );
+  return getAdminApiList(response).map(normalizeExchangeRateRecord);
+};
+
+export const getExchangeRateDetail = async (rateId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/exchange-rates/${requireId(rateId, "mã tỷ giá")}`,
+    requestConfig(options)
+  );
+  return normalizeExchangeRateRecord(getAdminApiData(response));
+};
+
+export const createExchangeRate = async (payload, options = {}) => {
+  const body = {
+    currencyCode: normalizeText(payload?.currencyCode).toUpperCase(),
+    currencyName: normalizeText(payload?.currencyName) || undefined,
+    rateToVnd: Number(payload?.rateToVnd) || 0,
+    isActive: payload?.isActive !== false,
+    note: normalizeText(payload?.note) || undefined,
+  };
+  const response = await axiosInstance.post(
+    "/api/exchange-rates",
+    body,
+    requestConfig(options)
+  );
+  return normalizeExchangeRateRecord(getAdminApiData(response));
+};
+
+export const updateExchangeRate = async (rateId, payload, options = {}) => {
+  const body = {
+    currencyName: normalizeText(payload?.currencyName) || undefined,
+    rateToVnd: Number(payload?.rateToVnd) || 0,
+    isActive: payload?.isActive !== false,
+    note: normalizeText(payload?.note) || undefined,
+  };
+  const response = await axiosInstance.put(
+    `/api/exchange-rates/${requireId(rateId, "mã tỷ giá")}`,
+    body,
+    requestConfig(options)
+  );
+  return normalizeExchangeRateRecord(getAdminApiData(response));
+};
+
+export const deleteExchangeRate = async (rateId, options = {}) => {
+  const response = await axiosInstance.delete(
+    `/api/exchange-rates/${requireId(rateId, "mã tỷ giá")}`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+

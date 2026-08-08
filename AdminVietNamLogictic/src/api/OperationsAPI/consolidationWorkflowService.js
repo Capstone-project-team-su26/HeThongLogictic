@@ -1006,6 +1006,7 @@ function mapWro(row) {
     exportReason: text(row?.exportReason || row?.ExportReason),
     vehicleNumber: text(row?.vehicleNumber || row?.VehicleNumber),
     trackingNumber: text(row?.trackingNumber || row?.TrackingNumber),
+    exportBarcode: text(row?.exportBarcode || row?.ExportBarcode),
     customsDocumentUrls: Array.isArray(row?.customsDocumentUrls)
       ? row.customsDocumentUrls.filter(Boolean)
       : Array.isArray(row?.CustomsDocumentUrls)
