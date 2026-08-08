@@ -641,7 +641,7 @@ export default function PurchaseRequestList() {
   };
 
   return (
-    <main className="purchase-list-page">
+    <main className="vcl-purchase-list-scope purchase-list-page">
       <div className="purchase-list-shell">
         <section className="purchase-list-header">
           <div>
@@ -1017,21 +1017,21 @@ export default function PurchaseRequestList() {
                       </div>
                     </div>
 
-                    <div className="card-dates-timeline-bar">
-                      <div className="timeline-bar-label">
+                    <div className="purchase-card-dates-timeline-bar">
+                      <div className="purchase-timeline-bar-label">
                         ⏱️ Tiến trình:
                       </div>
 
-                      <div className="timeline-chips-row">
+                      <div className="purchase-timeline-chips-row">
                         <div
-                          className="date-pill"
+                          className="purchase-date-pill"
                           title={formatDateUtcTitle(
                             item?.createdAtUtc || item?.createdAt
                           )}
                         >
-                          <span className="pill-dot is-created" />
-                          <span className="pill-title">Tạo đơn:</span>
-                          <strong className="pill-time">
+                          <span className="purchase-pill-dot is-created" />
+                          <span className="purchase-pill-title">Tạo đơn:</span>
+                          <strong className="purchase-pill-time">
                             {formatDateTime(
                               item?.createdAtUtc || item?.createdAt
                             )}
@@ -1040,14 +1040,14 @@ export default function PurchaseRequestList() {
 
                         {item?.quotationCreatedAtUtc && (
                           <div
-                            className="date-pill"
+                            className="purchase-date-pill"
                             title={formatDateUtcTitle(
                               item?.quotationCreatedAtUtc
                             )}
                           >
-                            <span className="pill-dot is-quoted" />
-                            <span className="pill-title">Báo giá:</span>
-                            <strong className="pill-time">
+                            <span className="purchase-pill-dot is-quoted" />
+                            <span className="purchase-pill-title">Báo giá:</span>
+                            <strong className="purchase-pill-time">
                               {formatDateTime(item?.quotationCreatedAtUtc)}
                             </strong>
                           </div>
@@ -1057,14 +1057,14 @@ export default function PurchaseRequestList() {
                           item?.statusUpdatedAtUtc &&
                           item?.statusUpdatedAtUtc !== item?.createdAtUtc && (
                             <div
-                              className="date-pill"
+                              className="purchase-date-pill"
                               title={formatDateUtcTitle(
                                 item?.statusUpdatedAtUtc
                               )}
                             >
-                              <span className="pill-dot is-updated" />
-                              <span className="pill-title">Cập nhật:</span>
-                              <strong className="pill-time">
+                              <span className="purchase-pill-dot is-updated" />
+                              <span className="purchase-pill-title">Cập nhật:</span>
+                              <strong className="purchase-pill-time">
                                 {formatDateTime(item?.statusUpdatedAtUtc)}
                               </strong>
                             </div>

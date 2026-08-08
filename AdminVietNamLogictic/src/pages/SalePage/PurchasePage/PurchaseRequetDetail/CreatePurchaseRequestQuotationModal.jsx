@@ -1148,71 +1148,80 @@ export default function CreatePurchaseRequestQuotationModal({
                           ?.productName ||
                           "Sản phẩm"}
                       </h4>
-
-                      <div>
-                        <Tag>
-                          Số lượng:{" "}
-                          {formatNumber(
-                            current.quantity
-                          )}
-                        </Tag>
-                      </div>
                     </div>
 
                     <div className="purchase-quotation-item__price">
-                      <label className="foreign-price-label">
-                        Nhập giá ngoại tệ ({routeCurrencyInfo.code})
-                        <b>*</b>
-                      </label>
+                      <div className="pricing-card-box">
+                        <div className="pricing-field-group">
+                          <div className="pricing-field-header">
+                            <label className="pricing-field-label">
+                              Giá ngoại tệ ({routeCurrencyInfo.code}) <b className="required-star">*</b>
+                            </label>
+                            <span className="currency-pill-badge">
+                              {routeCurrencyInfo.flag} {routeCurrencyInfo.code} • {routeCurrencyInfo.name}
+                            </span>
+                          </div>
 
-                      <div className="foreign-input-group">
-                        <span className="route-currency-tag">
-                          {routeCurrencyInfo.flag} {routeCurrencyInfo.code} ({routeCurrencyInfo.name})
-                        </span>
-
-                        <InputNumber
-                          value={currentForeign.amount ?? null}
-                          placeholder={`Nhập số tiền (${routeCurrencyInfo.code})`}
-                          min={0}
-                          controls={false}
-                          onChange={(amount) => {
-                            handleConvertForeignPrice(current.itemId, routeCurrencyInfo.code, amount);
-                          }}
-                          className="foreign-amount-input"
-                        />
-                      </div>
-
-                      <div className="converted-vnd-wrapper">
-                        <label className="vnd-read-label">
-                          Đơn giá quy đổi (VNĐ) <b style={{ color: "#dc2626" }}>*</b>
-                        </label>
-
-                        <InputNumber
-                          value={current.unitPrice || null}
-                          placeholder="Nhập đơn giá VNĐ"
-                          min={0}
-                          controls={false}
-                          formatter={moneyFormatter}
-                          addonAfter="₫"
-                          onChange={(val) => handlePriceChange(current.itemId, val)}
-                          className="converted-vnd-input"
-                        />
-                      </div>
-
-                      {currentForeign.convertedVnd > 0 && currentForeign.amount > 0 ? (
-                        <div className="foreign-result-note">
-                          💡 Quy đổi: {formatNumber(currentForeign.amount)} {currentForeign.currency} × {formatNumber(currentForeign.rate)} ₫ = <strong>{formatCurrency(currentForeign.convertedVnd)}</strong>
+                          <InputNumber
+                            value={currentForeign.amount ?? null}
+                            placeholder={`Nhập số tiền (${routeCurrencyInfo.code})`}
+                            min={0}
+                            precision={0}
+                            controls={false}
+                            addonAfter={routeCurrencyInfo.code}
+                            formatter={(val) => (val ? `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "")}
+                            parser={(val) => (val ? val.replace(/[^0-9]/g, "") : "")}
+                            onKeyDown={(e) => {
+                              if (
+                                !/[0-9]/.test(e.key) &&
+                                !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key) &&
+                                !e.ctrlKey &&
+                                !e.metaKey
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onChange={(amount) => {
+                              handleConvertForeignPrice(current.itemId, routeCurrencyInfo.code, amount);
+                            }}
+                            className="premium-price-input"
+                          />
                         </div>
-                      ) : null}
 
-                      <small className="line-total-display">
-                        Thành tiền ({current.quantity} sản phẩm):{" "}
-                        <strong>
-                          {formatCurrency(
-                            current.lineTotal
-                          )}
-                        </strong>
-                      </small>
+                        <div className="pricing-field-group">
+                          <div className="pricing-field-header">
+                            <label className="pricing-field-label">
+                              Đơn giá quy đổi (VNĐ)
+                            </label>
+                            {currentForeign.convertedVnd > 0 && currentForeign.amount > 0 && (
+                              <span className="rate-info-chip">
+                                💡 1 {currentForeign.currency} = {formatNumber(currentForeign.rate)} ₫
+                              </span>
+                            )}
+                          </div>
+
+                          <InputNumber
+                            value={current.unitPrice || null}
+                            placeholder="Tự động quy đổi từ giá ngoại tệ"
+                            min={0}
+                            disabled
+                            controls={false}
+                            formatter={moneyFormatter}
+                            addonAfter="₫"
+                            className="premium-price-input is-vnd"
+                          />
+                        </div>
+
+                        <div className="pricing-card-footer">
+                          <span className="line-item-qty">
+                            Số lượng: <strong>{formatNumber(current.quantity)}</strong> sản phẩm
+                          </span>
+
+                          <span className="line-item-total">
+                            Thành tiền: <strong>{formatCurrency(current.lineTotal || 0)}</strong>
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </article>
                 );
@@ -1243,7 +1252,6 @@ export default function CreatePurchaseRequestQuotationModal({
               <label>
                 <DollarOutlined />
                 Phí mua hộ
-                <b className="required-star">*</b>
               </label>
 
               <InputNumber
@@ -1282,7 +1290,6 @@ export default function CreatePurchaseRequestQuotationModal({
               <label>
                 <TruckOutlined />
                 Phí vận chuyển
-                <b className="required-star">*</b>
               </label>
 
               <InputNumber

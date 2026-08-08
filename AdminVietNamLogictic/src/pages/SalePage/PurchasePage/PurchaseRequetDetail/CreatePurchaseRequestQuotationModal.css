@@ -392,13 +392,13 @@
 
 .purchase-quotation-item {
   min-width: 0;
-  padding: 14px 18px;
+  padding: 16px 20px;
 
   display: grid;
   grid-template-columns:
-    34px 80px minmax(0, 1fr) minmax(240px, 300px);
+    34px 80px minmax(200px, 1fr) minmax(360px, 460px);
   align-items: center;
-  gap: 16px;
+  gap: 18px;
 
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -1223,68 +1223,116 @@
   font-weight: 800;
 }
 
-.foreign-price-label {
+.pricing-card-box {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pricing-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pricing-field-header {
   display: flex;
   align-items: center;
-  gap: 3px;
-  margin-bottom: 6px;
+  justify-content: space-between;
+  gap: 8px;
+}
 
+.pricing-field-label {
   color: #334155;
   font-size: 13px;
-  line-height: 1.4;
-  font-weight: 850;
+  font-weight: 800;
 }
 
-.foreign-price-label b {
-  display: inline-block;
-  margin-left: 2px;
-  color: #dc2626;
-  font-size: 14px;
-  font-weight: 900;
-  line-height: 1;
+.currency-pill-badge {
+  padding: 3px 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.foreign-input-group {
+.rate-info-chip {
+  padding: 2px 8px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.premium-price-input {
+  width: 100%;
+}
+
+.premium-price-input .ant-input-number-group-addon {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  border-color: #cbd5e1 !important;
+  border-top-right-radius: 10px !important;
+  border-bottom-right-radius: 10px !important;
+  padding: 0 14px !important;
+  font-size: 13.5px !important;
+}
+
+.premium-price-input.is-vnd .ant-input-number-group-addon {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  font-weight: 900 !important;
+}
+
+.premium-price-input .ant-input-number {
+  border-top-left-radius: 10px !important;
+  border-bottom-left-radius: 10px !important;
+  border-color: #cbd5e1 !important;
+}
+
+.premium-price-input:focus-within .ant-input-number {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+}
+
+.premium-price-input .ant-input-number-input {
+  height: 40px !important;
+  color: #0f172a !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.pricing-card-footer {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #475569;
 }
 
-.route-currency-tag {
-  height: 42px;
-  padding: 0 14px;
-  flex-shrink: 0;
-
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
+.line-item-qty strong {
   color: #0f172a;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-
-  font-size: 13.5px;
   font-weight: 800;
-  white-space: nowrap;
 }
 
-.foreign-amount-input {
-  flex: 1;
-  border-radius: 10px !important;
-  border-color: #2563eb !important;
-}
-
-.foreign-amount-input:focus-within {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
-}
-
-.foreign-amount-input .ant-input-number-input {
-  height: 38px !important;
-  color: #0f172a;
-  font-size: 14.5px;
-  font-weight: 800;
+.line-item-total strong {
+  color: #2563eb;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .converted-vnd-wrapper {

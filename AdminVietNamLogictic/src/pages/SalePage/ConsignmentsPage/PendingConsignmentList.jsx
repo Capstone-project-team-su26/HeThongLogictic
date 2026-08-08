@@ -1306,11 +1306,6 @@ export default function PendingConsignmentList() {
                               Mã đơn: {getOrderCode(item)}
                             </div>
 
-                            <div className="receiver-phone">
-                              <span>Số điện thoại:</span>{" "}
-                              <strong>{item.receiverPhone || "-"}</strong>
-                            </div>
-
                             <div className="receiver-address">
                               <span>📍 Địa chỉ:</span>{" "}
                               <strong>{item.receiverAddress || "-"}</strong>
@@ -1319,22 +1314,6 @@ export default function PendingConsignmentList() {
                         </div>
 
                         <div className="body-right">
-                          <span
-                            className={`status-badge-center ${statusInfo.className}`}
-                            title={`Trạng thái API: ${statusInfo.code}`}
-                          >
-                            {statusInfo.label}
-                          </span>
-
-                          <div className="shipping-type">
-                            <span>LOẠI VẬN CHUYỂN</span>
-
-                            <strong>
-                              {getConsignmentTypeLabel(
-                                item.consignmentType
-                              )}
-                            </strong>
-                          </div>
 
                           <div className="specs-list">
                             <span>
