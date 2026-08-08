@@ -23,7 +23,6 @@ import PendingConsignmentListHistory from "../pages/SalePage/HistorySalePage/His
 import PendingPurchaseRequestListHistory from "../pages/SalePage/HistorySalePage/HistoryPurchasePage/PendingPurchaseRequestListHistory";
 import OrderPaymentHistory from "../pages/SalePage/HistorySalePage/HistoryOrderPage/OrderDetailhisstory/OrderPaymentHistory";
 import PurchaseRequestList from "../pages/SalePage/PurchasePage/PurchaseRequestList";
-import WarehouseReceiptCreate from "../pages/SalePage/HistorySalePage/HistoryOrderPage/WarehouseReceipt/WarehouseReceiptCreate";
 import PurchaseRequestDetail from "../pages/SalePage/PurchasePage/PurchaseRequetDetail/PurchaseRequestDetail";
 import ConsignmentBuyOrder from "../pages/SalePage/CreateRequestPage/CreateRequestBuyCuspage/ConsignmentBuyOrder";
 import ConsignmentOrder from "../pages/SalePage/CreateRequestPage/CreateRequestOrderCusPage/ConsignmentOrder";
@@ -275,10 +274,6 @@ export default function AppRoutes() {
         />
 
         <Route path="customer-service" element={<CustomerServiceChat />} />
-        <Route
-  path="/sale/warehouse-receipts/create/:orderId"
-  element={<WarehouseReceiptCreate />}
-/>
       </Route>
 
       {/* ========== OPERATIONS MANAGER ========== */}

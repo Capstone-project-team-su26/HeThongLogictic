@@ -866,27 +866,6 @@ export default function OrderPaymentHistory({
                       >
                         Xem chi tiết
                       </Button>
-
-                      {isPaymentSuccess && (
-                        <Button
-                          type="primary"
-                          icon={<BankOutlined />}
-                          onClick={() =>
-                            navigate(
-                              `/sale/warehouse-receipts/create/${orderId}`,
-                              {
-                                state: {
-                                  orderId,
-                                  paymentHistory: history,
-                                  payment,
-                                },
-                              }
-                            )
-                          }
-                        >
-                          Xuất phiếu nhập kho
-                        </Button>
-                      )}
                     </div>
                   </article>
                 );
