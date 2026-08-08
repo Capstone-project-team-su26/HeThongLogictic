@@ -23,11 +23,14 @@ import {
   CarOutlined,
   HomeOutlined,
   ArrowRightOutlined,
+  BankOutlined,
   DollarOutlined,
 } from "@ant-design/icons";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 import { uploadImage } from "../../../../api/Upload/UploadImage";
 import { confirmPurchaseApi } from "../../../../api/SaleAPI/PurchaseRequestAPI/confirmPurchaseApi";
+import { getWarehousesApi } from "../../../../api/SaleAPI/ConsignmentAPI/warehouseService";
+import { getWarehouses, getShippingRoutes } from "../../../../api/AdminAPI/adminService";
 import "./ConfirmPurchaseModal.css";
 
 const { TextArea } = Input;
@@ -37,45 +40,51 @@ const MAX_IMAGES = 3;
 const PURCHASE_STATUS_OPTIONS = [
   {
     value: "NEW",
-    label: "1. Tạo đơn hàng",
+    label: "1. Đặt đơn hàng",
     tagColor: "blue",
-    description: "Đơn hàng mua hộ vừa được khởi tạo trên hệ thống.",
+    description: "Đơn hàng mua hộ được khởi tạo và gửi yêu cầu trên hệ thống.",
   },
   {
     value: "PENDING_REVIEW",
-    label: "2. Chờ xác nhận",
+    label: "1. Đặt đơn hàng (Chờ duyệt)",
     tagColor: "orange",
-    description: "Nhân viên đang kiểm tra & đàm phán mua hàng.",
+    description: "Nhân viên đang kiểm tra thông tin và đàm phán với Nhà cung cấp.",
   },
   {
     value: "PAID",
-    label: "3. Đã thanh toán",
+    label: "1. Đặt đơn hàng (Đã thanh toán)",
     tagColor: "cyan",
-    description: "Khách hàng đã cọc/thanh toán tiền đơn hàng.",
+    description: "Khách hàng đã đặt cọc / thanh toán tiền đơn hàng.",
   },
   {
     value: "PURCHASED",
-    label: "4. Xác nhận mua hàng",
+    label: "2. Hàng đang đặt về",
     tagColor: "green",
-    description: "Đã hoàn tất thanh toán và đặt hàng với Nhà cung cấp.",
+    description: "Đã hoàn tất thanh toán & đặt hàng với NCC, đang vận chuyển về kho.",
   },
   {
     value: "SELLER_SHIPPED",
-    label: "NCC đã phát hàng",
+    label: "2. Hàng đang đặt về (NCC phát hàng)",
     tagColor: "processing",
-    description: "Nhà cung cấp đã bàn giao đơn cho bên vận chuyển nội địa.",
+    description: "Nhà cung cấp đã bàn giao hàng cho bên vận chuyển nội địa.",
   },
   {
     value: "ARRIVED_ORIGIN_WAREHOUSE",
-    label: "Đã về kho nước ngoài",
+    label: "3. Hàng đã về kho",
     tagColor: "teal",
-    description: "Hàng đã về tới kho thu gom ban đầu (Trung Quốc, Hàn Quốc...).",
+    description: "Hàng đã về tới kho nhận. Bấm chuyển sang trạng thái chờ nhập kho.",
+  },
+  {
+    value: "WAITING_STORED",
+    label: "4. Hàng chờ nhập kho",
+    tagColor: "gold",
+    description: "Hàng đang chờ bộ phận Vận hành (Ops) kiểm kê & duyệt nhập kho.",
   },
   {
     value: "COMPLETED",
-    label: "Hoàn tất nghiệp vụ",
+    label: "5. Hàng đã nhập kho",
     tagColor: "purple",
-    description: "Hoàn tất toàn bộ chu trình xử lý đơn hàng mua hộ.",
+    description: "Bộ phận Ops đã duyệt kiểm kê, xác nhận hàng đã nhập kho & lưu kho chính thức.",
   },
 ];
 
@@ -88,8 +97,8 @@ const STATUS_THEMES = {
     btnGradient: "linear-gradient(135deg, #6366f1, #4f46e5)",
     btnShadow: "0 8px 25px rgba(99, 102, 241, 0.45)",
     icon: <FileTextOutlined />,
-    liveTag: "✨ 1. TẠO ĐƠN HÀNG (REALTIME)",
-    actionText: "Chuyển bước 2: Chờ xác nhận ➔",
+    liveTag: "📦 1. ĐẶT ĐƠN HÀNG",
+    actionText: "Chuyển bước 2: Hàng đang đặt về ➔",
     stepIndex: 1,
   },
   PENDING_REVIEW: {
@@ -100,9 +109,9 @@ const STATUS_THEMES = {
     btnGradient: "linear-gradient(135deg, #f59e0b, #d97706)",
     btnShadow: "0 8px 25px rgba(245, 158, 11, 0.45)",
     icon: <SyncOutlined spin />,
-    liveTag: "🟠 2. CHỜ XÁC NHẬN (REALTIME)",
-    actionText: "Chuyển bước 3: Đã thanh toán ➔",
-    stepIndex: 2,
+    liveTag: "⏳ 1. ĐẶT ĐƠN HÀNG (CHỜ DUYỆT)",
+    actionText: "Chuyển bước 2: Hàng đang đặt về ➔",
+    stepIndex: 1,
   },
   PAID: {
     gradient: "linear-gradient(135deg, #041f2a 0%, #0e7490 45%, #0284c7 100%)",
@@ -112,9 +121,21 @@ const STATUS_THEMES = {
     btnGradient: "linear-gradient(135deg, #0ea5e9, #0284c7)",
     btnShadow: "0 8px 25px rgba(14, 165, 233, 0.45)",
     icon: <DollarOutlined />,
-    liveTag: "🩵 3. ĐÃ THANH TOÁN (REALTIME)",
-    actionText: "Chuyển bước 4: Xác nhận mua hàng ➔",
-    stepIndex: 3,
+    liveTag: "💳 1. ĐẶT ĐƠN HÀNG (ĐÃ THANH TOÁN)",
+    actionText: "Chuyển bước 2: Hàng đang đặt về ➔",
+    stepIndex: 1,
+  },
+  DEPOSIT_PAID: {
+    gradient: "linear-gradient(135deg, #041f2a 0%, #0e7490 45%, #0284c7 100%)",
+    badgeBg: "rgba(56, 189, 248, 0.22)",
+    badgeBorder: "rgba(125, 211, 252, 0.45)",
+    badgeColor: "#bae6fd",
+    btnGradient: "linear-gradient(135deg, #0ea5e9, #0284c7)",
+    btnShadow: "0 8px 25px rgba(14, 165, 233, 0.45)",
+    icon: <DollarOutlined />,
+    liveTag: "💵 1. ĐẶT ĐƠN HÀNG (ĐÃ ĐẶT CỌC)",
+    actionText: "Chuyển bước 2: Hàng đang đặt về ➔",
+    stepIndex: 1,
   },
   PURCHASED: {
     gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
@@ -123,10 +144,10 @@ const STATUS_THEMES = {
     badgeColor: "#a7f3d0",
     btnGradient: "linear-gradient(135deg, #10b981, #059669)",
     btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
-    icon: <CheckCircleOutlined />,
-    liveTag: "🟢 4. XÁC NHẬN MUA HÀNG (HOÀN TẤT)",
-    actionText: "Xác nhận đã mua hộ & Hoàn tất",
-    stepIndex: 4,
+    icon: <CarOutlined />,
+    liveTag: "🚚 2. HÀNG ĐANG ĐẶT VỀ",
+    actionText: "Chuyển bước 3: Hàng đã về kho ➔",
+    stepIndex: 2,
   },
   SELLER_SHIPPED: {
     gradient: "linear-gradient(135deg, #0b132b 0%, #1c2541 45%, #2563eb 100%)",
@@ -136,9 +157,9 @@ const STATUS_THEMES = {
     btnGradient: "linear-gradient(135deg, #3b82f6, #1d4ed8)",
     btnShadow: "0 8px 25px rgba(59, 130, 246, 0.45)",
     icon: <CarOutlined />,
-    liveTag: "🔵 NCC ĐÃ PHÁT HÀNG (REALTIME)",
-    actionText: "Xác nhận & Hoàn tất",
-    stepIndex: 4,
+    liveTag: "🚛 2. HÀNG ĐANG ĐẶT VỀ (NCC ĐÃ PHÁT HÀNG)",
+    actionText: "Chuyển bước 3: Hàng đã về kho ➔",
+    stepIndex: 2,
   },
   ARRIVED_ORIGIN_WAREHOUSE: {
     gradient: "linear-gradient(135deg, #180e29 0%, #3b0764 45%, #6b21a8 100%)",
@@ -148,21 +169,33 @@ const STATUS_THEMES = {
     btnGradient: "linear-gradient(135deg, #9333ea, #7e22ce)",
     btnShadow: "0 8px 25px rgba(147, 51, 234, 0.45)",
     icon: <HomeOutlined />,
-    liveTag: "🩵 ĐÃ VỀ KHO NƯỚC NGOÀI (REALTIME)",
-    actionText: "Xác nhận & Hoàn tất",
+    liveTag: "🏢 3. HÀNG ĐÃ VỀ KHO",
+    actionText: "Chuyển sang: 4. Hàng chờ nhập kho (Gửi Manager duyệt) ➔",
+    stepIndex: 3,
+  },
+  WAITING_STORED: {
+    gradient: "linear-gradient(135deg, #2e1065 0%, #581c87 45%, #7e22ce 100%)",
+    badgeBg: "rgba(234, 179, 8, 0.22)",
+    badgeBorder: "rgba(250, 204, 21, 0.45)",
+    badgeColor: "#fef08a",
+    btnGradient: "linear-gradient(135deg, #eab308, #ca8a04)",
+    btnShadow: "0 8px 25px rgba(234, 179, 8, 0.45)",
+    icon: <SyncOutlined spin />,
+    liveTag: "📋 4. HÀNG CHỜ NHẬP KHO (CHỜ MANAGER / OPS DUYỆT)",
+    actionText: "Manager / Ops duyệt: 5. Hàng đã nhập kho ➔",
     stepIndex: 4,
   },
   COMPLETED: {
-    gradient: "linear-gradient(135deg, #2e1065 0%, #581c87 45%, #7e22ce 100%)",
-    badgeBg: "rgba(216, 180, 254, 0.22)",
-    badgeBorder: "rgba(233, 213, 255, 0.45)",
-    badgeColor: "#f3e8ff",
-    btnGradient: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
-    btnShadow: "0 8px 25px rgba(139, 92, 246, 0.45)",
+    gradient: "linear-gradient(135deg, #022c22 0%, #047857 45%, #059669 100%)",
+    badgeBg: "rgba(52, 211, 153, 0.22)",
+    badgeBorder: "rgba(110, 231, 183, 0.45)",
+    badgeColor: "#a7f3d0",
+    btnGradient: "linear-gradient(135deg, #10b981, #059669)",
+    btnShadow: "0 8px 25px rgba(16, 185, 129, 0.45)",
     icon: <CheckCircleOutlined />,
-    liveTag: "🟣 HOÀN TẤT MUA HỘ (REALTIME)",
+    liveTag: "✅ 5. HÀNG ĐÃ NHẬP KHO (OPS ĐÃ DUYỆT)",
     actionText: "Xác nhận & Hoàn tất",
-    stepIndex: 4,
+    stepIndex: 5,
   },
 };
 
@@ -188,10 +221,13 @@ export default function ConfirmPurchaseModal({
     }));
   });
 
-  // Always start initial status at "NEW" (Step 1: Tạo đơn hàng) when opening modal
+  // Sync initial status with current purchaseRequest status
   const initialStatus = useMemo(() => {
-    return "NEW";
-  }, []);
+    const currentStatus = String(purchaseRequest?.status || "").toUpperCase();
+    return PURCHASE_STATUS_OPTIONS.some((opt) => opt.value === currentStatus)
+      ? currentStatus
+      : "NEW";
+  }, [purchaseRequest?.status]);
 
   // State for proof images & purchase status
   const [purchaseStatus, setPurchaseStatus] = useState(initialStatus);
@@ -203,12 +239,247 @@ export default function ConfirmPurchaseModal({
   const [previewImage, setPreviewImage] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
-  // Sync purchaseStatus when modal opens or initialStatus changes
+  // State for warehouse selection
+  const [warehouses, setWarehouses] = useState([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+
+  // Helper to extract origin country from route
+  const getRouteOriginCountry = useCallback((routeStr) => {
+    const route = String(routeStr || "").toUpperCase();
+    if (route.includes("KOREA") || route.includes("HAN") || route.includes("HÀN") || route.includes("KR")) {
+      return "KOREA";
+    }
+    if (route.includes("JAPAN") || route.includes("NHAT") || route.includes("NHẬT") || route.includes("JP")) {
+      return "JAPAN";
+    }
+    if (route.includes("USA") || route.includes("MY") || route.includes("MỸ") || route.includes("US")) {
+      return "USA";
+    }
+    return "CHINA";
+  }, []);
+
+  // Helper to check if a warehouse matches the request route
+  const isWarehouseMatchingRoute = useCallback(
+    (warehouse, routeStr) => {
+      if (!warehouse) return false;
+      const targetOrigin = getRouteOriginCountry(routeStr);
+      const textToSearch = [
+        warehouse.code,
+        warehouse.name,
+        warehouse.address,
+        warehouse.region,
+        warehouse.country,
+        warehouse.originCountry,
+        warehouse.warehouseType,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toUpperCase();
+
+      if (targetOrigin === "CHINA") {
+        return (
+          textToSearch.includes("CN") ||
+          textToSearch.includes("CHINA") ||
+          textToSearch.includes("TRUNG") ||
+          textToSearch.includes("QUẢNG CHÂU") ||
+          textToSearch.includes("GUANGZHOU") ||
+          textToSearch.includes("BANGKOK")
+        );
+      }
+      if (targetOrigin === "KOREA") {
+        return (
+          textToSearch.includes("KR") ||
+          textToSearch.includes("KOREA") ||
+          textToSearch.includes("HÀN") ||
+          textToSearch.includes("SEOUL") ||
+          textToSearch.includes("INCHEON")
+        );
+      }
+      if (targetOrigin === "JAPAN") {
+        return (
+          textToSearch.includes("JP") ||
+          textToSearch.includes("JAPAN") ||
+          textToSearch.includes("NHẬT") ||
+          textToSearch.includes("TOKYO") ||
+          textToSearch.includes("OSAKA")
+        );
+      }
+      if (targetOrigin === "USA") {
+        return (
+          textToSearch.includes("US") ||
+          textToSearch.includes("USA") ||
+          textToSearch.includes("MỸ") ||
+          textToSearch.includes("CALIFORNIA") ||
+          textToSearch.includes("OREGON")
+        );
+      }
+      return false;
+    },
+    [getRouteOriginCountry]
+  );
+
+  const [shippingRoutesList, setShippingRoutesList] = useState([]);
+
+  // Sync purchaseStatus and fetch active warehouses & shipping routes when modal opens
   useEffect(() => {
     if (open) {
       setPurchaseStatus(initialStatus);
+      setLoadingWarehouses(true);
+
+      Promise.allSettled([
+        getWarehousesApi(),
+        getWarehouses(),
+        getShippingRoutes(),
+      ])
+        .then(([whApiRes, adminWhRes, routeRes]) => {
+          let whList = [];
+
+          if (whApiRes.status === "fulfilled" && Array.isArray(whApiRes.value) && whApiRes.value.length > 0) {
+            whList = whApiRes.value;
+          } else if (adminWhRes.status === "fulfilled" && Array.isArray(adminWhRes.value) && adminWhRes.value.length > 0) {
+            whList = adminWhRes.value
+              .map((w) => ({
+                id: String(w.id || w.warehouseId || ""),
+                name: String(w.name || w.warehouseName || "Kho hàng"),
+                code: String(w.code || w.warehouseCode || ""),
+                address: String(w.address || w.location || ""),
+                warehouseType: String(w.warehouseType || w.type || ""),
+                isActive: w.isActive !== false,
+              }))
+              .filter((w) => Boolean(w.id));
+          }
+
+          // Fallback warehouse list if backend endpoints return empty array
+          if (whList.length === 0) {
+            whList = [
+              { id: "WH-CN-01", name: "Kho Quảng Châu (Trung Quốc)", code: "KHO-CN", address: "Guangzhou, China", warehouseType: "ORIGIN", isActive: true },
+              { id: "WH-KR-01", name: "Kho Seoul (Hàn Quốc)", code: "KHO-KR", address: "Seoul, Korea", warehouseType: "ORIGIN", isActive: true },
+              { id: "WH-JP-01", name: "Kho Tokyo (Nhật Bản)", code: "KHO-JP", address: "Tokyo, Japan", warehouseType: "ORIGIN", isActive: true },
+              { id: "WH-VN-01", name: "Kho Tổng Hà Nội (Việt Nam)", code: "KHO-VN-HN", address: "Hà Nội, Việt Nam", warehouseType: "DESTINATION", isActive: true },
+              { id: "WH-VN-02", name: "Kho HCM (Việt Nam)", code: "KHO-VN-HCM", address: "TP. Hồ Chí Minh, Việt Nam", warehouseType: "DESTINATION", isActive: true },
+            ];
+          }
+
+          const rList =
+            routeRes.status === "fulfilled" && Array.isArray(routeRes.value)
+              ? routeRes.value
+              : [];
+
+          setWarehouses(whList);
+          setShippingRoutesList(rList);
+
+          const prRoute = String(purchaseRequest?.route || "").toUpperCase();
+
+          // Check if system shipping routes API has configured warehouse for this route
+          const matchedRouteObj = rList.find((r) => {
+            const rCode = String(r.routeCode || r.code || "").toUpperCase();
+            const rName = String(r.routeName || r.name || "").toUpperCase();
+            return (
+              rCode === prRoute ||
+              rName === prRoute ||
+              (prRoute && rCode.includes(prRoute)) ||
+              (prRoute && rName.includes(prRoute)) ||
+              (rCode && prRoute.includes(rCode))
+            );
+          });
+
+          const existingWhId =
+            purchaseRequest?.warehouseId ||
+            purchaseRequest?.destinationWarehouseId ||
+            purchaseRequest?.originWarehouseId;
+
+          if (existingWhId) {
+            setSelectedWarehouseId(String(existingWhId));
+          } else if (matchedRouteObj?.originWarehouseId) {
+            setSelectedWarehouseId(String(matchedRouteObj.originWarehouseId));
+          } else if (matchedRouteObj?.destinationWarehouseId) {
+            setSelectedWarehouseId(String(matchedRouteObj.destinationWarehouseId));
+          } else {
+            const matchedWh = whList.find((wh) =>
+              isWarehouseMatchingRoute(wh, prRoute)
+            );
+            if (matchedWh) {
+              setSelectedWarehouseId(String(matchedWh.id || matchedWh.warehouseId));
+            } else if (whList.length > 0) {
+              setSelectedWarehouseId(String(whList[0].id || whList[0].warehouseId));
+            }
+          }
+        })
+        .catch((err) => {
+          console.error("GET WAREHOUSES & ROUTES ERROR:", err);
+        })
+        .finally(() => {
+          setLoadingWarehouses(false);
+        });
     }
-  }, [initialStatus, open]);
+  }, [getRouteOriginCountry, initialStatus, isWarehouseMatchingRoute, open, purchaseRequest]);
+
+  // Formatted warehouse select options grouped by route API match & location match
+  const filteredWarehouseOptions = useMemo(() => {
+    const route = purchaseRequest?.route || "";
+    const prRoute = String(route).toUpperCase();
+
+    const matchedRouteObj = shippingRoutesList.find((r) => {
+      const rCode = String(r.routeCode || r.code || "").toUpperCase();
+      const rName = String(r.routeName || r.name || "").toUpperCase();
+      return (
+        rCode === prRoute ||
+        rName === prRoute ||
+        (prRoute && rCode.includes(prRoute)) ||
+        (prRoute && rName.includes(prRoute)) ||
+        (rCode && prRoute.includes(rCode))
+      );
+    });
+
+    const apiWarehouseIds = new Set(
+      [
+        matchedRouteObj?.originWarehouseId,
+        matchedRouteObj?.destinationWarehouseId,
+      ]
+        .filter(Boolean)
+        .map((id) => String(id))
+    );
+
+    const matched = [];
+    const others = [];
+
+    warehouses.forEach((wh) => {
+      const whIdStr = String(wh.id || wh.warehouseId);
+      const isApiMatch = apiWarehouseIds.has(whIdStr);
+      const isLocationMatch = isWarehouseMatchingRoute(wh, route);
+      const isMatch = isApiMatch || isLocationMatch;
+
+      const itemOption = {
+        value: whIdStr,
+        label: `${isMatch ? "⭐ [Phù hợp tuyến] " : ""}${wh.code ? `[${wh.code}] ` : ""}${wh.name || "Kho vắng tên"}${wh.address ? ` — ${wh.address}` : ""}`,
+      };
+
+      if (isMatch) {
+        matched.push(itemOption);
+      } else {
+        others.push(itemOption);
+      }
+    });
+
+    if (matched.length > 0) {
+      return [
+        {
+          label: `⭐ KHO PHÙ HỢP TUYẾN DỊCH VỤ (${route || "Tuyến hiện tại"})`,
+          options: matched,
+        },
+        {
+          label: "CÁC KHO KHÁC",
+          options: others,
+        },
+      ];
+    }
+
+    return warehouses.map((wh) => ({
+      value: String(wh.id || wh.warehouseId),
+      label: `${wh.code ? `[${wh.code}] ` : ""}${wh.name || "Kho vắng tên"}${wh.address ? ` — ${wh.address}` : ""}`,
+    }));
+  }, [isWarehouseMatchingRoute, purchaseRequest?.route, shippingRoutesList, warehouses]);
 
   // Active status config object
   const activeStatusConfig = useMemo(() => {
@@ -306,69 +577,70 @@ export default function ConfirmPurchaseModal({
   const handleSubmit = async () => {
     try {
       setErrorMsg("");
+
+      const isStepOne = ["NEW", "PENDING_REVIEW", "PAID", "DEPOSIT_PAID", "IN_REVIEW", "APPROVED"].includes(purchaseStatus);
+
+      if (isStepOne && !selectedWarehouseId && warehouses.length > 0) {
+        const msg = "Vui lòng chọn Kho nhận hàng dự kiến trước khi xác nhận.";
+        setErrorMsg(msg);
+        AuthNotify.warning("Chưa chọn kho", msg);
+        return;
+      }
+
       setSubmitting(true);
 
       const reqId = purchaseRequest?.purchaseRequestId || purchaseRequest?.id;
+      const selectedWh = warehouses.find(
+        (w) => String(w.id || w.warehouseId) === String(selectedWarehouseId)
+      );
+      const warehousePayload = {
+        warehouseId: selectedWarehouseId,
+        destinationWarehouseId: selectedWarehouseId,
+        warehouseName: selectedWh?.name || null,
+      };
 
-      if (purchaseStatus === "NEW") {
-        // Step 1 -> Step 2: Update status to PENDING_REVIEW
-        const resData = await confirmPurchaseApi(reqId, {
-          status: "PENDING_REVIEW",
-          proofImages: imageList.map((img) => img.url),
-          generalNote,
-        });
-        setPurchaseStatus("PENDING_REVIEW");
-        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 2. Chờ xác nhận");
-      } else if (purchaseStatus === "PENDING_REVIEW") {
-        // Step 2 -> Step 3: Update status to PAID
-        const resData = await confirmPurchaseApi(reqId, {
-          status: "PAID",
-          proofImages: imageList.map((img) => img.url),
-          generalNote,
-        });
-        setPurchaseStatus("PAID");
-        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 3. Đã thanh toán");
-      } else if (purchaseStatus === "PAID") {
-        // Step 3 -> Step 4: Update status to PURCHASED
-        const resData = await confirmPurchaseApi(reqId, {
-          status: "PURCHASED",
-          proofImages: imageList.map((img) => img.url),
-          generalNote,
-        });
-        setPurchaseStatus("PURCHASED");
-        AuthNotify.info("Tiến độ đơn hàng", "Đã chuyển sang bước: 4. Xác nhận mua hàng");
+      let nextStatus = "PURCHASED";
+      if (isStepOne) {
+        nextStatus = "PURCHASED";
+      } else if (["PURCHASED", "SELLER_SHIPPED"].includes(purchaseStatus)) {
+        nextStatus = "ARRIVED_ORIGIN_WAREHOUSE";
+      } else if (purchaseStatus === "ARRIVED_ORIGIN_WAREHOUSE") {
+        nextStatus = "WAITING_STORED";
+      } else if (purchaseStatus === "WAITING_STORED") {
+        nextStatus = "COMPLETED";
       } else {
-        // Step 4 FINAL STEP: Submit to Real BE API endpoint PUT /api/purchase-requests/{id}/confirm-purchase & Exit Modal
-        const ALLOWED_BE_STATUSES = ["PURCHASED", "SELLER_SHIPPED", "ARRIVED_ORIGIN_WAREHOUSE", "PAID", "PENDING_REVIEW"];
-        const targetStatus = ALLOWED_BE_STATUSES.includes(purchaseStatus)
-          ? purchaseStatus
-          : "PURCHASED";
+        nextStatus = "COMPLETED";
+      }
 
-        const resData = await confirmPurchaseApi(reqId, {
-          status: targetStatus,
+      const resData = await confirmPurchaseApi(reqId, {
+        status: nextStatus,
+        proofImages: imageList.map((img) => img.url),
+        generalNote,
+        ...warehousePayload,
+      });
+
+      setPurchaseStatus(nextStatus);
+
+      AuthNotify.success(
+        "Cập nhật tiến độ thành công",
+        `Đã lưu thông tin & chuyển sang bước tiếp theo cho đơn ${resData?.purchaseCode || purchaseRequest?.purchaseCode || ""}`
+      );
+
+      if (onSuccess) {
+        await onSuccess({
+          purchaseRequestId: reqId,
+          status: nextStatus,
+          statusConfig: activeStatusConfig,
+          items: itemForms,
           proofImages: imageList.map((img) => img.url),
           generalNote,
+          warehouseId: selectedWarehouseId,
+          warehouseName: selectedWh?.name || null,
+          apiResponse: resData,
         });
-
-        AuthNotify.success(
-          "Xác nhận mua hộ thành công",
-          `Đã lưu thông tin & hoàn tất xác nhận mua hộ cho đơn ${resData?.purchaseCode || purchaseRequest?.purchaseCode || ""}`
-        );
-
-        if (onSuccess) {
-          await onSuccess({
-            purchaseRequestId: reqId,
-            status: targetStatus,
-            statusConfig: activeStatusConfig,
-            items: itemForms,
-            proofImages: imageList.map((img) => img.url),
-            generalNote,
-            apiResponse: resData,
-          });
-        }
-
-        handleCloseModal();
       }
+
+      handleCloseModal();
     } catch (err) {
       console.error("Confirm purchase submit error:", err);
       const msg = err?.message || "Không thể hoàn tất xác nhận mua hộ.";
@@ -385,7 +657,7 @@ export default function ConfirmPurchaseModal({
         open={open}
         onCancel={handleCloseModal}
         footer={null}
-        width={780}
+        width={840}
         centered
         destroyOnHidden
         className="confirm-purchase-modal"
@@ -422,38 +694,46 @@ export default function ConfirmPurchaseModal({
             )}
           </div>
 
-          {/* Stepper Pipeline Bar - Read-Only Progress Indicator */}
+          {/* Stepper Pipeline Bar - 5 Business Steps */}
           <div className="header-pipeline-bar">
             <div
               className={`pipeline-step ${activeTheme.stepIndex >= 1 ? "is-active" : ""} ${activeTheme.stepIndex === 1 ? "is-selected" : ""
                 }`}
             >
-              <span className="step-num">1</span>
-              <span className="step-label">Tạo đơn hàng</span>
+              <span className="step-num"><FileTextOutlined /></span>
+              <span className="step-label">1. Đặt đơn hàng</span>
             </div>
             <div className={`pipeline-line ${activeTheme.stepIndex >= 2 ? "is-active" : ""}`} />
             <div
               className={`pipeline-step ${activeTheme.stepIndex >= 2 ? "is-active" : ""} ${activeTheme.stepIndex === 2 ? "is-selected" : ""
                 }`}
             >
-              <span className="step-num">2</span>
-              <span className="step-label">Chờ xác nhận</span>
+              <span className="step-num"><CarOutlined /></span>
+              <span className="step-label">2. Hàng đang đặt về</span>
             </div>
             <div className={`pipeline-line ${activeTheme.stepIndex >= 3 ? "is-active" : ""}`} />
             <div
               className={`pipeline-step ${activeTheme.stepIndex >= 3 ? "is-active" : ""} ${activeTheme.stepIndex === 3 ? "is-selected" : ""
                 }`}
             >
-              <span className="step-num">3</span>
-              <span className="step-label">Đã thanh toán</span>
+              <span className="step-num"><HomeOutlined /></span>
+              <span className="step-label">3. Hàng đã về kho</span>
             </div>
             <div className={`pipeline-line ${activeTheme.stepIndex >= 4 ? "is-active" : ""}`} />
             <div
               className={`pipeline-step ${activeTheme.stepIndex >= 4 ? "is-active" : ""} ${activeTheme.stepIndex === 4 ? "is-selected" : ""
                 }`}
             >
-              <span className="step-num">4</span>
-              <span className="step-label">Xác nhận mua hàng</span>
+              <span className="step-num"><SyncOutlined spin={activeTheme.stepIndex === 4} /></span>
+              <span className="step-label">4. Hàng chờ nhập kho</span>
+            </div>
+            <div className={`pipeline-line ${activeTheme.stepIndex >= 5 ? "is-active" : ""}`} />
+            <div
+              className={`pipeline-step ${activeTheme.stepIndex >= 5 ? "is-active" : ""} ${activeTheme.stepIndex === 5 ? "is-selected" : ""
+                }`}
+            >
+              <span className="step-num"><CheckCircleOutlined /></span>
+              <span className="step-label">5. Hàng đã nhập kho</span>
             </div>
           </div>
         </div>
@@ -469,6 +749,52 @@ export default function ConfirmPurchaseModal({
               className="confirm-purchase-modal__alert"
             />
           )}
+
+          {/* Section 1: Chọn Kho Nhận Hàng / Nhập Kho (Chỉ hiển thị ở Bước 1: Đặt đơn hàng) */}
+          {["NEW", "PENDING_REVIEW", "PAID", "DEPOSIT_PAID", "IN_REVIEW", "APPROVED"].includes(purchaseStatus) && (
+            <>
+              <section className="confirm-purchase-section">
+                <div className="confirm-purchase-section__title">
+                  <BankOutlined />
+                  <span>KHO NHẬN HÀNG DỰ KIẾN (KHO NHẬP) <b style={{ color: "#ef4444" }}>*</b></span>
+                </div>
+
+                <div style={{ background: "#f8fafc", padding: "16px 20px", borderRadius: "16px", border: "1.5px solid #e2e8f0" }}>
+                  <label style={{ display: "block", marginBottom: "8px", fontWeight: 750, fontSize: "13px", color: "#334155" }}>
+                    Chọn kho xử lý / nhận hàng khi NCC giao đến:
+                  </label>
+
+                  <Select
+                    style={{ width: "100%" }}
+                    size="large"
+                    loading={loadingWarehouses}
+                    placeholder="— Chọn kho nhận hàng dự kiến —"
+                    value={selectedWarehouseId || undefined}
+                    onChange={(val) => setSelectedWarehouseId(val)}
+                    options={filteredWarehouseOptions}
+                  />
+
+                  {selectedWarehouseId && (
+                    <div style={{ marginTop: "12px", fontSize: "12px", color: "#334155", display: "flex", alignItems: "flex-start", gap: "10px", background: "#eff6ff", padding: "10px 14px", borderRadius: "12px", border: "1px solid #bfdbfe" }}>
+                      <BankOutlined style={{ color: "#2563eb", fontSize: "16px", marginTop: "2px" }} />
+                      <div>
+                        <strong style={{ color: "#1e40af", display: "block" }}>
+                          Định hướng về: {warehouses.find((w) => String(w.id || w.warehouseId) === String(selectedWarehouseId))?.name || "Kho đã chọn"}
+                        </strong>
+                        <span>
+                          Nghiệp vụ Sale: Đơn sẽ ở trạng thái chờ/đang giao về kho này. Khi hàng thực tế tới kho, Bộ phận Vận hành (Ops) sẽ xác nhận kiểm kê và lưu kho chính thức.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <Divider style={{ margin: "16px 0" }} />
+            </>
+          )}
+
+
 
 
 
@@ -580,14 +906,21 @@ export default function ConfirmPurchaseModal({
             size="large"
             icon={activeTheme.icon}
             loading={submitting}
+            disabled={submitting || ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)}
             onClick={handleSubmit}
             className="confirm-purchase-submit-btn"
             style={{
-              background: activeTheme.btnGradient,
-              boxShadow: activeTheme.btnShadow,
+              background: ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)
+                ? "#94a3b8"
+                : activeTheme.btnGradient,
+              boxShadow: ["COMPLETED", "STORED", "CANCELLED", "REJECTED"].includes(purchaseStatus)
+                ? "none"
+                : activeTheme.btnShadow,
             }}
           >
-            {activeTheme.actionText}
+            {["COMPLETED", "STORED"].includes(purchaseStatus)
+              ? "Đã hoàn tất nhập kho"
+              : activeTheme.actionText}
           </Button>
         </div>
       </Modal>

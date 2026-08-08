@@ -57,6 +57,13 @@ export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
       ? payload.proofImages.map((img) => String(img || "").trim()).filter(Boolean)
       : [],
     generalNote: String(payload?.generalNote || "").trim() || null,
+    warehouseId: payload?.warehouseId ? String(payload.warehouseId).trim() : null,
+    destinationWarehouseId: payload?.destinationWarehouseId
+      ? String(payload.destinationWarehouseId).trim()
+      : payload?.warehouseId
+      ? String(payload.warehouseId).trim()
+      : null,
+    warehouseName: payload?.warehouseName ? String(payload.warehouseName).trim() : null,
   };
 
   const endpointUrl =

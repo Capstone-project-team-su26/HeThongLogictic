@@ -57,14 +57,14 @@ const getArrayItems = (data) => {
 export const normalizeWarehouse = (
   warehouse = {}
 ) => ({
-  id: normalizeText(warehouse?.id),
-  name: normalizeText(warehouse?.name),
-  code: normalizeText(warehouse?.code),
-  address: normalizeText(warehouse?.address),
+  id: normalizeText(warehouse?.id || warehouse?.warehouseId || warehouse?._id),
+  name: normalizeText(warehouse?.name || warehouse?.warehouseName || warehouse?.title || "Kho hàng"),
+  code: normalizeText(warehouse?.code || warehouse?.warehouseCode),
+  address: normalizeText(warehouse?.address || warehouse?.location || warehouse?.fullAddress),
   warehouseType: normalizeText(
-    warehouse?.warehouseType
+    warehouse?.warehouseType || warehouse?.type
   ),
-  isActive: warehouse?.isActive === true,
+  isActive: warehouse?.isActive !== false,
 });
 
 /* =========================
