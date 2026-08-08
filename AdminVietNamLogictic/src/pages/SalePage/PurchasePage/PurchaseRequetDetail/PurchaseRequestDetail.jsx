@@ -70,6 +70,14 @@ import {
 import "./PurchaseRequestDetail.css";
 
 const STATUS_CONFIG = {
+  DRAFT: {
+    label: "Bản nháp",
+    className: "is-info",
+  },
+  QUOTATION_CONFIRMED: {
+    label: "Đã xác nhận báo giá",
+    className: "is-success",
+  },
   NEW: {
     label: "Đặt đơn hàng",
     className: "is-info",
