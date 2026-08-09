@@ -19,6 +19,7 @@ import {
   FileSearchOutlined,
   InboxOutlined,
   LogoutOutlined,
+  MonitorOutlined,
   SendOutlined,
   PlusCircleOutlined,
   RightOutlined,
@@ -27,6 +28,7 @@ import {
   ShoppingCartOutlined,
   ShoppingOutlined,
   TeamOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 
 import logoVietnamLogistics from "../../assets/anhlogocap2.jpeg";
@@ -81,6 +83,37 @@ const MENU_BY_ROLE = {
       label: "Quản lý người dùng",
       icon: <TeamOutlined />,
       path: "/admin/users",
+    },
+    {
+      key: "admin-oversight",
+      label: "Giám sát vận hành",
+      icon: <MonitorOutlined />,
+      children: [
+        {
+          key: "admin-consignments",
+          label: "Đơn ký gửi",
+          icon: <FileSearchOutlined />,
+          path: "/admin/consignments",
+        },
+        {
+          key: "admin-inventory",
+          label: "Tồn kho",
+          icon: <InboxOutlined />,
+          path: "/admin/inventory",
+        },
+        {
+          key: "admin-wro",
+          label: "Phiếu xuất kho",
+          icon: <CheckSquareOutlined />,
+          path: "/admin/wro",
+        },
+        {
+          key: "admin-cash-flow",
+          label: "Dòng tiền",
+          icon: <WalletOutlined />,
+          path: "/admin/cash-flow",
+        },
+      ],
     },
     {
       key: "admin-warehouse",
@@ -483,6 +516,20 @@ export default function Sidebar() {
       location.pathname;
 
     return {
+      "admin-oversight":
+        pathname.startsWith(
+          "/admin/consignments"
+        ) ||
+        pathname.startsWith(
+          "/admin/inventory"
+        ) ||
+        pathname.startsWith(
+          "/admin/wro"
+        ) ||
+        pathname.startsWith(
+          "/admin/cash-flow"
+        ),
+
       "sale-list-and-fees":
         pathname.startsWith(
           "/sale/restricted-items"
@@ -582,6 +629,7 @@ export default function Sidebar() {
          * Tránh nhiều nhóm menu mở cùng lúc.
          */
         return {
+          "admin-oversight": false,
           "sale-list-and-fees": false,
           "sale-create-request": false,
           "sale-transaction-history": false,

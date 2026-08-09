@@ -257,7 +257,7 @@ function CopyValue({
       AuthNotify.error(
         "Không thể sao chép",
         error?.message ||
-          "Vui lòng thử lại."
+        "Vui lòng thử lại."
       );
     }
   };
@@ -308,7 +308,9 @@ function PaymentHistoryLoading() {
 
 export default function OrderPaymentHistory({
   orderId: orderIdProp,
-}) {
+  basePath = "/sale",
+  readOnly = false,
+} = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -633,7 +635,7 @@ export default function OrderPaymentHistory({
                   ) === "OFFICIAL"
                     ? "Báo giá chính thức"
                     : history?.quotation
-                        ?.quoteType || "—"}
+                      ?.quoteType || "—"}
                 </strong>
               </div>
 
@@ -706,11 +708,10 @@ export default function OrderPaymentHistory({
                       payment?.paymentId ||
                       `${payment?.orderCode}-${index}`
                     }
-                    className={`payment-receipt-card ${
-                      isPaymentSuccess
+                    className={`payment-receipt-card ${isPaymentSuccess
                         ? "payment-receipt-card--success"
                         : ""
-                    }`}
+                      }`}
                   >
                     <div className="payment-receipt-card__head">
                       <div className="payment-receipt-card__check">
@@ -727,8 +728,8 @@ export default function OrderPaymentHistory({
                           {isPaymentSuccess
                             ? "Giao dịch đã được hệ thống ghi nhận"
                             : getInstallmentTypeLabel(
-                                payment?.installmentType
-                              )}
+                              payment?.installmentType
+                            )}
                         </p>
                       </div>
 
@@ -810,7 +811,7 @@ export default function OrderPaymentHistory({
                         <strong>
                           {formatDateTime(
                             history?.createdAt ||
-                              payment?.createdAt
+                            payment?.createdAt
                           )}
                         </strong>
                       </div>
@@ -854,12 +855,14 @@ export default function OrderPaymentHistory({
                       <Button
                         icon={<FileTextOutlined />}
                         onClick={() =>
-                          navigate(`/sale/consignments/${orderId}`, {
-                            state: {
-                              orderId,
-                              payment,
-                              paymentHistory: history,
-                            },
+                          navigate(
+                            `${basePath}/consignments/${orderId}`,
+                            {
+                              state: {
+                                orderId,
+                                payment,
+                                paymentHistory: history,
+                              },
                             }
                           )
                         }

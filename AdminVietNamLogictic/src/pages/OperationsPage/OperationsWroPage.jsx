@@ -37,7 +37,9 @@ const STATUS_FILTER_OPTIONS = [
   })),
 ];
 
-export default function OperationsWroPage() {
+export default function OperationsWroPage({
+  readOnly = false,
+} = {}) {
   const [wroList, setWroList] = useState([]);
   const [statusFilter, setStatusFilter] = useState("NEEDS_APPROVAL");
   const [searchInput, setSearchInput] = useState("");
@@ -181,7 +183,7 @@ export default function OperationsWroPage() {
         title: "Thao tác",
         key: "actions",
         fixed: "right",
-        width: 240,
+        width: readOnly ? 120 : 240,
         render: (_, row) => (
           <Space size={4}>
             <Button
@@ -192,7 +194,7 @@ export default function OperationsWroPage() {
             >
               Xem
             </Button>
-            {wroNeedsApproval(row.status) ? (
+            {!readOnly && wroNeedsApproval(row.status) ? (
               <>
                 <Button
                   size="small"
@@ -218,7 +220,7 @@ export default function OperationsWroPage() {
         ),
       },
     ],
-    [busyId, handleReject]
+    [busyId, handleReject, readOnly]
   );
 
   return (
@@ -228,8 +230,9 @@ export default function OperationsWroPage() {
           <span>Xuất kho</span>
           <h1>Phiếu xuất kho (WRO)</h1>
           <p>
-            Duyệt phiếu chờ xử lý, xem chi tiết và mở giấy tờ thông quan đã đính kèm.
-            Khi duyệt bắt buộc nhập mã chuyến bay và upload chứng từ.
+            {readOnly
+              ? "Chế độ giám sát: chỉ xem phiếu xuất kho và chứng từ."
+              : "Duyệt phiếu chờ xử lý, xem chi tiết và mở giấy tờ thông quan đã đính kèm. Khi duyệt bắt buộc nhập mã chuyến bay và upload chứng từ."}
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -322,7 +325,7 @@ export default function OperationsWroPage() {
         />
       </div>
 
-      {approveTarget ? (
+      {approveTarget && !readOnly ? (
         <WroApproveModal
           open
           wro={approveTarget}

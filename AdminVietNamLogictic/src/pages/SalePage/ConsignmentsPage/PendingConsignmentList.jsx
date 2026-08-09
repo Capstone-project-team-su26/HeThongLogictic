@@ -560,7 +560,9 @@ const getErrorMessage = (error) => {
    COMPONENT
 ========================================================= */
 
-export default function PendingConsignmentList() {
+export default function PendingConsignmentList({
+  basePath = "/sale",
+} = {}) {
   const navigate = useNavigate();
 
   const [consignments, setConsignments] = useState([]);
@@ -960,7 +962,7 @@ export default function PendingConsignmentList() {
       return;
     }
 
-    navigate(`/sale/consignments/${item.orderId}`, {
+    navigate(`${basePath}/consignments/${item.orderId}`, {
       state: {
         consignment: item,
       },

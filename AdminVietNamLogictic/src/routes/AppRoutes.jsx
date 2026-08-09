@@ -33,6 +33,7 @@ import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
 import AdminDashboard from "../pages/AdminPage/AdminDashboard";
 import AdminUsersPage from "../pages/AdminPage/AdminUsersPage";
 import WarehouseLocationsPage from "../pages/AdminPage/WarehouseLocationsPage";
+import AdminCashFlowPage from "../pages/AdminPage/AdminCashFlowPage";
 import {
   AdditionalServiceFeesAdminPage,
   CarriersAdminPage,
@@ -212,6 +213,29 @@ export default function AppRoutes() {
         <Route path="units-of-measure" element={<UnitsOfMeasureAdminPage />} />
         <Route path="suppliers" element={<SuppliersAdminPage />} />
         <Route path="shipping-routes" element={<ShippingRoutesAdminPage />} />
+
+        {/* Giám sát vận hành (chỉ xem) */}
+        <Route
+          path="consignments"
+          element={<PendingConsignmentList basePath="/admin" readOnly />}
+        />
+        <Route
+          path="consignments/:orderId"
+          element={<ConsignmentDetail readOnly />}
+        />
+        <Route
+          path="consignments/:orderId/payments"
+          element={<OrderPaymentHistory basePath="/admin" readOnly />}
+        />
+        <Route
+          path="inventory"
+          element={<OperationsParcelsPage readOnly />}
+        />
+        <Route
+          path="wro"
+          element={<OperationsWroPage readOnly />}
+        />
+        <Route path="cash-flow" element={<AdminCashFlowPage />} />
       </Route>
 
       {/* ================= SALE ================= */}
