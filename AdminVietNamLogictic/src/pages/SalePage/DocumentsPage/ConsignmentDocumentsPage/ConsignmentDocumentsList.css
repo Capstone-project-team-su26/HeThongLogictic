@@ -260,10 +260,10 @@
 }
 
 .consignment-docs-page .customer-address {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.3;
+  margin-top: 2px;
 }
 
 /* DOC TYPE TAG */

@@ -290,26 +290,30 @@ export default function ConsignmentDocumentsList() {
     {
       title: "Khách hàng & Người nhận",
       key: "customer",
-      render: (record) => (
-        <div className="customer-info-box">
-          <div className="customer-avatar">
-            <UserOutlined />
-          </div>
-          <div>
-            <strong className="customer-name">
-              {record.customer?.fullName || record.customerName || record.receiverName || "—"}
-            </strong>
-            <div className="customer-sub-info">
-              <span>📞 {record.receiverPhone || record.customer?.phone || "—"}</span>
-              {record.receiverAddress && (
-                <span className="customer-address" title={record.receiverAddress}>
-                  📍 {record.receiverAddress}
-                </span>
-              )}
+      render: (record) => {
+        const name = record.receiverName || record.customer?.fullName || record.customerName || "—";
+        const phone = record.receiverPhone || record.customer?.phone || record.phone;
+        const address = record.receiverAddress || record.address || record.customer?.address;
+
+        return (
+          <div className="customer-info-box">
+            <div className="customer-avatar">
+              <UserOutlined />
+            </div>
+            <div>
+              <strong className="customer-name">{name}</strong>
+              <div className="customer-sub-info">
+                <span>📞 {phone || "—"}</span>
+                {address && (
+                  <span className="customer-address" title={address}>
+                    📍 {address}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "Loại vận chuyển & Chứng từ",

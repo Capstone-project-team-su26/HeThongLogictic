@@ -154,7 +154,7 @@ const roundToDecimals = (
         normalizeNumber(value, 0) +
         Number.EPSILON
       ) *
-        factor
+      factor
     ) / factor
   );
 };
@@ -338,7 +338,7 @@ const parseRouteCountries = (route) => {
 const getOrderStatus = (status) => {
   return (
     ORDER_STATUS_CONFIG[
-      normalizeUpperText(status)
+    normalizeUpperText(status)
     ] || {
       label:
         normalizeText(status) ||
@@ -381,27 +381,27 @@ const getUnitSuffix = (unitType) => {
 const getItemWeightKg = (item) =>
   normalizePositiveNumber(
     item?.weight ??
-      item?.actualWeight ??
-      item?.totalWeight ??
-      item?.weightKg
+    item?.actualWeight ??
+    item?.totalWeight ??
+    item?.weightKg
   );
 
 const getItemLengthCm = (item) =>
   normalizePositiveNumber(
     item?.length ??
-      item?.lengthCm
+    item?.lengthCm
   );
 
 const getItemWidthCm = (item) =>
   normalizePositiveNumber(
     item?.width ??
-      item?.widthCm
+    item?.widthCm
   );
 
 const getItemHeightCm = (item) =>
   normalizePositiveNumber(
     item?.height ??
-      item?.heightCm
+    item?.heightCm
   );
 
 const getItemDeclaredValue = (item) =>
@@ -524,7 +524,7 @@ const warehouseMatchesCountry = (
 
   const keywords =
     WAREHOUSE_COUNTRY_KEYWORDS[
-      countryCode
+    countryCode
     ] || [];
 
   return keywords.some((keyword) =>
@@ -542,8 +542,8 @@ const getSelectedRuleIds = (detail) => {
   return new Set(
     Array.isArray(detail?.pricingRuleIds)
       ? detail.pricingRuleIds
-          .map(normalizeText)
-          .filter(Boolean)
+        .map(normalizeText)
+        .filter(Boolean)
       : []
   );
 };
@@ -584,8 +584,8 @@ const isRuleSelectedByCustomer = (
 
   if (
     ruleCode ===
-      PRICING_RULE_CODE
-        .SUR_INSPECTION &&
+    PRICING_RULE_CODE
+      .SUR_INSPECTION &&
     detail?.requiresInspection === true
   ) {
     return true;
@@ -1113,21 +1113,21 @@ export default function CreateConsignmentQuotation() {
             normalizeText(
               pricing?.id
             ) ===
-              quotationPricingId &&
+            quotationPricingId &&
             normalizeUpperText(
               pricing?.serviceType
             ) === serviceType &&
             normalizeCountryCode(
               pricing?.originCountry
             ) ===
-              routeCountryCodes
-                .originCountry &&
+            routeCountryCodes
+              .originCountry &&
             normalizeCountryCode(
               pricing
                 ?.destinationCountry
             ) ===
-              routeCountryCodes
-                .destinationCountry
+            routeCountryCodes
+              .destinationCountry
         );
 
       if (existingPricing) {
@@ -1266,9 +1266,9 @@ export default function CreateConsignmentQuotation() {
       return itemTotal > 0
         ? itemTotal
         : normalizePositiveNumber(
-            detail?.quotation
-              ?.declaredValue
-          );
+          detail?.quotation
+            ?.declaredValue
+        );
     }, [
       items,
       detail?.quotation
@@ -1316,8 +1316,8 @@ export default function CreateConsignmentQuotation() {
               normalizePositiveNumber(
                 configuration
                   ?.estimatedFee ??
-                  configuration
-                    ?.packageFee
+                configuration
+                  ?.packageFee
               ),
           };
         })
@@ -1353,13 +1353,13 @@ export default function CreateConsignmentQuotation() {
           if (
             !code ||
             rule?.isRequired ===
-              true ||
+            true ||
             code ===
-              PRICING_RULE_CODE
-                .VOLUMETRIC_DIVISOR ||
+            PRICING_RULE_CODE
+              .VOLUMETRIC_DIVISOR ||
             code ===
-              PRICING_RULE_CODE
-                .DOMESTIC_FEE
+            PRICING_RULE_CODE
+              .DOMESTIC_FEE
           ) {
             return false;
           }
@@ -1396,8 +1396,8 @@ export default function CreateConsignmentQuotation() {
            */
           const calculationPackageCount =
             ruleCode ===
-            PRICING_RULE_CODE
-              .WOOD_CRATE
+              PRICING_RULE_CODE
+                .WOOD_CRATE
               ? 1
               : packageCount;
 
@@ -1500,9 +1500,9 @@ export default function CreateConsignmentQuotation() {
       return selectedOptionalFeeRows.filter(
         (row) =>
           row.code !==
-            PRICING_RULE_CODE.DOMESTIC_FEE &&
+          PRICING_RULE_CODE.DOMESTIC_FEE &&
           row.code !==
-            PRICING_RULE_CODE.WOOD_CRATE
+          PRICING_RULE_CODE.WOOD_CRATE
       );
     }, [selectedOptionalFeeRows]);
 
@@ -1521,7 +1521,7 @@ export default function CreateConsignmentQuotation() {
   const packagingFeeTotal =
     roundMoney(
       packageConfigurationFee +
-        woodCrateFee
+      woodCrateFee
     );
 
   const watchedDiscountPercent =
@@ -1579,9 +1579,9 @@ export default function CreateConsignmentQuotation() {
   const freightCharge =
     roundMoney(
       unitPrice *
-        normalizePositiveNumber(
-          billingQuantity
-        )
+      normalizePositiveNumber(
+        billingQuantity
+      )
     );
 
   /*
@@ -1595,7 +1595,7 @@ export default function CreateConsignmentQuotation() {
   const serviceFee =
     roundMoney(
       packagingFeeTotal +
-        otherSurchargeTotal
+      otherSurchargeTotal
     );
 
   /*
@@ -1605,10 +1605,10 @@ export default function CreateConsignmentQuotation() {
    */
   const returnedTaxAndDuty =
     detail?.quotation?.taxAndDuty !== undefined &&
-    detail?.quotation?.taxAndDuty !== null
+      detail?.quotation?.taxAndDuty !== null
       ? getFiniteMoney(
-          detail.quotation.taxAndDuty
-        )
+        detail.quotation.taxAndDuty
+      )
       : null;
 
   const taxAndDuty =
@@ -1617,8 +1617,8 @@ export default function CreateConsignmentQuotation() {
   const subtotal =
     roundMoney(
       freightCharge +
-        domesticShippingFee +
-        serviceFee
+      domesticShippingFee +
+      serviceFee
     );
 
   const discountPercent =
@@ -1632,14 +1632,14 @@ export default function CreateConsignmentQuotation() {
   const discountAmount =
     roundMoney(
       subtotal *
-        (discountPercent / 100)
+      (discountPercent / 100)
     );
 
   const totalEstimatedCost =
     roundMoney(
       subtotal -
-        discountAmount +
-        taxAndDuty
+      discountAmount +
+      taxAndDuty
     );
 
   const currentOrderStatus =
@@ -1783,8 +1783,8 @@ export default function CreateConsignmentQuotation() {
           return (
             rule?.isRequired === true &&
             code !==
-              PRICING_RULE_CODE
-                .VOLUMETRIC_DIVISOR
+            PRICING_RULE_CODE
+              .VOLUMETRIC_DIVISOR
           );
         })
         .map((rule) =>
@@ -1798,7 +1798,7 @@ export default function CreateConsignmentQuotation() {
       if (!canCreateQuotation) {
         throw new Error(
           validationMessages[0] ||
-            "Chưa đủ điều kiện lập báo giá."
+          "Chưa đủ điều kiện lập báo giá."
         );
       }
 
@@ -1821,12 +1821,12 @@ export default function CreateConsignmentQuotation() {
                */
               amount:
                 code ===
-                PRICING_RULE_CODE
-                  .WOOD_CRATE
+                  PRICING_RULE_CODE
+                    .WOOD_CRATE
                   ? woodCrateFee
                   : roundMoney(
-                      row.amount
-                    ),
+                    row.amount
+                  ),
 
               enabled: true,
             };
@@ -2160,9 +2160,9 @@ export default function CreateConsignmentQuotation() {
         AuthNotify.error(
           "Chưa thể mở xác nhận báo giá",
           formError?.response?.data?.message ||
-            formError?.response?.data?.error ||
-            formError?.message ||
-            "Vui lòng kiểm tra lại thông tin."
+          formError?.response?.data?.error ||
+          formError?.message ||
+          "Vui lòng kiểm tra lại thông tin."
         );
       }
     };
@@ -2387,24 +2387,24 @@ export default function CreateConsignmentQuotation() {
 
         {validationMessages.length >
           0 && (
-          <Alert
-            type="warning"
-            showIcon
-            message="Chưa đủ điều kiện gửi báo giá"
-            description={
-              <ul className="quotation-validation-list">
-                {validationMessages.map(
-                  (message) => (
-                    <li key={message}>
-                      {message}
-                    </li>
-                  )
-                )}
-              </ul>
-            }
-            className="quotation-create-validation"
-          />
-        )}
+            <Alert
+              type="warning"
+              showIcon
+              message="Chưa đủ điều kiện gửi báo giá"
+              description={
+                <ul className="quotation-validation-list">
+                  {validationMessages.map(
+                    (message) => (
+                      <li key={message}>
+                        {message}
+                      </li>
+                    )
+                  )}
+                </ul>
+              }
+              className="quotation-create-validation"
+            />
+          )}
 
         <div className="quotation-create-layout">
           <section className="quotation-create-main">
@@ -2594,111 +2594,111 @@ export default function CreateConsignmentQuotation() {
 
             {selectedPackageRows.length >
               0 && (
-              <article className="quotation-section-card">
-                <div className="quotation-section-heading">
-                  <div className="quotation-section-heading__icon">
-                    <ShoppingOutlined />
+                <article className="quotation-section-card">
+                  <div className="quotation-section-heading">
+                    <div className="quotation-section-heading__icon">
+                      <ShoppingOutlined />
+                    </div>
+
+                    <div>
+                      <span>03</span>
+                      <h2>
+                        Cấu hình đóng gói
+                      </h2>
+                      <p>
+                        Chỉ hiển thị cấu hình khách
+                        hàng đã chọn cho từng kiện.
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <span>03</span>
-                    <h2>
-                      Cấu hình đóng gói
-                    </h2>
-                    <p>
-                      Chỉ hiển thị cấu hình khách
-                      hàng đã chọn cho từng kiện.
-                    </p>
-                  </div>
-                </div>
+                  <div className="quotation-package-list">
+                    {selectedPackageRows.map(
+                      (row) => (
+                        <div
+                          key={row.id}
+                          className="quotation-package-row"
+                        >
+                          <div>
+                            <strong>
+                              {row.name}
+                            </strong>
+                            <span>
+                              {
+                                row.configurationName
+                              }
+                            </span>
+                          </div>
 
-                <div className="quotation-package-list">
-                  {selectedPackageRows.map(
-                    (row) => (
-                      <div
-                        key={row.id}
-                        className="quotation-package-row"
-                      >
-                        <div>
                           <strong>
-                            {row.name}
+                            {formatCurrency(
+                              row.fee
+                            )}
                           </strong>
-                          <span>
-                            {
-                              row.configurationName
-                            }
-                          </span>
                         </div>
-
-                        <strong>
-                          {formatCurrency(
-                            row.fee
-                          )}
-                        </strong>
-                      </div>
-                    )
-                  )}
-                </div>
-              </article>
-            )}
+                      )
+                    )}
+                  </div>
+                </article>
+              )}
 
             {additionalFeeRows.length >
               0 && (
-              <article className="quotation-section-card">
-                <div className="quotation-section-heading">
-                  <div className="quotation-section-heading__icon">
-                    <CheckCircleOutlined />
+                <article className="quotation-section-card">
+                  <div className="quotation-section-heading">
+                    <div className="quotation-section-heading__icon">
+                      <CheckCircleOutlined />
+                    </div>
+
+                    <div>
+                      <span>04</span>
+                      <h2>
+                        Phụ phí khách hàng đã chọn
+                      </h2>
+                      <p>
+                        Không hiển thị những phụ phí
+                        khách hàng không lựa chọn.
+                      </p>
+                    </div>
                   </div>
 
-                  <div>
-                    <span>04</span>
-                    <h2>
-                      Phụ phí khách hàng đã chọn
-                    </h2>
-                    <p>
-                      Không hiển thị những phụ phí
-                      khách hàng không lựa chọn.
-                    </p>
-                  </div>
-                </div>
+                  <div className="quotation-selected-fees">
+                    {additionalFeeRows.map(
+                      (fee) => (
+                        <div
+                          key={
+                            fee.id ||
+                            fee.code
+                          }
+                          className="quotation-selected-fee"
+                        >
+                          <CheckCircleOutlined />
 
-                <div className="quotation-selected-fees">
-                  {additionalFeeRows.map(
-                    (fee) => (
-                      <div
-                        key={
-                          fee.id ||
-                          fee.code
-                        }
-                        className="quotation-selected-fee"
-                      >
-                        <CheckCircleOutlined />
+                          <div>
+                            <strong>
+                              {fee.label}
+                            </strong>
 
-                        <div>
+                            {fee.description && (
+                              <span>
+                                {
+                                  fee.description
+                                }
+                              </span>
+                            )}
+                          </div>
+
                           <strong>
-                            {fee.label}
+                            {formatCurrency(
+                              fee.amount
+                            )}
                           </strong>
-
-                          {fee.description && (
-                            <span>
-                              {
-                                fee.description
-                              }
-                            </span>
-                          )}
                         </div>
-
-                        <strong>
-                          {formatCurrency(
-                            fee.amount
-                          )}
-                        </strong>
-                      </div>
-                    )
-                  )}
-                </div>
-              </article>
-            )}
+                      )
+                    )}
+                  </div>
+                </article>
+              )}
 
             <article className="quotation-section-card">
               <div className="quotation-section-heading">
@@ -2712,8 +2712,7 @@ export default function CreateConsignmentQuotation() {
                     Thông tin bổ sung
                   </h2>
                   <p>
-                    Chỉ nhập chiết khấu và ghi chú
-                    dành cho khách hàng.
+                    Nhập ghi chú dành cho khách hàng.
                   </p>
                 </div>
               </div>
@@ -2726,31 +2725,6 @@ export default function CreateConsignmentQuotation() {
                 className="quotation-create-form"
               >
                 <div className="quotation-create-form__grid">
-                  <Form.Item
-                    name="discountPercent"
-                    label="Chiết khấu"
-                    rules={[
-                      {
-                        type: "number",
-                        min: 0,
-                        max: 100,
-                        message:
-                          "Chiết khấu phải từ 0 đến 100%.",
-                      },
-                    ]}
-                  >
-                    <InputNumber
-                      size="large"
-                      min={0}
-                      max={100}
-                      precision={0}
-                      controls={false}
-                      addonAfter="%"
-                      disabled={sending}
-                      className="quotation-create-number"
-                    />
-                  </Form.Item>
-
                   <div className="quotation-readonly-value">
                     <span>
                       Giá trị khai báo
@@ -2816,18 +2790,6 @@ export default function CreateConsignmentQuotation() {
                 </strong>
               </div>
 
-              <div>
-                <span>
-                  Trọng lượng quy đổi
-                </span>
-                <strong>
-                  {formatDimWeight(
-                    totalDimKg
-                  )}{" "}
-                  kg
-                </strong>
-              </div>
-
               <div className="is-highlight">
                 <span>
                   Khối lượng tính cước
@@ -2838,21 +2800,6 @@ export default function CreateConsignmentQuotation() {
                     4
                   )}{" "}
                   kg
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Số lượng tính giá
-                </span>
-                <strong>
-                  {formatMeasurement(
-                    billingQuantity,
-                    6
-                  )}{" "}
-                  {getUnitSuffix(
-                    unitType
-                  )}
                 </strong>
               </div>
             </div>
@@ -2871,31 +2818,31 @@ export default function CreateConsignmentQuotation() {
 
               {domesticShippingFee >
                 0 && (
-                <div className="is-domestic-fee">
-                  <span>
-                    Phí vận chuyển nội địa
-                  </span>
-                  <strong>
-                    {formatCurrency(
-                      domesticShippingFee
-                    )}
-                  </strong>
-                </div>
-              )}
+                  <div className="is-domestic-fee">
+                    <span>
+                      Phí vận chuyển nội địa
+                    </span>
+                    <strong>
+                      {formatCurrency(
+                        domesticShippingFee
+                      )}
+                    </strong>
+                  </div>
+                )}
 
               {packageConfigurationFee >
                 0 && (
-                <div>
-                  <span>
-                    Phí cấu hình thùng theo kiện
-                  </span>
-                  <strong>
-                    {formatCurrency(
-                      packageConfigurationFee
-                    )}
-                  </strong>
-                </div>
-              )}
+                  <div>
+                    <span>
+                      Phí cấu hình thùng theo kiện
+                    </span>
+                    <strong>
+                      {formatCurrency(
+                        packageConfigurationFee
+                      )}
+                    </strong>
+                  </div>
+                )}
 
               {woodCrateFee > 0 && (
                 <div>
@@ -3014,11 +2961,10 @@ export default function CreateConsignmentQuotation() {
                 handleOpenConfirmation
               }
               block
-              className={`quotation-confirm-button ${
-                hasSentQuotation
+              className={`quotation-confirm-button ${hasSentQuotation
                   ? "is-submitted"
                   : ""
-              }`}
+                }`}
             >
               {hasSentQuotation
                 ? "Đã gửi báo giá"
@@ -3032,9 +2978,9 @@ export default function CreateConsignmentQuotation() {
                 Hệ số quy đổi thể tích:{" "}
                 {dimDivisor > 0
                   ? formatMeasurement(
-                      dimDivisor,
-                      0
-                    )
+                    dimDivisor,
+                    0
+                  )
                   : "Chưa có cấu hình"}
                 .
               </span>
