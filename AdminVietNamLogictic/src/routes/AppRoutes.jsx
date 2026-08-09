@@ -27,6 +27,8 @@ import PurchaseRequestDetail from "../pages/SalePage/PurchasePage/PurchaseRequet
 import ConsignmentBuyOrder from "../pages/SalePage/CreateRequestPage/CreateRequestBuyCuspage/ConsignmentBuyOrder";
 import ConsignmentOrder from "../pages/SalePage/CreateRequestPage/CreateRequestOrderCusPage/ConsignmentOrder";
 import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
+import ConsignmentDocumentsList from "../pages/SalePage/DocumentsPage/ConsignmentDocumentsPage/ConsignmentDocumentsList";
+import PurchaseDocumentsList from "../pages/SalePage/DocumentsPage/PurchaseDocumentsPage/PurchaseDocumentsList";
 
 /* ================= ADMIN ================= */
 
@@ -284,6 +286,16 @@ export default function AppRoutes() {
         <Route
           path="history/purchase-requests"
           element={<PendingPurchaseRequestListHistory />}
+        />
+
+        <Route
+          path="documents/consignments"
+          element={<ConsignmentDocumentsList />}
+        />
+
+        <Route
+          path="documents/purchase-requests"
+          element={<PurchaseDocumentsList />}
         />
 
         <Route

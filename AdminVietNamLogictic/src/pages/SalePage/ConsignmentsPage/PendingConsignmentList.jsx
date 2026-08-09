@@ -22,7 +22,7 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import SearchIcon from "@mui/icons-material/Search";
 
-import { getConsignmentsApi } from "../../../api/SaleAPI/ConsignmentAPI/consignmentService";
+import { getConsignmentsApi, getConsignmentReceiptApi } from "../../../api/SaleAPI/ConsignmentAPI/consignmentService";
 import AuthNotify from "../../../utils/Common/AuthNotify";
 import { isAuthenticationError } from "../../../utils/Common/authSession";
 
@@ -497,14 +497,14 @@ const getConsignmentStatus = (
     statusDisplayName && statusDisplayName !== "string"
       ? statusDisplayName
       : configuredStatus?.label ||
-        (code
-          ? code
-              .replace(/_/g, " ")
-              .toLocaleLowerCase("vi-VN")
-              .replace(/(^|\s)\S/g, (character) =>
-                character.toLocaleUpperCase("vi-VN")
-              )
-          : "Chưa xác định");
+      (code
+        ? code
+          .replace(/_/g, " ")
+          .toLocaleLowerCase("vi-VN")
+          .replace(/(^|\s)\S/g, (character) =>
+            character.toLocaleUpperCase("vi-VN")
+          )
+        : "Chưa xác định");
 
   return {
     code: code || "UNKNOWN",
@@ -1181,36 +1181,57 @@ export default function PendingConsignmentList({
                               (item?.paymentStatus || item?.orderStatus) &&
                               getConsignmentStatusCode(item?.paymentStatus || item?.orderStatus) !== statusInfo.code
                             ) && (
-                              <span
-                                className={`tag-status-header ${
-                                  getConsignmentStatus(
+                                <span
+                                  className={`tag-status-header ${getConsignmentStatus(
                                     item?.paymentStatus || item?.orderStatus
                                   ).className
-                                }`}
-                                style={{ opacity: 0.9, marginLeft: "4px" }}
-                              >
-                                {
-                                  getConsignmentStatus(
-                                    item?.paymentStatus || item?.orderStatus
-                                  ).label
-                                }
-                              </span>
-                            )}
+                                    }`}
+                                  style={{ opacity: 0.9, marginLeft: "4px" }}
+                                >
+                                  {
+                                    getConsignmentStatus(
+                                      item?.paymentStatus || item?.orderStatus
+                                    ).label
+                                  }
+                                </span>
+                              )}
                           </div>
                         </div>
 
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          endIcon={<ArrowForwardIcon />}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleViewDetail(item);
-                          }}
-                          className="view-detail-button"
-                        >
-                          Xem chi tiết
-                        </Button>
+                        <Space>
+                          {/* <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              const orderId = item?.orderId || item?.id;
+                              if (!orderId) return;
+                              getConsignmentReceiptApi(orderId, { download: true })
+                                .then(() => {
+                                  AuthNotify.success("Tải phiếu thành công", `Đã tải phiếu biên nhận đơn ${item?.orderCode || item?.trackingCode || orderId}.pdf`);
+                                })
+                                .catch((err) => {
+                                  AuthNotify.error("Không thể tải phiếu", err?.message || "Vui lòng thử lại.");
+                                });
+                            }}
+                            style={{ borderColor: "#cbd5e1", color: "#334155", textTransform: "none", borderRadius: "8px" }}
+                          >
+                            📄 In phiếu PDF
+                          </Button> */}
+
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            endIcon={<ArrowForwardIcon />}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleViewDetail(item);
+                            }}
+                            className="view-detail-button"
+                          >
+                            Xem chi tiết
+                          </Button>
+                        </Space>
                       </div>
 
                       <div className="sub-header">
