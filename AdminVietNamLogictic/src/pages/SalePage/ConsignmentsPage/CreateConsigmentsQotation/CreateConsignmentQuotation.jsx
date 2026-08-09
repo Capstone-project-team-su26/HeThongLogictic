@@ -54,6 +54,7 @@ import {
 import {
   getActivePackageConfigurationsApi,
   calculateItemsPackageFee,
+  calculateItemPackageFee,
   resolveItemPackageConfiguration,
   getPackageConfigurationDisplayName,
 } from "../../../../api/SaleAPI/ConsignmentAPI/packageConfigurationService";
@@ -1312,13 +1313,10 @@ export default function CreateConsignmentQuotation() {
               getPackageConfigurationDisplayName(
                 configuration
               ),
-            fee:
-              normalizePositiveNumber(
-                configuration
-                  ?.estimatedFee ??
-                configuration
-                  ?.packageFee
-              ),
+            fee: calculateItemPackageFee(
+              item,
+              packageConfigurations
+            ),
           };
         })
         .filter(Boolean);
