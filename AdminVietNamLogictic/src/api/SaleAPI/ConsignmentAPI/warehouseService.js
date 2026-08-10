@@ -57,14 +57,14 @@ const getArrayItems = (data) => {
 export const normalizeWarehouse = (
   warehouse = {}
 ) => ({
-  id: normalizeText(warehouse?.id),
-  name: normalizeText(warehouse?.name),
-  code: normalizeText(warehouse?.code),
-  address: normalizeText(warehouse?.address),
+  id: normalizeText(warehouse?.id || warehouse?.warehouseId || warehouse?._id),
+  name: normalizeText(warehouse?.name || warehouse?.warehouseName || warehouse?.title || "Kho hàng"),
+  code: normalizeText(warehouse?.code || warehouse?.warehouseCode),
+  address: normalizeText(warehouse?.address || warehouse?.location || warehouse?.fullAddress),
   warehouseType: normalizeText(
-    warehouse?.warehouseType
+    warehouse?.warehouseType || warehouse?.type
   ),
-  isActive: warehouse?.isActive === true,
+  isActive: warehouse?.isActive !== false,
 });
 
 /* =========================
@@ -78,7 +78,6 @@ export const getWarehousesApi = async (
     API_ENDPOINTS.warehouses.list,
     {
       params: removeEmptyParams(filters),
-      headers: getAuthHeaders(),
     }
   );
 
@@ -100,19 +99,18 @@ export const getActiveWarehousesApi = async (
     API_ENDPOINTS.warehouses.active,
     {
       params: removeEmptyParams(filters),
-      headers: getAuthHeaders(),
     }
   );
 
   const data = getResponseData(response);
 
+  // /active đã lọc kho ngừng hoạt động; field có thể không có isActive.
   return getArrayItems(data)
     .map(normalizeWarehouse)
     .filter(
       (warehouse) =>
         Boolean(warehouse.id) &&
-        Boolean(warehouse.name) &&
-        warehouse.isActive === true
+        Boolean(warehouse.name)
     );
 };
 

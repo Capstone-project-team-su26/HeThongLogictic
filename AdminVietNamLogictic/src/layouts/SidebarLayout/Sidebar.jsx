@@ -15,9 +15,13 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   DownOutlined,
+  CheckSquareOutlined,
   FileSearchOutlined,
+  FileTextOutlined,
   InboxOutlined,
   LogoutOutlined,
+  MonitorOutlined,
+  SendOutlined,
   PlusCircleOutlined,
   RightOutlined,
   SafetyCertificateOutlined,
@@ -25,6 +29,7 @@ import {
   ShoppingCartOutlined,
   ShoppingOutlined,
   TeamOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 
 import logoVietnamLogistics from "../../assets/anhlogocap2.jpeg";
@@ -81,6 +86,37 @@ const MENU_BY_ROLE = {
       path: "/admin/users",
     },
     {
+      key: "admin-oversight",
+      label: "Giám sát vận hành",
+      icon: <MonitorOutlined />,
+      children: [
+        {
+          key: "admin-consignments",
+          label: "Đơn ký gửi",
+          icon: <FileSearchOutlined />,
+          path: "/admin/consignments",
+        },
+        {
+          key: "admin-inventory",
+          label: "Tồn kho",
+          icon: <InboxOutlined />,
+          path: "/admin/inventory",
+        },
+        {
+          key: "admin-wro",
+          label: "Phiếu xuất kho",
+          icon: <CheckSquareOutlined />,
+          path: "/admin/wro",
+        },
+        {
+          key: "admin-cash-flow",
+          label: "Dòng tiền",
+          icon: <WalletOutlined />,
+          path: "/admin/cash-flow",
+        },
+      ],
+    },
+    {
       key: "admin-warehouse",
       label: "Kho vận hành",
       icon: <DatabaseOutlined />,
@@ -93,7 +129,7 @@ const MENU_BY_ROLE = {
         },
         {
           key: "admin-warehouse-locations",
-          label: "Vị trí kho",
+          label: "Sơ đồ vị trí kho",
           icon: <InboxOutlined />,
           path: "/admin/warehouse-locations",
         },
@@ -116,6 +152,37 @@ const MENU_BY_ROLE = {
           icon: <ShoppingCartOutlined />,
           path: "/admin/shipping-methods",
         },
+        {
+          key: "admin-shipping-routes",
+          label: "Tuyến vận chuyển",
+          icon: <ShoppingCartOutlined />,
+          path: "/admin/shipping-routes",
+        },
+        {
+          key: "admin-suppliers",
+          label: "Nhà cung cấp",
+          icon: <ShoppingOutlined />,
+          path: "/admin/suppliers",
+        },
+      ],
+    },
+    {
+      key: "admin-goods-catalog",
+      label: "Danh mục hàng hóa",
+      icon: <InboxOutlined />,
+      children: [
+        {
+          key: "admin-product-types",
+          label: "Loại hàng",
+          icon: <InboxOutlined />,
+          path: "/admin/product-types",
+        },
+        {
+          key: "admin-units-of-measure",
+          label: "Đơn vị tính",
+          icon: <InboxOutlined />,
+          path: "/admin/units-of-measure",
+        },
       ],
     },
     {
@@ -128,6 +195,12 @@ const MENU_BY_ROLE = {
           label: "Bảng giá vận chuyển",
           icon: <CalculatorOutlined />,
           path: "/admin/service-pricings",
+        },
+        {
+          key: "admin-exchange-rates",
+          label: "Bảng giá tiền tệ",
+          icon: <CalculatorOutlined />,
+          path: "/admin/exchange-rates",
         },
         {
           key: "admin-pricing-rules",
@@ -166,16 +239,28 @@ const MENU_BY_ROLE = {
       end: true,
     },
     {
-      key: "operations-parcels",
-      label: "Gom hàng",
-      icon: <InboxOutlined />,
-      path: "/operations-manager/parcels",
+      key: "operations-wro",
+      label: "Phiếu xuất kho",
+      icon: <CheckSquareOutlined />,
+      path: "/operations-manager/wro",
     },
     {
-      key: "operations-warehouse",
-      label: "Sơ đồ vị trí kho",
-      icon: <DatabaseOutlined />,
-      path: "/operations-manager/warehouse",
+      key: "operations-purchase-store",
+      label: "Duyệt nhập kho mua hộ",
+      icon: <ShoppingCartOutlined />,
+      path: "/operations-manager/purchase-store",
+    },
+    {
+      key: "operations-shipments",
+      label: "Lô vận chuyển",
+      icon: <SendOutlined />,
+      path: "/operations-manager/shipments",
+    },
+    {
+      key: "operations-parcels",
+      label: "Tồn kho",
+      icon: <InboxOutlined />,
+      path: "/operations-manager/parcels",
     },
   ],
 
@@ -278,6 +363,28 @@ const MENU_BY_ROLE = {
           label: "Ký gửi",
           icon: <InboxOutlined />,
           path: "/sale/history/order",
+          end: true,
+        },
+      ],
+    },
+
+    {
+      key: "sale-documents",
+      label: "Quản lý giấy tờ",
+      icon: <FileTextOutlined />,
+      children: [
+        {
+          key: "sale-documents-purchase",
+          label: "Giấy tờ mua hộ",
+          icon: <ShoppingOutlined />,
+          path: "/sale/documents/purchase-requests",
+          end: true,
+        },
+        {
+          key: "sale-documents-consignment",
+          label: "Giấy tờ ký gửi",
+          icon: <InboxOutlined />,
+          path: "/sale/documents/consignments",
           end: true,
         },
       ],
@@ -432,6 +539,20 @@ export default function Sidebar() {
       location.pathname;
 
     return {
+      "admin-oversight":
+        pathname.startsWith(
+          "/admin/consignments"
+        ) ||
+        pathname.startsWith(
+          "/admin/inventory"
+        ) ||
+        pathname.startsWith(
+          "/admin/wro"
+        ) ||
+        pathname.startsWith(
+          "/admin/cash-flow"
+        ),
+
       "sale-list-and-fees":
         pathname.startsWith(
           "/sale/restricted-items"
@@ -531,6 +652,7 @@ export default function Sidebar() {
          * Tránh nhiều nhóm menu mở cùng lúc.
          */
         return {
+          "admin-oversight": false,
           "sale-list-and-fees": false,
           "sale-create-request": false,
           "sale-transaction-history": false,

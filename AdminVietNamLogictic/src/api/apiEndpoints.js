@@ -23,6 +23,8 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/orders/${encodeId(orderId)}/quotation/estimate`,
     sendQuotation: (orderId) =>
       `/api/orders/${encodeId(orderId)}/quotation/send`,
+    receipt: (orderId) =>
+      `/api/orders/consignments/${encodeId(orderId)}/receipt`,
   }),
   purchaseRequests: Object.freeze({
     list: "/api/purchase-requests",
@@ -30,6 +32,12 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/purchase-requests/${encodeId(purchaseRequestId)}`,
     quotation: (purchaseRequestId) =>
       `/api/purchase-requests/${encodeId(purchaseRequestId)}/quotation`,
+    confirmPurchase: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/confirm-purchase`,
+    approveStore: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/approve-store`,
+    history: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/history`,
   }),
   deliveryAddresses: Object.freeze({
     list: "/api/delivery-addresses",
@@ -65,6 +73,11 @@ export const API_ENDPOINTS = Object.freeze({
     list: "/api/pricing-rules",
     detail: (pricingRuleId) =>
       `/api/pricing-rules/${encodeId(pricingRuleId)}`,
+  }),
+  exchangeRates: Object.freeze({
+    list: "/api/exchange-rates",
+    convert: "/api/exchange-rates/convert",
+    detail: (id) => `/api/exchange-rates/${encodeId(id)}`,
   }),
 });
 

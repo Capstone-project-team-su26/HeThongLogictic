@@ -33,10 +33,14 @@ import {
   PictureOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RobotOutlined,
   SendOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 
+import {
+  useLocation,
+} from "react-router-dom";
 import {
   createConversationApi,
   getConversationDetailApi,
@@ -44,6 +48,7 @@ import {
   markConversationAsReadApi,
   sendConversationMessageApi,
 } from "../../../api/SaleAPI/Conversation/conversationApi";
+import SalesAiAssistantPanel from "./components/SalesAiAssistantPanel";
 
 import AuthNotify from "../../../utils/Common/AuthNotify";
 
@@ -1254,7 +1259,39 @@ const validateImageFile = (file) => {
   }
 };
 
+const buildAiContextFromConversation = (conversation) => {
+  if (!conversation) return null;
+
+  const relatedCode = getConversationRelatedCode(conversation);
+  const looksLikeId =
+    relatedCode && getConversationId(conversation) === relatedCode;
+
+  return {
+    orderCode: looksLikeId ? "" : relatedCode,
+    customerId: getCustomerId(conversation) || undefined,
+    customerName: getCustomerDisplayName(conversation) || undefined,
+    relatedType: conversation?.relatedType || undefined,
+    relatedId: conversation?.relatedId || undefined,
+  };
+};
+
+const buildAiPrefillFromLocation = (state) => {
+  if (!state || typeof state !== "object") return null;
+
+  const orderCode = String(state.aiOrderCode || "").trim();
+  if (!orderCode) return null;
+
+  return {
+    orderCode,
+    customerId: String(state.aiCustomerId || "").trim() || undefined,
+    customerName: String(state.aiCustomerName || "").trim() || undefined,
+    relatedType: String(state.aiRelatedType || "").trim() || undefined,
+    relatedId: String(state.aiRelatedId || "").trim() || undefined,
+  };
+};
+
 export default function CustomerServiceChat() {
+  const location = useLocation();
   const currentUserId = useMemo(() => getCurrentUserId(), []);
   const currentUserRole = useMemo(
     () => getCurrentUserRole(),
@@ -1299,6 +1336,19 @@ export default function CustomerServiceChat() {
   const [copiedMessageId, setCopiedMessageId] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState(() => new Set());
+  const [aiPrefill, setAiPrefill] = useState(() =>
+    buildAiPrefillFromLocation(location.state)
+  );
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(() =>
+    Boolean(buildAiPrefillFromLocation(location.state))
+  );
+
+  useEffect(() => {
+    const nextPrefill = buildAiPrefillFromLocation(location.state);
+    if (!nextPrefill) return;
+    setAiPrefill(nextPrefill);
+    setIsAiAssistantOpen(true);
+  }, [location.state]);
 
   const hasConversation = conversations.length > 0;
   const hasSelectedConversation = Boolean(selectedConversationId);
@@ -2002,6 +2052,28 @@ export default function CustomerServiceChat() {
     }));
   };
 
+  const aiContext = useMemo(
+    () => buildAiContextFromConversation(selectedConversation),
+    [selectedConversation]
+  );
+
+  const handleInsertAiAnswer = (text) => {
+    const content = String(text || "").trim();
+    if (!content) return;
+
+    setMessageForm((current) => ({
+      ...current,
+      content: current.content
+        ? `${current.content}\n\n${content}`
+        : content,
+    }));
+
+    AuthNotify.success(
+      "Đã chèn gợi ý",
+      "Câu trả lời cho khách đã được chèn vào ô nhắn tin. Kiểm tra lại rồi gửi."
+    );
+  };
+
   const appendImageAttachment = ({
     file,
     setAttachments,
@@ -2395,7 +2467,14 @@ export default function CustomerServiceChat() {
       }}
     >
       <div className="cskh-chat-page">
-        <section className="cskh-chat-shell">
+        <section
+          className={[
+            "cskh-chat-shell",
+            isSaleViewer && isAiAssistantOpen && "has-ai-panel",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <aside className="cskh-chat-sidebar">
             <div className="cskh-chat-sidebar__header">
               <p className="cskh-chat-eyebrow">CHĂM SÓC KHÁCH HÀNG</p>
@@ -2702,7 +2781,7 @@ export default function CustomerServiceChat() {
 
                 <p>
                   {isSaleViewer
-                    ? "Chọn một cuộc trò chuyện bên trái để xem lịch sử và phản hồi khách hàng."
+                    ? "Chọn một cuộc trò chuyện bên trái để xem lịch sử và phản hồi khách hàng. Bấm AI khi cần soạn gợi ý trả lời."
                     : "Chọn một cuộc trò chuyện bên trái hoặc tạo yêu cầu mới để bắt đầu trao đổi với nhân viên Sale."}
                 </p>
 
@@ -2715,6 +2794,20 @@ export default function CustomerServiceChat() {
                     onClick={handleOpenCreateModal}
                   >
                     Tạo cuộc trò chuyện
+                  </Button>
+                )}
+
+                {isSaleViewer && (
+                  <Button
+                    type="default"
+                    size="large"
+                    icon={<RobotOutlined />}
+                    className="cskh-welcome-button"
+                    onClick={() =>
+                      setIsAiAssistantOpen((current) => !current)
+                    }
+                  >
+                    {isAiAssistantOpen ? "Đóng trợ lý AI" : "Mở trợ lý AI"}
                   </Button>
                 )}
               </div>
@@ -2744,16 +2837,38 @@ export default function CustomerServiceChat() {
                     </div>
                   </div>
 
-                  <Tooltip title="Đánh dấu cuộc trò chuyện đã đọc">
-                    <Button
-                      type="default"
-                      className="cskh-read-button"
-                      icon={<CheckCircleOutlined />}
-                      onClick={handleMarkRead}
-                    >
-                      <span className="cskh-read-button__label">Đã đọc</span>
-                    </Button>
-                  </Tooltip>
+                  <div className="cskh-chat-header__actions">
+                    {isSaleViewer && (
+                      <Tooltip
+                        title={
+                          isAiAssistantOpen
+                            ? "Đóng trợ lý AI"
+                            : "Mở trợ lý AI hỗ trợ soạn phản hồi"
+                        }
+                      >
+                        <Button
+                          type={isAiAssistantOpen ? "primary" : "default"}
+                          icon={<RobotOutlined />}
+                          onClick={() =>
+                            setIsAiAssistantOpen((current) => !current)
+                          }
+                        >
+                          <span className="cskh-read-button__label">AI</span>
+                        </Button>
+                      </Tooltip>
+                    )}
+
+                    <Tooltip title="Đánh dấu cuộc trò chuyện đã đọc">
+                      <Button
+                        type="default"
+                        className="cskh-read-button"
+                        icon={<CheckCircleOutlined />}
+                        onClick={handleMarkRead}
+                      >
+                        <span className="cskh-read-button__label">Đã đọc</span>
+                      </Button>
+                    </Tooltip>
+                  </div>
                 </header>
 
                 <section
@@ -3067,6 +3182,22 @@ export default function CustomerServiceChat() {
               </>
             )}
           </main>
+
+          {isSaleViewer && isAiAssistantOpen && (
+            <SalesAiAssistantPanel
+              context={aiContext}
+              prefill={aiPrefill}
+              customerName={
+                aiContext?.customerName ||
+                aiPrefill?.customerName ||
+                selectedConversationTitle
+              }
+              onInsertText={
+                hasSelectedConversation ? handleInsertAiAnswer : null
+              }
+              onClose={() => setIsAiAssistantOpen(false)}
+            />
+          )}
         </section>
 
         <Modal

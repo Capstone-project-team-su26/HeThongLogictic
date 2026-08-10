@@ -1,11 +1,11 @@
 ---
-description: Link môi trường dev/test VCL — không chứa mật khẩu
+description: Link môi trường dev/test VCL — không chứa mật khẩu / sheet private
 alwaysApply: true
 ---
 
 # VCL — Link dev & test
 
-**Không** ghi mật khẩu / connection string vào rule hoặc source.
+**Không** ghi mật khẩu / connection string / link sheet tài khoản vào rule đã commit hoặc source.
 
 | Mục | URL |
 |-----|-----|
@@ -13,6 +13,12 @@ alwaysApply: true
 | Web khách | https://vietnamlogictic.vercel.app/ |
 | API | https://api-vcl.zushin.io.vn |
 
-- Tài khoản test: hỏi team / sheet nội bộ.
+## Tài khoản test
+
+- Biến: `VCL_TEST_ACCOUNTS_URL` (link Google Sheet nội bộ).
+- Giá trị nằm ở file **local, gitignored**: `.cursor/rules/vcl-dev-links.local.mdc`.
+- Máy mới: copy `.cursor/rules/vcl-dev-links.local.mdc.example` → `vcl-dev-links.local.mdc` rồi dán URL sheet.
+- Agent cần acc test → đọc `VCL_TEST_ACCOUNTS_URL` từ file local; **không** hardcode URL/password vào code hay PR.
+
 - FE chỉ gọi HTTP API — **không** kết nối thẳng DB.
 - Repo khung mới: https://github.com/Capstone-project-team-su26/vcl-forntend

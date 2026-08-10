@@ -16,6 +16,7 @@ import {
   FallOutlined,
   MinusOutlined,
   InboxOutlined,
+  FileDoneOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -28,6 +29,7 @@ import {
   CONSIGNMENT_TYPE_FILTER_OPTIONS,
   getConsignmentStatusLabel,
 } from "../../api/OperationsAPI/operationsMappers";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 const RANGE_OPTIONS = [
@@ -127,9 +129,9 @@ export default function OperationsDashboard() {
       const result = await getOperationalDashboard();
       setSourceItems(result?.items ?? []);
     } catch (error) {
-      setLoadError(
-        getOperationsApiError(error, "Không thể tải dữ liệu dashboard.")
-      );
+      const errMsg = getOperationsApiError(error, "Không thể tải dữ liệu dashboard.");
+      AuthNotify.error("Lỗi tải dữ liệu", errMsg);
+      setLoadError(errMsg);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -228,8 +230,8 @@ export default function OperationsDashboard() {
           <span>Trung tâm vận hành</span>
           <h1>Chào {displayName}, tổng quan hôm nay</h1>
           <p>
-            Theo dõi luồng hàng và nhận biết điểm nghẽn. Thao tác gom hàng thực
-            hiện ở trang Gom hàng.
+            Theo dõi luồng hàng và nhận biết điểm nghẽn. Duyệt WRO, gom lô và tồn
+            kho nằm ở các trang riêng.
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -239,8 +241,14 @@ export default function OperationsDashboard() {
               {analytics.totalWeight.toLocaleString("vi-VN")} kg
             </strong>
           </div>
-          <Link to="/operations-manager/parcels">
-            <Button icon={<InboxOutlined />}>Trang gom hàng</Button>
+          <Link to="/operations-manager/wro">
+            <Button>Duyệt WRO</Button>
+          </Link>
+          <Link to="/operations-manager/shipments">
+            <Button icon={<InboxOutlined />}>Lô vận chuyển</Button>
+          </Link>
+          <Link to="/operations-manager/releases">
+            <Button icon={<FileDoneOutlined />}>Duyệt xuất kho</Button>
           </Link>
           <Button
             type="primary"
@@ -392,9 +400,10 @@ export default function OperationsDashboard() {
           columns={columns}
           dataSource={analytics.rows}
           loading={isLoading}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
+          sticky={{ offsetHeader: 0 }}
+          scroll={{ x: 900, y: "calc(100vh - 450px)" }}
+          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} lô` }}
           locale={{ emptyText: "Chưa có lô hàng trong khoảng thời gian này." }}
-          scroll={{ x: 900 }}
         />
       </div>
     </div>

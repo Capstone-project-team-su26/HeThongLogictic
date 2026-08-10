@@ -61,6 +61,20 @@
   background: #fff;
 }
 
+.cskh-chat-shell.has-ai-panel {
+  grid-template-columns:
+    clamp(260px, 22vw, 320px)
+    minmax(0, 1fr)
+    clamp(300px, 28vw, 380px);
+}
+
+.cskh-chat-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 /* Conversation sidebar */
 .cskh-chat-sidebar {
   display: flex;
@@ -1412,6 +1426,14 @@
     grid-template-columns: 300px minmax(0, 1fr);
   }
 
+  .cskh-chat-shell.has-ai-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  }
+
+  .cskh-chat-shell.has-ai-panel .cskh-chat-sidebar {
+    display: none;
+  }
+
   .cskh-message-group {
     max-width: 78%;
   }
@@ -1421,6 +1443,20 @@
   .cskh-chat-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(185px, 31%) minmax(0, 1fr);
+  }
+
+  .cskh-chat-shell.has-ai-panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(220px, 42%) minmax(0, 1fr);
+  }
+
+  .cskh-chat-shell.has-ai-panel .cskh-chat-sidebar {
+    display: none;
+  }
+
+  .cskh-chat-shell.has-ai-panel .sale-ai-panel {
+    order: -1;
+    max-height: none;
   }
 
   .cskh-chat-sidebar {

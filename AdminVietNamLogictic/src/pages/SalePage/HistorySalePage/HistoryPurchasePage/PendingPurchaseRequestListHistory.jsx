@@ -183,6 +183,8 @@ const normalizePurchaseRequestTime = (item) => {
   return {
     ...item,
     createdAtUtc: normalizeApiTimeToUtc(item.createdAt),
+    quotationCreatedAtUtc: normalizeApiTimeToUtc(item.quotationCreatedAt),
+    statusUpdatedAtUtc: normalizeApiTimeToUtc(item.statusUpdatedAt),
     updatedAtUtc: normalizeApiTimeToUtc(item.updatedAt),
   };
 };

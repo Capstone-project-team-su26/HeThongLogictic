@@ -8,7 +8,7 @@ import {
   isAccessTokenExpired,
 } from "../utils/Common/authSession";
 
-/* ================= SALE ================= */
+import SaleDashboard from "../pages/SalePage/SaleDashboard/SaleDashboard";
 
 import PendingConsignmentList from "../pages/SalePage/ConsignmentsPage/PendingConsignmentList";
 
@@ -23,25 +23,32 @@ import PendingConsignmentListHistory from "../pages/SalePage/HistorySalePage/His
 import PendingPurchaseRequestListHistory from "../pages/SalePage/HistorySalePage/HistoryPurchasePage/PendingPurchaseRequestListHistory";
 import OrderPaymentHistory from "../pages/SalePage/HistorySalePage/HistoryOrderPage/OrderDetailhisstory/OrderPaymentHistory";
 import PurchaseRequestList from "../pages/SalePage/PurchasePage/PurchaseRequestList";
-import WarehouseReceiptCreate from "../pages/SalePage/HistorySalePage/HistoryOrderPage/WarehouseReceipt/WarehouseReceiptCreate";
 import PurchaseRequestDetail from "../pages/SalePage/PurchasePage/PurchaseRequetDetail/PurchaseRequestDetail";
 import ConsignmentBuyOrder from "../pages/SalePage/CreateRequestPage/CreateRequestBuyCuspage/ConsignmentBuyOrder";
 import ConsignmentOrder from "../pages/SalePage/CreateRequestPage/CreateRequestOrderCusPage/ConsignmentOrder";
 import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
+import ConsignmentDocumentsList from "../pages/SalePage/DocumentsPage/ConsignmentDocumentsPage/ConsignmentDocumentsList";
+import PurchaseDocumentsList from "../pages/SalePage/DocumentsPage/PurchaseDocumentsPage/PurchaseDocumentsList";
 
 /* ================= ADMIN ================= */
 
 import AdminDashboard from "../pages/AdminPage/AdminDashboard";
 import AdminUsersPage from "../pages/AdminPage/AdminUsersPage";
 import WarehouseLocationsPage from "../pages/AdminPage/WarehouseLocationsPage";
+import AdminCashFlowPage from "../pages/AdminPage/AdminCashFlowPage";
 import {
   AdditionalServiceFeesAdminPage,
   CarriersAdminPage,
+  ExchangeRatesAdminPage,
   PackageConfigurationsAdminPage,
   PricingRulesAdminPage,
+  ProductTypesAdminPage,
   RestrictedItemsAdminPage,
   ServicePricingsAdminPage,
   ShippingMethodsAdminPage,
+  ShippingRoutesAdminPage,
+  SuppliersAdminPage,
+  UnitsOfMeasureAdminPage,
   WarehousesAdminPage,
 } from "../pages/AdminPage/AdminCatalogPages";
 
@@ -49,7 +56,9 @@ import {
 
 import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
 import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
-import OperationsWarehousePage from "../pages/OperationsPage/OperationsWarehousePage";
+import OperationsWroPage from "../pages/OperationsPage/OperationsWroPage";
+import OperationsShipmentsPage from "../pages/OperationsPage/OperationsShipmentsPage";
+import OperationsPurchaseStorePage from "../pages/OperationsPage/OperationsPurchaseStorePage";
 
 /* ================= ROLE CONFIG ================= */
 
@@ -200,7 +209,35 @@ export default function AppRoutes() {
         />
         <Route path="service-pricings" element={<ServicePricingsAdminPage />} />
         <Route path="pricing-rules" element={<PricingRulesAdminPage />} />
+        <Route path="exchange-rates" element={<ExchangeRatesAdminPage />} />
         <Route path="restricted-items" element={<RestrictedItemsAdminPage />} />
+        <Route path="product-types" element={<ProductTypesAdminPage />} />
+        <Route path="units-of-measure" element={<UnitsOfMeasureAdminPage />} />
+        <Route path="suppliers" element={<SuppliersAdminPage />} />
+        <Route path="shipping-routes" element={<ShippingRoutesAdminPage />} />
+
+        {/* Giám sát vận hành (chỉ xem) */}
+        <Route
+          path="consignments"
+          element={<PendingConsignmentList basePath="/admin" readOnly />}
+        />
+        <Route
+          path="consignments/:orderId"
+          element={<ConsignmentDetail readOnly />}
+        />
+        <Route
+          path="consignments/:orderId/payments"
+          element={<OrderPaymentHistory basePath="/admin" readOnly />}
+        />
+        <Route
+          path="inventory"
+          element={<OperationsParcelsPage readOnly />}
+        />
+        <Route
+          path="wro"
+          element={<OperationsWroPage readOnly />}
+        />
+        <Route path="cash-flow" element={<AdminCashFlowPage />} />
       </Route>
 
       {/* ================= SALE ================= */}
@@ -213,8 +250,9 @@ export default function AppRoutes() {
           </RequireAuth>
         }
       >
-        {/* Truy cập /sale */}
-        <Route index element={<Navigate to="consignments" replace />} />
+        {/* Truy cập /sale hoặc /sale/dashboard */}
+        <Route index element={<SaleDashboard />} />
+        <Route path="dashboard" element={<SaleDashboard />} />
 
         {/* Danh sách đơn ký gửi */}
         <Route path="consignments" element={<PendingConsignmentList />} />
@@ -251,6 +289,16 @@ export default function AppRoutes() {
         />
 
         <Route
+          path="documents/consignments"
+          element={<ConsignmentDocumentsList />}
+        />
+
+        <Route
+          path="documents/purchase-requests"
+          element={<PurchaseDocumentsList />}
+        />
+
+        <Route
           path="orders/:orderId/payments/history"
           element={<OrderPaymentHistory />}
         />
@@ -262,10 +310,6 @@ export default function AppRoutes() {
         />
 
         <Route path="customer-service" element={<CustomerServiceChat />} />
-        <Route
-  path="/sale/warehouse-receipts/create/:orderId"
-  element={<WarehouseReceiptCreate />}
-/>
       </Route>
 
       {/* ========== OPERATIONS MANAGER ========== */}
@@ -279,8 +323,11 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<OperationsDashboard />} />
+        <Route path="wro" element={<OperationsWroPage />} />
+        <Route path="shipments" element={<OperationsShipmentsPage />} />
         <Route path="parcels" element={<OperationsParcelsPage />} />
-        <Route path="warehouse" element={<OperationsWarehousePage />} />
+        <Route path="purchase-store" element={<OperationsPurchaseStorePage />} />
+        <Route path="releases" element={<Navigate to="/operations-manager/wro" replace />} />
       </Route>
 
       {/* ================= ROOT ================= */}

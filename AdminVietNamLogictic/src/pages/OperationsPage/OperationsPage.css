@@ -260,6 +260,35 @@
   overflow: hidden;
 }
 
+.ops-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ops-border);
+  background: #f8fafc;
+}
+
+.ops-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ops-form-grid label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ops-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ops-page .ant-tabs-top > .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
 .ops-table-card__head {
   display: flex;
   align-items: center;
@@ -364,6 +393,31 @@
   line-height: 1.4;
 }
 
+.ops-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.ops-row-actions__primary.ant-btn {
+  padding-inline: 4px;
+  height: 28px;
+  font-weight: 600;
+}
+
+.ops-row-actions__more.ant-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ops-muted);
+}
+
+.ops-row-actions__more.ant-btn:hover {
+  color: var(--ops-text);
+  background: #eef2f7;
+}
+
 .ops-bin__actions {
   display: flex;
   align-items: center;
@@ -396,6 +450,28 @@
 .ops-bin__btn--delete.ant-btn-dangerous:hover {
   color: #b91c1c;
   background: #fef2f2;
+}
+
+.ops-table-card .ant-table-thead > tr > th {
+  background: #f8fafc !important;
+  font-weight: 750 !important;
+  color: #334155 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  white-space: nowrap;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 @media (max-width: 720px) {

@@ -50,25 +50,37 @@ const DEFAULT_PAGE_SIZE = 10;
 const ALL_STATUS = "ALL";
 
 const STATUS_CONFIG = {
+  DRAFT: {
+    label: "Bản nháp",
+    className: "is-info",
+  },
+  QUOTATION_CONFIRMED: {
+    label: "Đã xác nhận báo giá",
+    className: "is-success",
+  },
   PENDING_REVIEW: {
-    label: "Chờ duyệt",
+    label: "Chờ xác nhận",
     className: "is-warning",
   },
   IN_REVIEW: {
-    label: "Đang duyệt",
+    label: "Đang xem xét",
     className: "is-info",
   },
   APPROVED: {
     label: "Đã duyệt",
     className: "is-success",
   },
-  REJECTED: {
-    label: "Đã từ chối",
-    className: "is-danger",
+  QUOTED: {
+    label: "Đã báo giá",
+    className: "is-info",
   },
   QUOTATION_SENT: {
     label: "Đã gửi báo giá",
     className: "is-info",
+  },
+  WAITING_PAYMENT: {
+    label: "Chờ thanh toán",
+    className: "is-warning",
   },
   WAITING_DEPOSIT: {
     label: "Chờ đặt cọc",
@@ -78,13 +90,41 @@ const STATUS_CONFIG = {
     label: "Đã đặt cọc",
     className: "is-success",
   },
-  PROCESSING: {
-    label: "Đang xử lý",
+  PAID: {
+    label: "Đã thanh toán",
+    className: "is-success",
+  },
+  PURCHASED: {
+    label: "Xác nhận mua hàng",
+    className: "is-success",
+  },
+  SELLER_SHIPPED: {
+    label: "NCC đã phát hàng",
     className: "is-info",
+  },
+  ARRIVED_ORIGIN_WAREHOUSE: {
+    label: "Đã về kho nước ngoài",
+    className: "is-info",
+  },
+  WAITING_STORED: {
+    label: "Chờ nhập kho",
+    className: "is-warning",
+  },
+  STORED: {
+    label: "Đã nhập kho",
+    className: "is-success",
   },
   COMPLETED: {
     label: "Hoàn thành",
     className: "is-success",
+  },
+  NEED_MORE_INFO: {
+    label: "Cần bổ sung thông tin",
+    className: "is-warning",
+  },
+  REJECTED: {
+    label: "Đã từ chối",
+    className: "is-danger",
   },
   CANCELLED: {
     label: "Đã hủy",
@@ -93,16 +133,22 @@ const STATUS_CONFIG = {
 };
 
 const STATUS_OPTIONS = [
-  {
-    value: ALL_STATUS,
-    label: "Tất cả trạng thái",
-  },
-  ...Object.entries(
-    STATUS_CONFIG
-  ).map(([value, config]) => ({
-    value,
-    label: config.label,
-  })),
+  { value: ALL_STATUS, label: "Tất cả trạng thái" },
+  { value: "PENDING_REVIEW", label: "Chờ xác nhận" },
+  { value: "IN_REVIEW", label: "Đang xem xét" },
+  { value: "APPROVED", label: "Đã duyệt" },
+  { value: "QUOTED", label: "Đã báo giá" },
+  { value: "WAITING_PAYMENT", label: "Chờ thanh toán" },
+  { value: "DEPOSIT_PAID", label: "Đã đặt cọc" },
+  { value: "PAID", label: "Đã thanh toán" },
+  { value: "PURCHASED", label: "Xác nhận mua hàng" },
+  { value: "SELLER_SHIPPED", label: "NCC đã phát hàng" },
+  { value: "ARRIVED_ORIGIN_WAREHOUSE", label: "Đã về kho nước ngoài" },
+  { value: "WAITING_STORED", label: "Chờ nhập kho" },
+  { value: "STORED", label: "Đã nhập kho" },
+  { value: "NEED_MORE_INFO", label: "Cần bổ sung thông tin" },
+  { value: "REJECTED", label: "Đã từ chối" },
+  { value: "CANCELLED", label: "Đã hủy" },
 ];
 
 const normalizeText = (value) =>
@@ -111,27 +157,23 @@ const normalizeText = (value) =>
 const normalizeUpperText = (value) =>
   normalizeText(value).toUpperCase();
 
-const getStatusInfo = (value) => {
-  const code =
-    normalizeUpperText(value);
+const getStatusInfo = (status, statusDisplayName) => {
+  const code = normalizeUpperText(status);
 
-  return (
-    STATUS_CONFIG[code] || {
-      label:
-        code
-          .replace(/_/g, " ")
-          .toLocaleLowerCase("vi-VN")
-          .replace(
-            /(^|\s)\S/g,
-            (character) =>
-              character.toLocaleUpperCase(
-                "vi-VN"
-              )
-          ) ||
-        "Chưa xác định",
-      className: "is-default",
-    }
-  );
+  const config = STATUS_CONFIG[code] || {
+    label: code.replace(/_/g, " ").toLocaleLowerCase("vi-VN"),
+    className: "is-default",
+  };
+
+  const label =
+    statusDisplayName && statusDisplayName !== "string"
+      ? statusDisplayName
+      : config.label;
+
+  return {
+    label,
+    className: config.className || "is-default",
+  };
 };
 
 /*
@@ -190,20 +232,16 @@ const formatDateUtcTitle = (
   )}`;
 };
 
-const normalizePurchaseRequestTime = (
-  item
-) => {
+const normalizePurchaseRequestTime = (item) => {
   if (!item) {
     return item;
   }
 
   return {
     ...item,
-
-    createdAtUtc:
-      normalizeApiTimeToUtc(
-        item?.createdAt
-      ),
+    createdAtUtc: normalizeApiTimeToUtc(item?.createdAt),
+    quotationCreatedAtUtc: normalizeApiTimeToUtc(item?.quotationCreatedAt),
+    statusUpdatedAtUtc: normalizeApiTimeToUtc(item?.statusUpdatedAt),
   };
 };
 
@@ -415,13 +453,18 @@ export default function PurchaseRequestList() {
                 : undefined,
           });
 
-        setItems(
-          Array.isArray(data?.items)
-            ? data.items.map(
-                normalizePurchaseRequestTime
-              )
-            : []
-        );
+        const rawItems = Array.isArray(data?.items)
+          ? data.items.map(normalizePurchaseRequestTime)
+          : [];
+
+        // Sap xep uu tien theo ngay tao/ngay cap nhat moi nhat len dau danh sach
+        const sortedItems = [...rawItems].sort((a, b) => {
+          const timeA = new Date(a?.createdAt || a?.statusUpdatedAt || a?.quotationCreatedAt || 0).getTime();
+          const timeB = new Date(b?.createdAt || b?.statusUpdatedAt || b?.quotationCreatedAt || 0).getTime();
+          return timeB - timeA;
+        });
+
+        setItems(sortedItems);
 
         setTotalCount(
           Number(data?.totalCount) ||
@@ -472,6 +515,43 @@ export default function PurchaseRequestList() {
     return () =>
       window.clearTimeout(timer);
   }, [loadData]);
+
+  const [availableStatusOptions, setAvailableStatusOptions] = useState([
+    { value: ALL_STATUS, label: "Tất cả trạng thái" },
+  ]);
+
+  // Load all unique status codes & statusDisplayName from entire system API dataset
+  useEffect(() => {
+    getPurchaseRequestsApi({ pageNumber: 1, pageSize: 1000 })
+      .then((res) => {
+        const raw = Array.isArray(res?.items) ? res.items : [];
+        const map = new Map();
+        map.set(ALL_STATUS, "Tất cả trạng thái");
+
+        raw.forEach((item) => {
+          const code = item?.status;
+          if (code && !map.has(code)) {
+            const displayName =
+              item?.statusDisplayName && item.statusDisplayName !== "string"
+                ? item.statusDisplayName
+                : getStatusInfo(code).label;
+            map.set(code, displayName);
+          }
+        });
+
+        const options = Array.from(map.entries()).map(([value, label]) => ({
+          value,
+          label,
+        }));
+
+        if (options.length > 1) {
+          setAvailableStatusOptions(options);
+        }
+      })
+      .catch((err) => {
+        console.error("FETCH ALL SYSTEM STATUSES ERROR:", err);
+      });
+  }, [refreshKey]);
 
   const pageSummary = useMemo(() => {
     if (totalCount <= 0) {
@@ -561,7 +641,7 @@ export default function PurchaseRequestList() {
   };
 
   return (
-    <main className="purchase-list-page">
+    <main className="vcl-purchase-list-scope purchase-list-page">
       <div className="purchase-list-shell">
         <section className="purchase-list-header">
           <div>
@@ -635,7 +715,7 @@ export default function PurchaseRequestList() {
 
               <Select
                 value={statusFilter}
-                options={STATUS_OPTIONS}
+                options={availableStatusOptions}
                 onChange={(value) => {
                   setStatusFilter(
                     value
@@ -700,7 +780,8 @@ export default function PurchaseRequestList() {
               {items.map((item) => {
                 const status =
                   getStatusInfo(
-                    item?.status
+                    item?.status,
+                    item?.statusDisplayName
                   );
 
                 const products =
@@ -933,16 +1014,61 @@ export default function PurchaseRequestList() {
                           </strong>
                         </div>
 
-                        <div>
-                          <span>
-                            Ghi chú chung
-                          </span>
-                          <strong>
-                            {item
-                              ?.generalNote ||
-                              "Không có"}
+                      </div>
+                    </div>
+
+                    <div className="purchase-card-dates-timeline-bar">
+                      <div className="purchase-timeline-bar-label">
+                        ⏱️ Tiến trình:
+                      </div>
+
+                      <div className="purchase-timeline-chips-row">
+                        <div
+                          className="purchase-date-pill"
+                          title={formatDateUtcTitle(
+                            item?.createdAtUtc || item?.createdAt
+                          )}
+                        >
+                          <span className="purchase-pill-dot is-created" />
+                          <span className="purchase-pill-title">Tạo đơn:</span>
+                          <strong className="purchase-pill-time">
+                            {formatDateTime(
+                              item?.createdAtUtc || item?.createdAt
+                            )}
                           </strong>
                         </div>
+
+                        {item?.quotationCreatedAtUtc && (
+                          <div
+                            className="purchase-date-pill"
+                            title={formatDateUtcTitle(
+                              item?.quotationCreatedAtUtc
+                            )}
+                          >
+                            <span className="purchase-pill-dot is-quoted" />
+                            <span className="purchase-pill-title">Báo giá:</span>
+                            <strong className="purchase-pill-time">
+                              {formatDateTime(item?.quotationCreatedAtUtc)}
+                            </strong>
+                          </div>
+                        )}
+
+                        {!item?.quotationCreatedAtUtc &&
+                          item?.statusUpdatedAtUtc &&
+                          item?.statusUpdatedAtUtc !== item?.createdAtUtc && (
+                            <div
+                              className="purchase-date-pill"
+                              title={formatDateUtcTitle(
+                                item?.statusUpdatedAtUtc
+                              )}
+                            >
+                              <span className="purchase-pill-dot is-updated" />
+                              <span className="purchase-pill-title">Cập nhật:</span>
+                              <strong className="purchase-pill-time">
+                                {formatDateTime(item?.statusUpdatedAtUtc)}
+                              </strong>
+                            </div>
+                          )}
                       </div>
                     </div>
                   </article>

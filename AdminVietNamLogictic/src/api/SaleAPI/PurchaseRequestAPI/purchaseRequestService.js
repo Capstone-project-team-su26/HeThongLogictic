@@ -214,8 +214,8 @@ const normalizeNonNegativeNumber = (
 ) => {
   const normalizedValue =
     value === undefined ||
-    value === null ||
-    value === ""
+      value === null ||
+      value === ""
       ? fallback
       : Number(value);
 
@@ -254,64 +254,41 @@ const getApiErrorMessage = (
    NORMALIZE LIST ITEM
 ========================================================= */
 
-const normalizePurchaseRequestListItem =
-  (item = {}) => {
-    return {
-      purchaseRequestId:
-        item?.purchaseRequestId ?? "",
-
-      purchaseCode:
-        item?.purchaseCode ?? "",
-
-      customerId:
-        item?.customerId ?? "",
-
-      route:
-        item?.route ?? "",
-
-      shippingOption:
-        item?.shippingOption ?? null,
-
-      receiverName:
-        item?.receiverName ?? "",
-
-      itemCount:
-        Number(item?.itemCount) || 0,
-
-      totalQuantity:
-        Number(
-          item?.totalQuantity
-        ) || 0,
-
-      status:
-        item?.status ?? "",
-
-      generalNote:
-        item?.generalNote ?? "",
-
-      createdAt:
-        item?.createdAt ?? null,
-
-      items:
-        Array.isArray(item?.items)
-          ? item.items.map(
-              (
-                purchaseItem = {}
-              ) => ({
-                productName:
-                  purchaseItem
-                    ?.productName ?? "",
-
-                quantity:
-                  Number(
-                    purchaseItem
-                      ?.quantity
-                  ) || 0,
-              })
-            )
-          : [],
-    };
+const normalizePurchaseRequestListItem = (item = {}) => {
+  return {
+    ...item,
+    purchaseRequestId: item?.purchaseRequestId ?? item?.id ?? "",
+    purchaseCode: item?.purchaseCode ?? item?.code ?? "",
+    customerId: item?.customerId ?? "",
+    customerName: item?.customerName ?? item?.receiverName ?? item?.customer?.fullName ?? "",
+    customerPhone: item?.customerPhone ?? item?.receiverPhone ?? item?.phone ?? item?.customer?.phone ?? "",
+    receiverName: item?.receiverName ?? item?.customerName ?? "",
+    receiverPhone: item?.receiverPhone ?? item?.customerPhone ?? item?.phone ?? item?.customer?.phone ?? "",
+    receiverAddress: item?.receiverAddress ?? item?.address ?? "",
+    route: item?.route ?? "",
+    shippingOption: item?.shippingOption ?? null,
+    status: item?.status ?? "",
+    statusDisplayName: item?.statusDisplayName ?? "",
+    receiptPdfUrl: item?.receiptPdfUrl ?? null,
+    warehouseName: item?.warehouseName ?? "",
+    itemCount:
+      Number(item?.itemCount) ||
+      (Array.isArray(item?.items) ? item.items.length : 0),
+    totalQuantity: Number(item?.totalQuantity) || 0,
+    generalNote: item?.generalNote ?? "",
+    createdAt: item?.createdAt ?? null,
+    quotationCreatedAt: item?.quotationCreatedAt ?? null,
+    statusUpdatedAt: item?.statusUpdatedAt ?? null,
+    items: Array.isArray(item?.items)
+      ? item.items.map((purchaseItem = {}) => ({
+          ...purchaseItem,
+          productName: purchaseItem?.productName ?? "",
+          quantity: Number(purchaseItem?.quantity) || 0,
+        }))
+      : [],
+    quotation: item?.quotation ?? null,
   };
+};
 
 /* =========================================================
    NORMALIZE LIST RESPONSE
@@ -325,8 +302,8 @@ const normalizePurchaseRequestPage =
     const items =
       Array.isArray(data?.items)
         ? data.items.map(
-            normalizePurchaseRequestListItem
-          )
+          normalizePurchaseRequestListItem
+        )
         : [];
 
     const pageNumber =
@@ -350,7 +327,7 @@ const normalizePurchaseRequestPage =
     const totalCount = Math.max(
       0,
       Number(data?.totalCount) ||
-        items.length
+      items.length
     );
 
     const totalPages = Math.max(
@@ -408,8 +385,8 @@ const normalizePurchaseRequestItem =
           item?.imageUrls
         )
           ? item.imageUrls
-              .map(normalizeText)
-              .filter(Boolean)
+            .map(normalizeText)
+            .filter(Boolean)
           : [],
     };
   };
@@ -421,11 +398,12 @@ const normalizePurchaseRequestItem =
 const normalizePurchaseRequestDetail =
   (data = {}) => {
     return {
+      ...data,
       purchaseRequestId:
-        data?.purchaseRequestId ?? "",
+        data?.purchaseRequestId ?? data?.id ?? "",
 
       purchaseCode:
-        data?.purchaseCode ?? "",
+        data?.purchaseCode ?? data?.code ?? "",
 
       customerId:
         data?.customerId ?? "",
@@ -471,8 +449,8 @@ const normalizePurchaseRequestDetail =
           data?.pricingRuleIds
         )
           ? data.pricingRuleIds
-              .map(normalizeText)
-              .filter(Boolean)
+            .map(normalizeText)
+            .filter(Boolean)
           : [],
 
       generalNote:
@@ -481,11 +459,27 @@ const normalizePurchaseRequestDetail =
       status:
         data?.status ?? "",
 
+      statusDisplayName:
+        data?.statusDisplayName ?? "",
+
+      warehouseId:
+        data?.warehouseId ?? null,
+
+      warehouseName:
+        data?.warehouseName ?? "",
+
+      proofImages:
+        Array.isArray(data?.proofImages) ? data.proofImages : [],
+
       reason:
         data?.reason ?? null,
 
       createdAt:
         data?.createdAt ?? null,
+      quotationCreatedAt:
+        data?.quotationCreatedAt ?? null,
+      statusUpdatedAt:
+        data?.statusUpdatedAt ?? null,
 
       totalQuantity:
         Number(
@@ -495,8 +489,8 @@ const normalizePurchaseRequestDetail =
       items:
         Array.isArray(data?.items)
           ? data.items.map(
-              normalizePurchaseRequestItem
-            )
+            normalizePurchaseRequestItem
+          )
           : [],
 
       quotation:
@@ -515,7 +509,7 @@ const normalizeQuotationItem = (
   const purchaseRequestItemId =
     normalizeText(
       item?.purchaseRequestItemId ??
-        item?.itemId
+      item?.itemId
     );
 
   if (!purchaseRequestItemId) {
@@ -543,7 +537,7 @@ const normalizeQuotationAdditionalFee =
     const pricingRuleId =
       normalizeText(
         fee?.pricingRuleId ??
-          fee?.id
+        fee?.id
       );
 
     if (!pricingRuleId) {
@@ -558,13 +552,13 @@ const normalizeQuotationAdditionalFee =
       feeName:
         normalizeText(
           fee?.feeName ??
-            fee?.ruleName
+          fee?.ruleName
         ),
 
       feeType:
         normalizeText(
           fee?.feeType ??
-            fee?.ruleType
+          fee?.ruleType
         ),
 
       calculationType:
@@ -639,7 +633,7 @@ const normalizeCreateQuotationPayload =
           normalizeQuotationAdditionalFee
         ),
     };
-};
+  };
 
 /* =========================================================
    VALIDATE ID
@@ -680,6 +674,13 @@ const validatePurchaseRequestId =
  */
 export const getPurchaseRequestsApi =
   async (filters = {}) => {
+    const searchText =
+      normalizeText(
+        filters?.search ??
+        filters?.searchKeyword ??
+        filters?.keyword
+      ) || undefined;
+
     const params =
       removeEmptyParams({
         pageNumber:
@@ -697,14 +698,12 @@ export const getPurchaseRequestsApi =
         status:
           filters?.status
             ? normalizeUpperText(
-                filters.status
-              )
+              filters.status
+            )
             : undefined,
 
-        searchKeyword:
-          normalizeText(
-            filters?.search
-          ) || undefined,
+        searchKeyword: searchText,
+        search: searchText,
 
         customerId:
           normalizeText(
@@ -719,8 +718,8 @@ export const getPurchaseRequestsApi =
         shippingOption:
           filters?.shippingOption
             ? normalizeUpperText(
-                filters.shippingOption
-              )
+              filters.shippingOption
+            )
             : undefined,
 
         fromDate:
@@ -878,8 +877,49 @@ export const createPurchaseRequestQuotationApi =
   };
 
 /* =========================================================
+   CONFIRM PURCHASE
+   PUT /api/purchase-requests/{purchaseRequestId}/confirm-purchase
+========================================================= */
+
+export const confirmPurchaseApi = async (purchaseRequestId, payload = {}) => {
+  const normalizedId = validatePurchaseRequestId(purchaseRequestId);
+
+  const requestBody = {
+    status: normalizeUpperText(payload?.status || "PURCHASED"),
+    proofImages: Array.isArray(payload?.proofImages)
+      ? payload.proofImages.map(normalizeText).filter(Boolean)
+      : [],
+    generalNote: normalizeText(payload?.generalNote) || null,
+  };
+
+  const endpointUrl =
+    typeof API_ENDPOINTS?.purchaseRequests?.confirmPurchase === "function"
+      ? API_ENDPOINTS.purchaseRequests.confirmPurchase(normalizedId)
+      : `/api/purchase-requests/${encodeURIComponent(normalizedId)}/confirm-purchase`;
+
+  try {
+    const response = await axiosInstance.put(endpointUrl, requestBody, {
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+    });
+
+    return getResponseData(response);
+  } catch (error) {
+    console.error("CONFIRM PURCHASE ERROR:", error);
+    throw new Error(
+      getApiErrorMessage(error, "Không thể xác nhận mua hộ."),
+      { cause: error }
+    );
+  }
+};
+
+/* =========================================================
    DEFAULT EXPORT
 ========================================================= */
+
+export { approveStorePurchaseApi } from "./confirmPurchaseApi";
 
 const purchaseRequestService = {
   normalizeCreatePurchaseRequestPayload,
@@ -887,6 +927,7 @@ const purchaseRequestService = {
   getPurchaseRequestsApi,
   getPurchaseRequestDetailApi,
   createPurchaseRequestQuotationApi,
+  confirmPurchaseApi,
 };
 
 export default purchaseRequestService;
