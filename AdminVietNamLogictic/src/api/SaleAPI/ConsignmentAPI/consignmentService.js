@@ -1,5 +1,6 @@
 import axiosInstance from "../../axiosInstance";
 import { API_ENDPOINTS } from "../../apiEndpoints";
+import { getConsignmentReceiptApi } from "./consignmentReceiptService";
 
 /* =========================
    RESPONSE HELPER
@@ -1044,6 +1045,8 @@ export const sendQuotationApi =
     return getResponseData(response);
   };
 
+export { getConsignmentReceiptApi };
+
 /* =====================================================
    DEFAULT EXPORT
 ===================================================== */
@@ -1063,6 +1066,7 @@ const consignmentService = {
   rejectConsignmentApi,
   estimateQuotationApi,
   sendQuotationApi,
+  getConsignmentReceiptApi,
 };
 
 export default consignmentService;

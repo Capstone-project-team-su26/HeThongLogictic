@@ -439,7 +439,8 @@ export const mapPackageConfigurationsToOptions = (
 ========================= */
 
 export const getPackageConfigurationFee = (
-  configuration
+  configuration,
+  item = null
 ) => {
   if (!configuration) {
     return 0;
@@ -451,19 +452,38 @@ export const getPackageConfigurationFee = (
     );
 
   /*
-   * Khi hệ thống trả estimatedFee,
-   * ưu tiên dùng mức phí đã ước tính.
-   * Nếu chưa có thì dùng packageFee.
+   * Ưu tiên dùng mức phí đã được API tính sẵn (estimatedFee).
    */
-  if (normalized.estimatedFee !== null) {
+  if (normalized.estimatedFee !== null && normalized.estimatedFee !== undefined) {
     return normalizePositiveNumber(
       normalized.estimatedFee
     );
   }
 
-  return normalizePositiveNumber(
+  const baseFee = normalizePositiveNumber(
     normalized.packageFee
   );
+  if (baseFee <= 0) return 0;
+
+  const maxFee = Number(normalized.maxFee ?? normalized.maxPackageFee);
+  const hasMaxFee = Number.isFinite(maxFee) && maxFee > 0;
+
+  const configCode = String(normalized.configCode ?? "").toUpperCase();
+  const isCustom = configCode === "CUSTOM" || configCode.includes("CUSTOM");
+
+  if (isCustom && item) {
+    const length = normalizePositiveNumber(item?.length ?? item?.lengthCm);
+    const width = normalizePositiveNumber(item?.width ?? item?.widthCm);
+    const height = normalizePositiveNumber(item?.height ?? item?.heightCm);
+    const volumeCm3 = length * width * height;
+
+    if (volumeCm3 > 0) {
+      const calculatedFee = Math.round((volumeCm3 / 1000) * baseFee);
+      return hasMaxFee ? Math.min(calculatedFee, maxFee) : calculatedFee;
+    }
+  }
+
+  return baseFee;
 };
 
 export const resolveItemPackageConfiguration = (
@@ -492,16 +512,9 @@ export const calculateItemPackageFee = (
       configurations
     );
 
-  /*
-   * Một dòng kiện chỉ tính một lần phí đóng gói.
-   * Không nhân thêm quantity.
-   *
-   * Dữ liệu mẫu:
-   * quantity = 2, MEDIUM = 25.000 ₫
-   * => phí đóng gói vẫn là 25.000 ₫.
-   */
   return getPackageConfigurationFee(
-    configuration
+    configuration,
+    item
   );
 };
 

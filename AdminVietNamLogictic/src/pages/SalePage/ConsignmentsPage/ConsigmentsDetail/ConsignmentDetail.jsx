@@ -803,10 +803,32 @@ const getItemPackageConfiguration = (
 };
 
 const getItemPackageFee = (item) => {
-  return normalizePositiveNumber(
-    getItemPackageConfiguration(item)
-      ?.packageFee
-  );
+  const config = getItemPackageConfiguration(item);
+  if (!config) return 0;
+
+  const estimatedFee = Number(config?.estimatedFee);
+  if (Number.isFinite(estimatedFee) && estimatedFee > 0) {
+    return estimatedFee;
+  }
+
+  const baseFee = normalizePositiveNumber(config?.packageFee);
+  if (baseFee <= 0) return 0;
+
+  const maxFee = Number(config?.maxFee ?? config?.maxPackageFee);
+  const hasMaxFee = Number.isFinite(maxFee) && maxFee > 0;
+
+  const configCode = String(config?.configCode ?? "").toUpperCase();
+  const isCustom = configCode === "CUSTOM" || configCode.includes("CUSTOM");
+
+  if (isCustom) {
+    const volumeCm3 = calculateItemVolumeCm3(item);
+    if (volumeCm3 > 0) {
+      const calculatedFee = Math.round((volumeCm3 / 1000) * baseFee);
+      return hasMaxFee ? Math.min(calculatedFee, maxFee) : calculatedFee;
+    }
+  }
+
+  return baseFee;
 };
 
 const getItemApiDimWeight = (item) => {
@@ -3076,11 +3098,16 @@ export default function ConsignmentDetail({
                                     cm
                                   </span>
 
-                                  <small>
+                                  {String(packageConfig?.configCode ?? "").toUpperCase() === "CUSTOM" && packageConfig?.packageFee > 0 && (
+                                    <small style={{ display: "block", color: "#64748b", marginTop: 2 }}>
+                                      Đơn giá: {formatCurrency(packageConfig.packageFee)} / 1.000 cm³
+                                    </small>
+                                  )}
+
+                                  <small style={{ fontWeight: 600, color: "#1e293b", display: "block", marginTop: 2 }}>
                                     Phí đóng gói:{" "}
                                     {formatCurrency(
-                                      packageConfig
-                                        ?.packageFee
+                                      getItemPackageFee(item)
                                     )}
                                   </small>
                                 </div>

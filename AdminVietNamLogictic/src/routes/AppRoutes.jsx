@@ -23,11 +23,12 @@ import PendingConsignmentListHistory from "../pages/SalePage/HistorySalePage/His
 import PendingPurchaseRequestListHistory from "../pages/SalePage/HistorySalePage/HistoryPurchasePage/PendingPurchaseRequestListHistory";
 import OrderPaymentHistory from "../pages/SalePage/HistorySalePage/HistoryOrderPage/OrderDetailhisstory/OrderPaymentHistory";
 import PurchaseRequestList from "../pages/SalePage/PurchasePage/PurchaseRequestList";
-import WarehouseReceiptCreate from "../pages/SalePage/HistorySalePage/HistoryOrderPage/WarehouseReceipt/WarehouseReceiptCreate";
 import PurchaseRequestDetail from "../pages/SalePage/PurchasePage/PurchaseRequetDetail/PurchaseRequestDetail";
 import ConsignmentBuyOrder from "../pages/SalePage/CreateRequestPage/CreateRequestBuyCuspage/ConsignmentBuyOrder";
 import ConsignmentOrder from "../pages/SalePage/CreateRequestPage/CreateRequestOrderCusPage/ConsignmentOrder";
 import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
+import ConsignmentDocumentsList from "../pages/SalePage/DocumentsPage/ConsignmentDocumentsPage/ConsignmentDocumentsList";
+import PurchaseDocumentsList from "../pages/SalePage/DocumentsPage/PurchaseDocumentsPage/PurchaseDocumentsList";
 
 /* ================= ADMIN ================= */
 
@@ -288,6 +289,16 @@ export default function AppRoutes() {
         />
 
         <Route
+          path="documents/consignments"
+          element={<ConsignmentDocumentsList />}
+        />
+
+        <Route
+          path="documents/purchase-requests"
+          element={<PurchaseDocumentsList />}
+        />
+
+        <Route
           path="orders/:orderId/payments/history"
           element={<OrderPaymentHistory />}
         />
@@ -299,10 +310,6 @@ export default function AppRoutes() {
         />
 
         <Route path="customer-service" element={<CustomerServiceChat />} />
-        <Route
-  path="/sale/warehouse-receipts/create/:orderId"
-  element={<WarehouseReceiptCreate />}
-/>
       </Route>
 
       {/* ========== OPERATIONS MANAGER ========== */}

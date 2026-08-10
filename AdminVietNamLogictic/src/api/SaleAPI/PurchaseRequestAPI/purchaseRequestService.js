@@ -258,39 +258,35 @@ const normalizePurchaseRequestListItem = (item = {}) => {
   return {
     ...item,
     purchaseRequestId: item?.purchaseRequestId ?? item?.id ?? "",
-
     purchaseCode: item?.purchaseCode ?? item?.code ?? "",
-
     customerId: item?.customerId ?? "",
-
+    customerName: item?.customerName ?? item?.receiverName ?? item?.customer?.fullName ?? "",
+    customerPhone: item?.customerPhone ?? item?.receiverPhone ?? item?.phone ?? item?.customer?.phone ?? "",
+    receiverName: item?.receiverName ?? item?.customerName ?? "",
+    receiverPhone: item?.receiverPhone ?? item?.customerPhone ?? item?.phone ?? item?.customer?.phone ?? "",
+    receiverAddress: item?.receiverAddress ?? item?.address ?? "",
     route: item?.route ?? "",
-
     shippingOption: item?.shippingOption ?? null,
-
-    receiverName: item?.receiverName ?? "",
-
+    status: item?.status ?? "",
+    statusDisplayName: item?.statusDisplayName ?? "",
+    receiptPdfUrl: item?.receiptPdfUrl ?? null,
+    warehouseName: item?.warehouseName ?? "",
     itemCount:
       Number(item?.itemCount) ||
       (Array.isArray(item?.items) ? item.items.length : 0),
-
     totalQuantity: Number(item?.totalQuantity) || 0,
-
-    status: item?.status ?? "",
-
     generalNote: item?.generalNote ?? "",
-
     createdAt: item?.createdAt ?? null,
     quotationCreatedAt: item?.quotationCreatedAt ?? null,
     statusUpdatedAt: item?.statusUpdatedAt ?? null,
-
     items: Array.isArray(item?.items)
       ? item.items.map((purchaseItem = {}) => ({
-        ...purchaseItem,
-        productName: purchaseItem?.productName ?? "",
-
-        quantity: Number(purchaseItem?.quantity) || 0,
-      }))
+          ...purchaseItem,
+          productName: purchaseItem?.productName ?? "",
+          quantity: Number(purchaseItem?.quantity) || 0,
+        }))
       : [],
+    quotation: item?.quotation ?? null,
   };
 };
 

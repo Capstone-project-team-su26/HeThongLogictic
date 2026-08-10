@@ -17,6 +17,7 @@ import {
   DownOutlined,
   CheckSquareOutlined,
   FileSearchOutlined,
+  FileTextOutlined,
   InboxOutlined,
   LogoutOutlined,
   MonitorOutlined,
@@ -362,6 +363,28 @@ const MENU_BY_ROLE = {
           label: "Ký gửi",
           icon: <InboxOutlined />,
           path: "/sale/history/order",
+          end: true,
+        },
+      ],
+    },
+
+    {
+      key: "sale-documents",
+      label: "Quản lý giấy tờ",
+      icon: <FileTextOutlined />,
+      children: [
+        {
+          key: "sale-documents-purchase",
+          label: "Giấy tờ mua hộ",
+          icon: <ShoppingOutlined />,
+          path: "/sale/documents/purchase-requests",
+          end: true,
+        },
+        {
+          key: "sale-documents-consignment",
+          label: "Giấy tờ ký gửi",
+          icon: <InboxOutlined />,
+          path: "/sale/documents/consignments",
           end: true,
         },
       ],

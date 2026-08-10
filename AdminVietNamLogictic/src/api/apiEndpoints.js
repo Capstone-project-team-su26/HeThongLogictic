@@ -23,6 +23,8 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/orders/${encodeId(orderId)}/quotation/estimate`,
     sendQuotation: (orderId) =>
       `/api/orders/${encodeId(orderId)}/quotation/send`,
+    receipt: (orderId) =>
+      `/api/orders/consignments/${encodeId(orderId)}/receipt`,
   }),
   purchaseRequests: Object.freeze({
     list: "/api/purchase-requests",

@@ -257,7 +257,7 @@ function CopyValue({
       AuthNotify.error(
         "Không thể sao chép",
         error?.message ||
-          "Vui lòng thử lại."
+        "Vui lòng thử lại."
       );
     }
   };
@@ -635,7 +635,7 @@ export default function OrderPaymentHistory({
                   ) === "OFFICIAL"
                     ? "Báo giá chính thức"
                     : history?.quotation
-                        ?.quoteType || "—"}
+                      ?.quoteType || "—"}
                 </strong>
               </div>
 
@@ -708,11 +708,10 @@ export default function OrderPaymentHistory({
                       payment?.paymentId ||
                       `${payment?.orderCode}-${index}`
                     }
-                    className={`payment-receipt-card ${
-                      isPaymentSuccess
+                    className={`payment-receipt-card ${isPaymentSuccess
                         ? "payment-receipt-card--success"
                         : ""
-                    }`}
+                      }`}
                   >
                     <div className="payment-receipt-card__head">
                       <div className="payment-receipt-card__check">
@@ -729,8 +728,8 @@ export default function OrderPaymentHistory({
                           {isPaymentSuccess
                             ? "Giao dịch đã được hệ thống ghi nhận"
                             : getInstallmentTypeLabel(
-                                payment?.installmentType
-                              )}
+                              payment?.installmentType
+                            )}
                         </p>
                       </div>
 
@@ -812,7 +811,7 @@ export default function OrderPaymentHistory({
                         <strong>
                           {formatDateTime(
                             history?.createdAt ||
-                              payment?.createdAt
+                            payment?.createdAt
                           )}
                         </strong>
                       </div>
@@ -870,27 +869,6 @@ export default function OrderPaymentHistory({
                       >
                         Xem chi tiết
                       </Button>
-
-                      {!readOnly && isPaymentSuccess && (
-                        <Button
-                          type="primary"
-                          icon={<BankOutlined />}
-                          onClick={() =>
-                            navigate(
-                              `${basePath}/warehouse-receipts/create/${orderId}`,
-                              {
-                                state: {
-                                  orderId,
-                                  paymentHistory: history,
-                                  payment,
-                                },
-                              }
-                            )
-                          }
-                        >
-                          Xuất phiếu nhập kho
-                        </Button>
-                      )}
                     </div>
                   </article>
                 );

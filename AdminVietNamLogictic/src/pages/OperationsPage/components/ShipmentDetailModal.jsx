@@ -21,6 +21,7 @@ import {
   updateShipmentStatus,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
 import { uploadImages } from "../../../api/Upload/UploadImage";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 function UrlList({ urls, empty }) {
   if (!urls?.length) {
@@ -140,11 +141,13 @@ export default function ShipmentDetailModal({ open, shipmentId, onClose, onChang
       setNote("");
       setExtraDocUrls([]);
       setNextStatus(getNextShipmentStatuses(detail.status)[0] || "");
-      onChanged?.(
-        `Đã cập nhật lô ${detail.code} → ${SHIPMENT_STATUS_META[detail.status]?.label || detail.status}`
-      );
+      const msg = `Đã cập nhật lô ${detail.code} → ${SHIPMENT_STATUS_META[detail.status]?.label || detail.status}`;
+      AuthNotify.success("Cập nhật lô hàng", msg);
+      onChanged?.(msg);
     } catch (err) {
-      setError(getOperationsApiError(err, "Không cập nhật được trạng thái lô."));
+      const errMsg = getOperationsApiError(err, "Không cập nhật được trạng thái lô.");
+      AuthNotify.error("Lỗi cập nhật lô", errMsg);
+      setError(errMsg);
     } finally {
       setSaving(false);
     }

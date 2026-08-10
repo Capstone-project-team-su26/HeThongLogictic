@@ -23,9 +23,11 @@ import {
 } from "../../api/AdminAPI/adminService";
 
 const boolField = { name: "isActive", label: "Đang hoạt động", type: "switch", defaultValue: true };
-const statusField = { name: "status", label: "Trạng thái", type: "select", defaultValue: "ACTIVE", options: [
-  { value: "ACTIVE", label: "Đang hoạt động" }, { value: "INACTIVE", label: "Ngừng hoạt động" },
-] };
+const statusField = {
+  name: "status", label: "Trạng thái", type: "select", defaultValue: "ACTIVE", options: [
+    { value: "ACTIVE", label: "Đang hoạt động" }, { value: "INACTIVE", label: "Ngừng hoạt động" },
+  ]
+};
 const page = (props) => <AdminResourcePage {...props} />;
 
 const warehouseApi = { list: getWarehouses, create: createWarehouse, update: updateWarehouse, remove: deleteWarehouse };
@@ -79,7 +81,7 @@ export const PricingRulesAdminPage = () => page({
 });
 
 const exchangeRateApi = {
-  list: () => getExchangeRates({ activeOnly: false }),
+  list: () => getExchangeRates({ activeOnly: true }),
   detail: getExchangeRateDetail,
   create: createExchangeRate,
   update: updateExchangeRate,

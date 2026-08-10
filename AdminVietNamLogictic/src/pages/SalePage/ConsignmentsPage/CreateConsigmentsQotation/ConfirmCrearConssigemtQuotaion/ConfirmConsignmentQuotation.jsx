@@ -138,77 +138,77 @@ export default function ConfirmConsignmentQuotation({
 
         {Array.isArray(data.packageRows) &&
           data.packageRows.length > 0 && (
-          <section className="quotation-confirm__section">
-            <div className="quotation-confirm__section-title">
-              <CheckCircleOutlined />
+            <section className="quotation-confirm__section">
+              <div className="quotation-confirm__section-title">
+                <CheckCircleOutlined />
 
-              <div>
-                <strong>
-                  Cấu hình đóng gói
-                </strong>
-                <span>
-                  Cấu hình khách hàng đã chọn cho từng
-                  kiện hàng.
-                </span>
-              </div>
-            </div>
-
-            <div className="quotation-confirm__fee-list">
-              {data.packageRows.map((row) => (
-                <div key={row.id}>
-                  <div>
-                    <strong>{row.name}</strong>
-                    <span>
-                      {row.configurationName}
-                    </span>
-                  </div>
-
+                <div>
                   <strong>
-                    {formatCurrency(row.fee)}
+                    Cấu hình đóng gói
                   </strong>
+                  <span>
+                    Cấu hình khách hàng đã chọn cho từng
+                    kiện hàng.
+                  </span>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              </div>
+
+              <div className="quotation-confirm__fee-list">
+                {data.packageRows.map((row) => (
+                  <div key={row.id}>
+                    <div>
+                      <strong>{row.name}</strong>
+                      <span>
+                        {row.configurationName}
+                      </span>
+                    </div>
+
+                    <strong>
+                      {formatCurrency(row.fee)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
         {Array.isArray(data.optionalFees) &&
           data.optionalFees.length > 0 && (
-          <section className="quotation-confirm__section">
-            <div className="quotation-confirm__section-title">
-              <CheckCircleOutlined />
+            <section className="quotation-confirm__section">
+              <div className="quotation-confirm__section-title">
+                <CheckCircleOutlined />
 
-              <div>
-                <strong>
-                  Phụ phí khách hàng đã chọn
-                </strong>
-                <span>
-                  Chỉ các phụ phí có trong đơn hàng mới
-                  được tính.
-                </span>
-              </div>
-            </div>
-
-            <div className="quotation-confirm__fee-list">
-              {data.optionalFees.map((fee) => (
-                <div key={fee.id || fee.code}>
-                  <div>
-                    <strong>{fee.label}</strong>
-                    {fee.description && (
-                      <span>
-                        {fee.description}
-                      </span>
-                    )}
-                  </div>
-
+                <div>
                   <strong>
-                    {formatCurrency(fee.amount)}
+                    Phụ phí khách hàng đã chọn
                   </strong>
+                  <span>
+                    Chỉ các phụ phí có trong đơn hàng mới
+                    được tính.
+                  </span>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              </div>
+
+              <div className="quotation-confirm__fee-list">
+                {data.optionalFees.map((fee) => (
+                  <div key={fee.id || fee.code}>
+                    <div>
+                      <strong>{fee.label}</strong>
+                      {fee.description && (
+                        <span>
+                          {fee.description}
+                        </span>
+                      )}
+                    </div>
+
+                    <strong>
+                      {formatCurrency(fee.amount)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
         <section className="quotation-confirm__section quotation-confirm__calculation">
           <div className="quotation-confirm__section-title">
@@ -378,11 +378,10 @@ export default function ConfirmConsignmentQuotation({
         )}
 
         <div
-          className={`quotation-confirm__notice ${
-            submitted
+          className={`quotation-confirm__notice ${submitted
               ? "is-submitted"
               : ""
-          }`}
+            }`}
         >
           <CheckCircleOutlined />
 
@@ -428,11 +427,10 @@ export default function ConfirmConsignmentQuotation({
 
               onConfirm?.();
             }}
-            className={`quotation-confirm__submit-button ${
-              submitted
+            className={`quotation-confirm__submit-button ${submitted
                 ? "is-submitted"
                 : ""
-            }`}
+              }`}
           >
             {submitted
               ? "Đã gửi báo giá"

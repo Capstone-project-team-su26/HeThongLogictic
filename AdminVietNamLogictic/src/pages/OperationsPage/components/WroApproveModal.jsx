@@ -15,6 +15,7 @@ import {
   getOperationsApiError,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
 import { uploadImages } from "../../../api/Upload/UploadImage";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 function collectUrls(value, bag = []) {
   if (!value) return bag;
@@ -95,11 +96,15 @@ export default function WroApproveModal({ open, wro, onClose, onApproved }) {
     if (submitting || !wro?.id) return;
     setError("");
     if (!flightNumber.trim()) {
-      setError("Vui lòng nhập mã chuyến bay / số hiệu chuyến.");
+      const msg = "Vui lòng nhập mã chuyến bay / số hiệu chuyến.";
+      AuthNotify.warning("Cảnh báo", msg);
+      setError(msg);
       return;
     }
     if (!docUrls.length) {
-      setError("Vui lòng upload hoặc dán ít nhất một giấy tờ thông quan.");
+      const msg = "Vui lòng upload hoặc dán ít nhất một giấy tờ thông quan.";
+      AuthNotify.warning("Cảnh báo", msg);
+      setError(msg);
       return;
     }
 
@@ -111,9 +116,12 @@ export default function WroApproveModal({ open, wro, onClose, onApproved }) {
         customsDocumentUrls: docUrls,
         note: note.trim(),
       });
+      AuthNotify.success("Duyệt WRO", `Đã duyệt và lưu chứng từ cho WRO ${wro.code || wro.id}`);
       onApproved?.(wro);
     } catch (err) {
-      setError(getOperationsApiError(err, "Không duyệt được phiếu WRO."));
+      const errMsg = getOperationsApiError(err, "Không duyệt được phiếu WRO.");
+      AuthNotify.error("Duyệt WRO thất bại", errMsg);
+      setError(errMsg);
       setSubmitting(false);
     }
   }

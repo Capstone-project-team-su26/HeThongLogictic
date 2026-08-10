@@ -5,6 +5,7 @@ import {
   getOperationsApiError,
   suggestMasterBoxCode,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 function formatNumber(value, suffix = "") {
   if (value == null || value === "") return "—";
@@ -102,11 +103,15 @@ export default function MasterBoxFormModal({
   async function handleSubmit() {
     if (isSubmitting) return;
     setError("");
-    if (!rows.length) return setError("Master box cần ít nhất một kiện hàng.");
+    if (!rows.length) {
+      const msg = "Master box cần ít nhất một kiện hàng.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
+    }
     if (rows.some((row) => !row.orderId)) {
-      return setError(
-        "Có kiện thiếu orderId — API consolidation gom theo đơn, không gom theo kiện."
-      );
+      const msg = "Có kiện thiếu orderId — API consolidation gom theo đơn, không gom theo kiện.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
     }
 
     setIsSubmitting(true);
@@ -121,7 +126,9 @@ export default function MasterBoxFormModal({
         parcelIds: rows.map((row) => row.id),
       });
     } catch (err) {
-      setError(getOperationsApiError(err, "Không thể tạo master box."));
+      const errMsg = getOperationsApiError(err, "Không thể tạo master box.");
+      AuthNotify.error("Lỗi tạo master box", errMsg);
+      setError(errMsg);
       setIsSubmitting(false);
     }
   }
