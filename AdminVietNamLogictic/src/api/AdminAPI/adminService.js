@@ -138,6 +138,14 @@ export const getWarehouseLocations = async (warehouseId, params = {}, options = 
   return getAdminApiList(response);
 };
 
+export const getActiveWarehouseLocations = async (warehouseId, params = {}, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/warehouses/${requireId(warehouseId, "mã kho")}/locations/active`,
+    requestConfig(options, { params })
+  );
+  return getAdminApiList(response);
+};
+
 export const createWarehouseLocation = async (warehouseId, payload, options = {}) => {
   const response = await axiosInstance.post(
     `/api/warehouses/${requireId(warehouseId, "mã kho")}/locations`,
@@ -572,6 +580,22 @@ export const getWarehouseLayout = async (warehouseId, options = {}) => {
   return getAdminApiList(response);
 };
 
+export const getWarehouseLayoutZones = async (warehouseId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/warehouses/${requireId(warehouseId, "mã kho")}/layout/zones`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
+export const getWarehouseLayoutStatus = async (warehouseId, options = {}) => {
+  const response = await axiosInstance.get(
+    `/api/warehouses/${requireId(warehouseId, "mã kho")}/layout/status`,
+    requestConfig(options)
+  );
+  return getAdminApiData(response);
+};
+
 export const createWarehouseLayoutItem = async (warehouseId, payload, options = {}) => {
   const response = await axiosInstance.post(
     `/api/warehouses/${requireId(warehouseId, "mã kho")}/layout`,
@@ -668,4 +692,22 @@ export const deleteExchangeRate = async (rateId, options = {}) => {
   );
   return getAdminApiData(response);
 };
+
+/* ==================== INVENTORIES (danh sách tồn kho) ==================== */
+export const getInventories = async (params = {}, options = {}) => {
+  const response = await axiosInstance.get("/api/inventories", {
+    params,
+    ...requestConfig(options),
+  });
+  return getAdminApiList(response);
+};
+
+export const getWarehouseInventories = async (warehouseId, params = {}, options = {}) => {
+  const response = await axiosInstance.get("/api/inventories", {
+    params: { warehouseId, ...params },
+    ...requestConfig(options),
+  });
+  return getAdminApiList(response);
+};
+
 
