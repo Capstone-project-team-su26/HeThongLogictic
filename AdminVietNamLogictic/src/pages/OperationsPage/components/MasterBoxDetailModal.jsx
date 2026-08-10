@@ -32,6 +32,7 @@ import {
   removeParcelFromMasterBox,
   SHIPMENT_STATUS_META,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 function formatNumber(value, suffix = "") {
   if (value == null || value === "") return "—";
@@ -205,9 +206,12 @@ export default function MasterBoxDetailModal({
     try {
       await action();
       await load();
+      AuthNotify.success("Thành công", message);
       onChanged?.(message);
     } catch (err) {
-      setError(getOperationsApiError(err, "Thao tác không thành công."));
+      const errMsg = getOperationsApiError(err, "Thao tác không thành công.");
+      AuthNotify.error("Thao tác thất bại", errMsg);
+      setError(errMsg);
     } finally {
       setIsActing(false);
     }
@@ -218,14 +222,13 @@ export default function MasterBoxDetailModal({
     setIsActing(true);
     setError("");
     try {
-      await deleteMasterBox(boxId);
-      const message = `Đã xóa lô ${box?.code || boxId}.`;
-      onDeleted?.(box);
-      onChanged?.(message);
-      onClose?.();
+      await deleteMasterBox(box.id);
+      AuthNotify.success("Xóa master box", `Đã xóa master box ${box?.code ?? ""}.`);
+      onDeleted?.(`Đã xóa ${box?.code ?? "master box"}.`);
     } catch (err) {
-      setError(getOperationsApiError(err, "Không thể xóa lô."));
-    } finally {
+      const errMsg = getOperationsApiError(err, "Không thể xóa master box.");
+      AuthNotify.error("Xóa master box thất bại", errMsg);
+      setError(errMsg);
       setIsActing(false);
     }
   }

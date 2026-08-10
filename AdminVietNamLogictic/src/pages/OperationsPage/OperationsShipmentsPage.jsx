@@ -16,6 +16,7 @@ import {
 } from "../../api/OperationsAPI/consolidationWorkflowService";
 import WroLotFormModal from "./components/WroLotFormModal";
 import ShipmentDetailModal from "./components/ShipmentDetailModal";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 function formatNumber(value, suffix = "") {
@@ -61,7 +62,9 @@ export default function OperationsShipmentsPage() {
       setShipments(shipmentPage.items ?? []);
       setSelectedWroIds([]);
     } catch (error) {
-      setLoadError(getOperationsApiError(error, "Không tải được dữ liệu lô."));
+      const errMsg = getOperationsApiError(error, "Không thể tải danh sách vận chuyển.");
+      AuthNotify.error("Lỗi tải dữ liệu", errMsg);
+      setLoadError(errMsg);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -89,9 +92,11 @@ export default function OperationsShipmentsPage() {
   function openCreateWroLot(wros) {
     const ready = (wros || []).filter((row) => row.status === "RELEASED");
     if (!ready.length) {
+      const msg = "Chọn ít nhất một phiếu WRO RELEASED để gom lô.";
+      AuthNotify.warning("Cảnh báo", msg);
       setNotice({
         type: "warning",
-        message: "Chọn ít nhất một phiếu WRO RELEASED để gom lô.",
+        message: msg,
       });
       return;
     }
@@ -99,9 +104,11 @@ export default function OperationsShipmentsPage() {
       ...new Set(ready.map((row) => row.shippingRouteId).filter(Boolean)),
     ];
     if (routeIds.length > 1) {
+      const msg = "Các WRO phải cùng tuyến vận chuyển trước khi gom lô.";
+      AuthNotify.warning("Cảnh báo", msg);
       setNotice({
         type: "warning",
-        message: "Các WRO phải cùng tuyến vận chuyển trước khi gom lô.",
+        message: msg,
       });
       return;
     }
@@ -266,34 +273,34 @@ export default function OperationsShipmentsPage() {
         />
       ) : null}
 
-      <section className="ops-kpi-grid" aria-label="Chỉ số lô">
+      <section className="ops-kpi-grid" aria-label="Chỉ số gom lô">
         <article className="ops-kpi-card">
-          <p className="ops-kpi-card__label">WRO sẵn sàng gom</p>
-          <p className="ops-kpi-card__value">
+          <p className="ops-kpi-card__label">WRO sẵn sàng gom lô</p>
+          <p className="ops-kpi-card__value" style={{ color: "#2563eb" }}>
             {isLoading ? "…" : releasedWros.length}
           </p>
           <div className="ops-kpi-card__meta">
-            <p>RELEASED</p>
+            <p>Đã xuất kho chuẩn bị</p>
           </div>
         </article>
         <article className="ops-kpi-card">
-          <p className="ops-kpi-card__label">Tổng lô</p>
-          <p className="ops-kpi-card__value">
+          <p className="ops-kpi-card__label">Tổng số lô hàng</p>
+          <p className="ops-kpi-card__value" style={{ color: "#0284c7" }}>
             {isLoading ? "…" : shipments.length}
           </p>
           <div className="ops-kpi-card__meta">
-            <p>International shipments</p>
+            <p>Lô vận chuyển quốc tế</p>
           </div>
         </article>
         <article className="ops-kpi-card">
           <p className="ops-kpi-card__label">Đang thông quan</p>
-          <p className="ops-kpi-card__value">
+          <p className="ops-kpi-card__value" style={{ color: "#d97706" }}>
             {isLoading
               ? "…"
               : shipments.filter((row) => row.statusTab === "CUSTOMS").length}
           </p>
           <div className="ops-kpi-card__meta">
-            <p>Tab CUSTOMS</p>
+            <p>Đang tiến hành thủ tục</p>
           </div>
         </article>
       </section>
@@ -308,27 +315,27 @@ export default function OperationsShipmentsPage() {
             children: (
               <div className="ops-table-card">
                 <div className="ops-table-card__head">
-                  <h3>WRO đã xuất kho</h3>
-                  <span>Đã chọn {selectedReleasedWros.length}</span>
+                  <h3>WRO đã xuất kho sẵn sàng gom lô</h3>
+                  <span>Đã chọn {selectedReleasedWros.length} WRO</span>
                 </div>
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message="BE chỉ nhận WRO RELEASED; khác kho hoặc khác tuyến sẽ bị từ chối."
-                />
                 <Table
                   rowKey="id"
                   columns={wroColumns}
                   dataSource={releasedWros}
                   loading={isLoading}
-                  pagination={{ pageSize: 10, showSizeChanger: false }}
-                  scroll={{ x: 1000 }}
+                  sticky={{ offsetHeader: 0 }}
+                  scroll={{ x: 1000, y: "calc(100vh - 430px)" }}
+                  pagination={{
+                    pageSize: 15,
+                    showSizeChanger: true,
+                    pageSizeOptions: ["10", "15", "25", "50"],
+                    showTotal: (total) => `Tổng ${total} WRO`,
+                  }}
                   rowSelection={{
                     selectedRowKeys: selectedWroIds,
                     onChange: setSelectedWroIds,
                   }}
-                  locale={{ emptyText: "Chưa có WRO RELEASED để gom lô." }}
+                  locale={{ emptyText: "Chưa có WRO đã xuất kho sẵn sàng gom lô." }}
                 />
               </div>
             ),
@@ -339,9 +346,9 @@ export default function OperationsShipmentsPage() {
             children: (
               <div className="ops-table-card">
                 <div className="ops-table-card__head">
-                  <h3>Danh sách lô</h3>
+                  <h3>Danh sách lô vận chuyển quốc tế</h3>
                   <span>
-                    {filteredShipments.length}/{shipments.length} · {shipmentStatusTab}
+                    {filteredShipments.length}/{shipments.length} lô
                   </span>
                 </div>
                 <Tabs
@@ -356,20 +363,26 @@ export default function OperationsShipmentsPage() {
                       ).length
                     })`,
                   }))}
-                  style={{ marginBottom: 12 }}
+                  style={{ marginBottom: 12, paddingLeft: 16, paddingRight: 16 }}
                 />
                 <Table
                   rowKey="id"
                   columns={shipmentColumns}
                   dataSource={filteredShipments}
                   loading={isLoading}
-                  pagination={{ pageSize: 10, showSizeChanger: false }}
-                  scroll={{ x: 1100 }}
+                  sticky={{ offsetHeader: 0 }}
+                  scroll={{ x: 1100, y: "calc(100vh - 430px)" }}
+                  pagination={{
+                    pageSize: 15,
+                    showSizeChanger: true,
+                    pageSizeOptions: ["10", "15", "25", "50"],
+                    showTotal: (total) => `Tổng ${total} lô`,
+                  }}
                   onRow={(row) => ({
                     onClick: () => setDetailShipmentId(row.id),
                     style: { cursor: "pointer" },
                   })}
-                  locale={{ emptyText: "Không có lô trong tab này." }}
+                  locale={{ emptyText: "Không có lô vận chuyển nào trong mục này." }}
                 />
               </div>
             ),

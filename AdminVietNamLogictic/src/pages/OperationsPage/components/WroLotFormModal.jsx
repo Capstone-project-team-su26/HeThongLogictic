@@ -16,6 +16,7 @@ import {
   TRANSPORT_MODES,
   WRO_STATUS_META,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 export default function WroLotFormModal({
   open,
@@ -102,12 +103,26 @@ export default function WroLotFormModal({
   async function handleSubmit() {
     if (isSubmitting) return;
     setError("");
-    if (!rows.length) return setError("Cần ít nhất một phiếu WRO RELEASED.");
-    if (routeMismatch) {
-      return setError("Các WRO phải cùng tuyến vận chuyển.");
+    if (!rows.length) {
+      const msg = "Cần ít nhất một phiếu WRO RELEASED.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
     }
-    if (!originWarehouseId) return setError("Cần chọn kho xuất.");
-    if (!destinationWarehouseId) return setError("Cần chọn kho đích.");
+    if (routeMismatch) {
+      const msg = "Các WRO phải cùng tuyến vận chuyển.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
+    }
+    if (!originWarehouseId) {
+      const msg = "Cần chọn kho xuất.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
+    }
+    if (!destinationWarehouseId) {
+      const msg = "Cần chọn kho đích.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
+    }
 
     setIsSubmitting(true);
     try {
@@ -122,7 +137,9 @@ export default function WroLotFormModal({
         note: note.trim(),
       });
     } catch (err) {
-      setError(getOperationsApiError(err, "Không thể tạo lô từ WRO."));
+      const errMsg = getOperationsApiError(err, "Không thể tạo lô từ WRO.");
+      AuthNotify.error("Lỗi tạo lô WRO", errMsg);
+      setError(errMsg);
       setIsSubmitting(false);
     }
   }

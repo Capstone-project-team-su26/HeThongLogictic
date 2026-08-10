@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Input, Modal, Select, Space, Table, Typography } from "antd";
 
 import { getOperationsApiError } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 function formatNumber(value, suffix = "") {
   if (value == null || value === "") return "—";
@@ -88,7 +89,11 @@ export default function ShipmentFormModal({
   async function handleSubmit() {
     if (isSubmitting) return;
     setError("");
-    if (!boxes.length) return setError("Cần ít nhất một master box.");
+    if (!boxes.length) {
+      const msg = "Cần ít nhất một master box.";
+      AuthNotify.warning("Cảnh báo", msg);
+      return setError(msg);
+    }
 
     setIsSubmitting(true);
     try {
@@ -99,7 +104,9 @@ export default function ShipmentFormModal({
         masterBoxIds: boxes.map((row) => row.id),
       });
     } catch (err) {
-      setError(getOperationsApiError(err, "Không thể tạo yêu cầu xuất kho."));
+      const errMsg = getOperationsApiError(err, "Không thể tạo chuyến vận chuyển.");
+      AuthNotify.error("Lỗi tạo chuyến", errMsg);
+      setError(errMsg);
       setIsSubmitting(false);
     }
   }

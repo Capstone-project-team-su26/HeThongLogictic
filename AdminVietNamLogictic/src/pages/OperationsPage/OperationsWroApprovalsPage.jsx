@@ -25,6 +25,7 @@ import {
   WRO_STATUS_META,
 } from "../../api/OperationsAPI/consolidationWorkflowService";
 import WroDetailModal from "./components/WroDetailModal";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 function formatNumber(value, suffix = "") {
@@ -113,12 +114,16 @@ export default function OperationsWroApprovalsPage() {
   async function handleApproveWro(row) {
     try {
       await approveWro(row.id);
-      setNotice({ type: "success", message: `Đã duyệt xuất kho ${row.code || row.id}.` });
+      const msg = `Đã duyệt xuất kho ${row.code || row.id}.`;
+      AuthNotify.success("Thành công", msg);
+      setNotice({ type: "success", message: msg });
       await loadWros({ refresh: true });
     } catch (error) {
+      const errMsg = getOperationsApiError(error, "Không thể duyệt yêu cầu xuất kho.");
+      AuthNotify.error("Duyệt thất bại", errMsg);
       setNotice({
         type: "error",
-        message: getOperationsApiError(error, "Không thể duyệt yêu cầu xuất kho."),
+        message: errMsg,
       });
     }
   }
@@ -127,22 +132,28 @@ export default function OperationsWroApprovalsPage() {
     const reason = rejectReason.trim();
     if (!rejectWroRow) return;
     if (!reason) {
-      setNotice({ type: "warning", message: "Cần nhập lý do từ chối." });
+      const msg = "Cần nhập lý do từ chối.";
+      AuthNotify.warning("Cảnh báo", msg);
+      setNotice({ type: "warning", message: msg });
       return;
     }
     try {
       await rejectWro(rejectWroRow.id, reason);
+      const msg = `Đã từ chối yêu cầu xuất kho ${rejectWroRow.code || rejectWroRow.id}.`;
+      AuthNotify.success("Từ chối WRO", msg);
       setNotice({
         type: "success",
-        message: `Đã từ chối yêu cầu xuất kho ${rejectWroRow.code || rejectWroRow.id}.`,
+        message: msg,
       });
       setRejectWroRow(null);
       setRejectReason("");
       await loadWros({ refresh: true });
     } catch (error) {
+      const errMsg = getOperationsApiError(error, "Không thể từ chối yêu cầu xuất kho.");
+      AuthNotify.error("Lỗi từ chối", errMsg);
       setNotice({
         type: "error",
-        message: getOperationsApiError(error, "Không thể từ chối yêu cầu xuất kho."),
+        message: errMsg,
       });
     }
   }
@@ -269,15 +280,19 @@ export default function OperationsWroApprovalsPage() {
     <div className="ops-page">
       <section className="ops-page__hero">
         <div>
-          <span>Duyệt xuất kho</span>
-          <h1>Duyệt yêu cầu xuất kho (WRO)</h1>
+          <span>BỘ PHẬN VẬN HÀNH (OPS)</span>
+          <h1>Duyệt Yêu Cầu Xuất Kho (WRO)</h1>
           <p>
-            Nhận và duyệt yêu cầu xuất kho từ kho TQ/VN và các bên khác gửi qua API WRO.
-            Mặc định hiển thị các đơn đang chờ duyệt.
+            Quản lý và duyệt các yêu cầu xuất kho từ kho nguồn và đối tác liên kết.
           </p>
         </div>
         <div className="ops-page__hero-actions">
+          <div className="ops-page__weight-chip">
+            <small>Chờ duyệt</small>
+            <strong>{pendingCount} yêu cầu</strong>
+          </div>
           <Button
+            type="primary"
             icon={<ReloadOutlined spin={isRefreshing} />}
             disabled={isRefreshing || isLoading}
             onClick={() => loadWros({ refresh: true })}
@@ -314,24 +329,28 @@ export default function OperationsWroApprovalsPage() {
 
       <section className="ops-kpi-grid" aria-label="Chỉ số duyệt xuất kho">
         <article className="ops-kpi-card">
-          <p className="ops-kpi-card__label">Đang hiển thị</p>
-          <p className="ops-kpi-card__value">{isLoading ? "…" : formatNumber(wroList.length)}</p>
+          <p className="ops-kpi-card__label">Tổng yêu cầu xuất kho</p>
+          <p className="ops-kpi-card__value" style={{ color: "#2563eb" }}>
+            {isLoading ? "…" : formatNumber(wroList.length)}
+          </p>
           <div className="ops-kpi-card__meta">
-            <p>Theo bộ lọc hiện tại</p>
+            <p>Trong hệ thống</p>
           </div>
         </article>
         <article className="ops-kpi-card">
-          <p className="ops-kpi-card__label">Cần duyệt (trong list)</p>
-          <p className="ops-kpi-card__value">{isLoading ? "…" : formatNumber(pendingCount)}</p>
+          <p className="ops-kpi-card__label">Đang chờ duyệt</p>
+          <p className="ops-kpi-card__value" style={{ color: "#d97706" }}>
+            {isLoading ? "…" : formatNumber(pendingCount)}
+          </p>
           <div className="ops-kpi-card__meta">
-            <p>RELEASE_PENDING / PENDING_REVIEW / PENDING</p>
+            <p>Cần xem xét & xác nhận</p>
           </div>
         </article>
       </section>
 
       <section className="ops-page__filters" aria-label="Bộ lọc WRO">
         <div>
-          <label htmlFor="wro-f-status">Trạng thái</label>
+          <label htmlFor="wro-f-status">Trạng thái xuất kho</label>
           <Select
             id="wro-f-status"
             style={{ width: "100%" }}
@@ -344,11 +363,11 @@ export default function OperationsWroApprovalsPage() {
           />
         </div>
         <div>
-          <label htmlFor="wro-f-search">Tìm kiếm</label>
+          <label htmlFor="wro-f-search">Tìm kiếm nhanh</label>
           <Input.Search
             id="wro-f-search"
             allowClear
-            placeholder="Mã WRO / lý do xuất..."
+            placeholder="Tìm theo mã WRO, người nhận, kho..."
             value={filters.search}
             onChange={(event) =>
               setFilters((current) => ({ ...current, search: event.target.value }))
@@ -369,8 +388,14 @@ export default function OperationsWroApprovalsPage() {
           columns={columns}
           dataSource={wroList}
           loading={isLoading || isRefreshing}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          scroll={{ x: 1300 }}
+          sticky={{ offsetHeader: 0 }}
+          scroll={{ x: 1300, y: "calc(100vh - 410px)" }}
+          pagination={{
+            pageSize: 15,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "15", "25", "50"],
+            showTotal: (total) => `Tổng ${total} yêu cầu`,
+          }}
           onRow={(row) => ({
             onClick: () => setDetailWroId(row.id),
             style: { cursor: "pointer" },

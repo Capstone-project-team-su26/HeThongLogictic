@@ -452,6 +452,28 @@
   background: #fef2f2;
 }
 
+.ops-table-card .ant-table-thead > tr > th {
+  background: #f8fafc !important;
+  font-weight: 750 !important;
+  color: #334155 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  white-space: nowrap;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 @media (max-width: 720px) {
   .ops-page {
     padding: 12px;

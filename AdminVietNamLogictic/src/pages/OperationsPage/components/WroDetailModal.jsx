@@ -24,6 +24,7 @@ import {
   TRANSPORT_MODES,
   wroNeedsApproval,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import AuthNotify from "../../../utils/Common/AuthNotify";
 
 const EMPTY_FINALIZE = {
   originWarehouseId: "",
@@ -60,7 +61,9 @@ export default function WroDetailModal({
     try {
       setDetail(await getWroDetail(wroId));
     } catch (err) {
-      setError(getOperationsApiError(err, "Không thể tải chi tiết WRO."));
+      const errMsg = getOperationsApiError(err, "Không thể tải chi tiết WRO.");
+      AuthNotify.error("Lỗi tải chi tiết WRO", errMsg);
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -105,9 +108,12 @@ export default function WroDetailModal({
     setError("");
     try {
       await action();
+      AuthNotify.success("Thành công", successMessage);
       onChanged?.(successMessage);
     } catch (err) {
-      setError(getOperationsApiError(err, "Thao tác thất bại."));
+      const errMsg = getOperationsApiError(err, "Thao tác thất bại.");
+      AuthNotify.error("Thao tác thất bại", errMsg);
+      setError(errMsg);
       setActing(false);
     }
   }

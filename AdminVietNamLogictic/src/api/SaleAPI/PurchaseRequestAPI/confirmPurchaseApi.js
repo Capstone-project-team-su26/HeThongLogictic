@@ -114,12 +114,7 @@ export const approveStorePurchaseApi = async (purchaseRequestId, payload = {}) =
       : `/api/purchase-requests/${encodeURIComponent(normalizedId)}/approve-store`;
 
   try {
-    const response = await axiosInstance.post(endpointUrl, requestBody, {
-      headers: {
-        ...getAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await axiosInstance.post(endpointUrl, requestBody);
     return response?.data?.data ?? response?.data ?? null;
   } catch (error) {
     console.error("APPROVE STORE PURCHASE API ERROR:", error);

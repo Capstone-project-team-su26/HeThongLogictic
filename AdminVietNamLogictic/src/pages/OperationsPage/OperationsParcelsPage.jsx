@@ -38,6 +38,7 @@ import {
 import MasterBoxFormModal from "./components/MasterBoxFormModal";
 import MasterBoxDetailModal from "./components/MasterBoxDetailModal";
 import ParcelDetailModal from "./components/ParcelDetailModal";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 const EMPTY_FILTERS = {
@@ -232,12 +233,15 @@ export default function OperationsParcelsPage({
     async (action, successMessage) => {
       try {
         await action();
+        AuthNotify.success("Thành công", successMessage);
         setNotice({ type: "success", message: successMessage });
         await loadData({ refresh: true });
       } catch (error) {
+        const errMsg = getOperationsApiError(error, "Thao tác không thành công.");
+        AuthNotify.error("Thao tác thất bại", errMsg);
         setNotice({
           type: "error",
-          message: getOperationsApiError(error, "Thao tác không thành công."),
+          message: errMsg,
         });
       }
     },
@@ -694,8 +698,14 @@ export default function OperationsParcelsPage({
                   columns={inventoryColumns}
                   dataSource={filteredInventory}
                   loading={isLoading}
-                  pagination={{ pageSize: 10, showSizeChanger: false }}
-                  scroll={{ x: 1200 }}
+                  sticky={{ offsetHeader: 0 }}
+                  scroll={{ x: 1200, y: "calc(100vh - 430px)" }}
+                  pagination={{
+                    pageSize: 15,
+                    showSizeChanger: true,
+                    pageSizeOptions: ["10", "15", "25", "50", "100"],
+                    showTotal: (total) => `Tổng ${total} kiện`,
+                  }}
                   rowSelection={
                     readOnly
                       ? undefined
@@ -731,8 +741,14 @@ export default function OperationsParcelsPage({
                   columns={masterBoxColumns}
                   dataSource={masterBoxes}
                   loading={isLoading}
-                  pagination={{ pageSize: 10, showSizeChanger: false }}
-                  scroll={{ x: 1000 }}
+                  sticky={{ offsetHeader: 0 }}
+                  scroll={{ x: 1000, y: "calc(100vh - 430px)" }}
+                  pagination={{
+                    pageSize: 15,
+                    showSizeChanger: true,
+                    pageSizeOptions: ["10", "15", "25", "50"],
+                    showTotal: (total) => `Tổng ${total} box`,
+                  }}
                   onRow={(row) => ({
                     onClick: () => setDetailBoxId(row.id),
                     style: { cursor: "pointer" },

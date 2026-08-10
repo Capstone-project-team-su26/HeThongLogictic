@@ -29,6 +29,7 @@ import {
   CONSIGNMENT_TYPE_FILTER_OPTIONS,
   getConsignmentStatusLabel,
 } from "../../api/OperationsAPI/operationsMappers";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 const RANGE_OPTIONS = [
@@ -128,9 +129,9 @@ export default function OperationsDashboard() {
       const result = await getOperationalDashboard();
       setSourceItems(result?.items ?? []);
     } catch (error) {
-      setLoadError(
-        getOperationsApiError(error, "Không thể tải dữ liệu dashboard.")
-      );
+      const errMsg = getOperationsApiError(error, "Không thể tải dữ liệu dashboard.");
+      AuthNotify.error("Lỗi tải dữ liệu", errMsg);
+      setLoadError(errMsg);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -399,9 +400,10 @@ export default function OperationsDashboard() {
           columns={columns}
           dataSource={analytics.rows}
           loading={isLoading}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
+          sticky={{ offsetHeader: 0 }}
+          scroll={{ x: 900, y: "calc(100vh - 450px)" }}
+          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} lô` }}
           locale={{ emptyText: "Chưa có lô hàng trong khoảng thời gian này." }}
-          scroll={{ x: 900 }}
         />
       </div>
     </div>

@@ -26,6 +26,7 @@ import {
 } from "../../api/OperationsAPI/consolidationWorkflowService";
 import WroApproveModal from "./components/WroApproveModal";
 import WroViewModal from "./components/WroViewModal";
+import AuthNotify from "../../utils/Common/AuthNotify";
 import "./OperationsPage.css";
 
 const STATUS_FILTER_OPTIONS = [
@@ -72,7 +73,9 @@ export default function OperationsWroPage({
         }
         setWroList(items);
       } catch (error) {
-        setLoadError(getOperationsApiError(error, "Không tải được danh sách phiếu xuất kho."));
+        const errMsg = getOperationsApiError(error, "Không thể tải danh sách phiếu WRO.");
+        AuthNotify.error("Lỗi tải dữ liệu", errMsg);
+        setLoadError(errMsg);
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
@@ -96,12 +99,16 @@ export default function OperationsWroPage({
       setBusyId(wroId);
       try {
         await rejectWro(wroId, "Ops từ chối phiếu xuất kho");
-        setNotice({ type: "success", message: "Đã từ chối phiếu WRO." });
+        const msg = "Đã từ chối phiếu WRO.";
+        AuthNotify.success("Thành công", msg);
+        setNotice({ type: "success", message: msg });
         await loadData({ refresh: true });
       } catch (error) {
+        const errMsg = getOperationsApiError(error, "Không từ chối được WRO.");
+        AuthNotify.error("Từ chối thất bại", errMsg);
         setNotice({
           type: "error",
-          message: getOperationsApiError(error, "Không từ chối được WRO."),
+          message: errMsg,
         });
       } finally {
         setBusyId("");
@@ -230,15 +237,13 @@ export default function OperationsWroPage({
           <span>Xuất kho</span>
           <h1>Phiếu xuất kho (WRO)</h1>
           <p>
-            {readOnly
-              ? "Chế độ giám sát: chỉ xem phiếu xuất kho và chứng từ."
-              : "Duyệt phiếu chờ xử lý, xem chi tiết và mở giấy tờ thông quan đã đính kèm. Khi duyệt bắt buộc nhập mã chuyến bay và upload chứng từ."}
+            Theo dõi, kiểm duyệt và quản lý các phiếu xuất kho trong hệ thống logistics.
           </p>
         </div>
         <div className="ops-page__hero-actions">
           <div className="ops-page__weight-chip">
-            <small>Cần duyệt (list)</small>
-            <strong>{pendingCount}</strong>
+            <small>Chờ duyệt</small>
+            <strong>{pendingCount} phiếu</strong>
           </div>
           <Button
             type="primary"
@@ -249,6 +254,28 @@ export default function OperationsWroPage({
             Làm mới
           </Button>
         </div>
+      </section>
+
+      {/* KPI Overview */}
+      <section className="ops-kpi-grid">
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">Tổng phiếu xuất kho</p>
+          <p className="ops-kpi-card__value" style={{ color: "#2563eb" }}>
+            {isLoading ? "…" : wroList.length}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Theo bộ lọc hiện tại</p>
+          </div>
+        </article>
+        <article className="ops-kpi-card">
+          <p className="ops-kpi-card__label">Phiếu chờ duyệt</p>
+          <p className="ops-kpi-card__value" style={{ color: "#d97706" }}>
+            {isLoading ? "…" : pendingCount}
+          </p>
+          <div className="ops-kpi-card__meta">
+            <p>Cần kiểm kê & thông quan</p>
+          </div>
+        </article>
       </section>
 
       {loadError ? (
@@ -278,7 +305,7 @@ export default function OperationsWroPage({
 
       <section className="ops-page__filters" aria-label="Bộ lọc phiếu xuất kho">
         <div>
-          <label htmlFor="wro-status">Trạng thái</label>
+          <label htmlFor="wro-status">Trạng thái xuất kho</label>
           <Select
             id="wro-status"
             style={{ width: "100%" }}
@@ -288,11 +315,11 @@ export default function OperationsWroPage({
           />
         </div>
         <div>
-          <label htmlFor="wro-search">Tìm kiếm</label>
+          <label htmlFor="wro-search">Tìm kiếm nhanh</label>
           <Input.Search
             id="wro-search"
             allowClear
-            placeholder="Mã WRO, khách, SĐT…"
+            placeholder="Mã WRO, mã vạch, khách hàng..."
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
             onSearch={(value) => setSearchTerm(String(value || "").trim())}
@@ -308,19 +335,19 @@ export default function OperationsWroPage({
             {statusFilter === "NEEDS_APPROVAL" ? " · chờ duyệt" : ""}
           </span>
         </div>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="Nút Xem / Giấy tờ mở phiếu và link chứng từ. Nút Duyệt mở form mã chuyến bay + upload giấy tờ."
-        />
         <Table
           rowKey="id"
           columns={columns}
           dataSource={wroList}
           loading={isLoading}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          scroll={{ x: 1280 }}
+          sticky={{ offsetHeader: 0 }}
+          scroll={{ x: 1280, y: "calc(100vh - 410px)" }}
+          pagination={{
+            pageSize: 15,
+            showSizeChanger: true,
+            pageSizeOptions: ["10", "15", "25", "50"],
+            showTotal: (total) => `Tổng ${total} phiếu`,
+          }}
           locale={{ emptyText: "Không có phiếu xuất kho theo bộ lọc." }}
         />
       </div>
