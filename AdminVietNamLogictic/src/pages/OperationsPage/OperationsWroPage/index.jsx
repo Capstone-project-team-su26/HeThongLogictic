@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Tabs } from "antd";
+import { Alert, Button, Input, Modal, Tabs, Typography } from "antd";
 import {
   AppstoreOutlined,
+  CheckCircleOutlined,
   InboxOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 
 import {
+  approveWro,
   getOperationsApiError,
   listCarriers,
   listWarehouses,
@@ -14,7 +16,7 @@ import {
   rejectWro,
   wroNeedsApproval,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
-import WroApproveModal from "../components/WroApproveModal";
+import WroShippingRouteModal from "../components/WroShippingRouteModal";
 import WroViewModal from "../components/WroViewModal";
 import WroHeader from "./components/WroHeader";
 import WroFilterBar from "./components/WroFilterBar";
@@ -23,7 +25,7 @@ import AuthNotify from "../../../utils/Common/AuthNotify";
 import "./OperationsWroPage.css";
 
 const INITIAL_FILTERS = {
-  status: "NEEDS_APPROVAL",
+  status: "",
   search: "",
   customsStatus: "",
   warehouseId: "",
@@ -49,6 +51,10 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
   const [notice, setNotice] = useState(null);
   const [busyId, setBusyId] = useState("");
   const [approveTarget, setApproveTarget] = useState(null);
+  const [approveNote, setApproveNote] = useState("");
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState("");
+  const [shippingRouteTarget, setShippingRouteTarget] = useState(null);
   const [viewWroId, setViewWroId] = useState(null);
 
   // Fetch Lookups (Warehouses & Carriers)
@@ -89,10 +95,6 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
         });
 
         let items = page.items ?? [];
-        if (filters.status === "NEEDS_APPROVAL") {
-          items = items.filter((row) => wroNeedsApproval(row.status));
-        }
-
         setWroList(items);
       } catch (error) {
         const errMsg = getOperationsApiError(
@@ -126,6 +128,14 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
   // Client-side Multi-Field Filter Processor
   const filteredList = useMemo(() => {
     return wroList.filter((row) => {
+      // Filter by WRO Status
+      if (filters.status) {
+        if (filters.status === "NEEDS_APPROVAL") {
+          if (!wroNeedsApproval(row.status)) return false;
+        } else if (row.status !== filters.status) {
+          return false;
+        }
+      }
       // Filter by Customs Status
       if (
         filters.customsStatus &&
@@ -231,29 +241,75 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
     return `${filteredList.length} / ${wroList.length} phiếu xuất kho`;
   }, [activeTab, batchList.length, singleList.length, filteredList.length, wroList.length]);
 
-  // Reject Action Handler
-  const handleReject = useCallback(
-    async (wroId) => {
-      setBusyId(wroId);
-      try {
-        await rejectWro(wroId, "Ops từ chối phiếu xuất kho");
-        const msg = "Đã từ chối phiếu WRO.";
-        AuthNotify.success("Thành công", msg);
-        setNotice({ type: "success", message: msg });
-        await loadData({ refresh: true });
-      } catch (error) {
-        const errMsg = getOperationsApiError(error, "Không từ chối được WRO.");
-        AuthNotify.error("Từ chối thất bại", errMsg);
-        setNotice({
-          type: "error",
-          message: errMsg,
-        });
-      } finally {
-        setBusyId("");
-      }
-    },
-    [loadData]
-  );
+  // Confirm Approve Execution via Status API (status: RELEASE_APPROVED)
+  const handleConfirmApprove = async () => {
+    if (!approveTarget) return;
+    const wroId = approveTarget.id || approveTarget.wroId;
+    const wroCode = approveTarget.code || approveTarget.wroCode || wroId;
+    setBusyId(wroId);
+    try {
+      await approveWro(wroId, { note: approveNote.trim() });
+      const msg = `Đã duyệt thành công phiếu xuất kho ${wroCode}.`;
+
+      AuthNotify.success("Duyệt WRO thành công", msg);
+      setNotice({ type: "success", message: msg });
+
+      setWroList((prevList) =>
+        prevList.map((item) =>
+          item.id === wroId || item.wroId === wroId
+            ? { ...item, status: "RELEASE_APPROVED" }
+            : item
+        )
+      );
+
+      setApproveTarget(null);
+      setApproveNote("");
+      await loadData({ refresh: true });
+    } catch (error) {
+      const errMsg = getOperationsApiError(error, "Không duyệt được phiếu WRO.");
+      AuthNotify.error("Duyệt WRO thất bại", errMsg);
+      setNotice({ type: "error", message: errMsg });
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  // Confirm Reject Execution via Status API (status: RELEASE_REJECTED)
+  const handleConfirmReject = async () => {
+    if (!rejectTarget) return;
+    const wroId = rejectTarget.id || rejectTarget.wroId;
+    const reason = rejectReasonInput.trim() || "Ops từ chối phiếu xuất kho";
+    setBusyId(wroId);
+    try {
+      await rejectWro(wroId, reason);
+      const wroCode = rejectTarget.code || rejectTarget.wroCode || wroId;
+      const msg = `Đã từ chối phiếu WRO ${wroCode}. Lý do: ${reason}`;
+
+      AuthNotify.success("Từ chối WRO thành công", msg);
+      setNotice({ type: "success", message: msg });
+
+      setWroList((prevList) =>
+        prevList.map((item) =>
+          item.id === wroId || item.wroId === wroId
+            ? { ...item, status: "RELEASE_REJECTED", rejectionReason: reason }
+            : item
+        )
+      );
+
+      setRejectTarget(null);
+      setRejectReasonInput("");
+      await loadData({ refresh: true });
+    } catch (error) {
+      const errMsg = getOperationsApiError(error, "Không từ chối được WRO.");
+      AuthNotify.error("Từ chối thất bại", errMsg);
+      setNotice({
+        type: "error",
+        message: errMsg,
+      });
+    } finally {
+      setBusyId("");
+    }
+  };
 
   const tabItems = [
     {
@@ -270,8 +326,15 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
           readOnly={readOnly}
           busyId={busyId}
           onView={(id) => setViewWroId(id)}
-          onApprove={(row) => setApproveTarget(row)}
-          onReject={handleReject}
+          onApprove={(row) => {
+            setApproveTarget(row);
+            setApproveNote("");
+          }}
+          onReject={(row) => {
+            setRejectTarget(row);
+            setRejectReasonInput("");
+          }}
+          onUpdateShippingRoute={(row) => setShippingRouteTarget(row)}
           emptyText="Không có phiếu xuất gom theo lô (BATCH) phù hợp theo bộ lọc."
         />
       ),
@@ -290,8 +353,15 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
           readOnly={readOnly}
           busyId={busyId}
           onView={(id) => setViewWroId(id)}
-          onApprove={(row) => setApproveTarget(row)}
-          onReject={handleReject}
+          onApprove={(row) => {
+            setApproveTarget(row);
+            setApproveNote("");
+          }}
+          onReject={(row) => {
+            setRejectTarget(row);
+            setRejectReasonInput("");
+          }}
+          onUpdateShippingRoute={(row) => setShippingRouteTarget(row)}
           emptyText="Không có phiếu xuất đơn lẻ (SINGLE) phù hợp theo bộ lọc."
         />
       ),
@@ -310,8 +380,15 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
           readOnly={readOnly}
           busyId={busyId}
           onView={(id) => setViewWroId(id)}
-          onApprove={(row) => setApproveTarget(row)}
-          onReject={handleReject}
+          onApprove={(row) => {
+            setApproveTarget(row);
+            setApproveNote("");
+          }}
+          onReject={(row) => {
+            setRejectTarget(row);
+            setRejectReasonInput("");
+          }}
+          onUpdateShippingRoute={(row) => setShippingRouteTarget(row)}
           emptyText="Không tìm thấy phiếu xuất kho nào theo bộ lọc."
         />
       ),
@@ -383,23 +460,139 @@ export default function OperationsWroPage({ readOnly = false } = {}) {
         />
       </div>
 
+      {/* Custom Approval Confirmation Modal */}
       {approveTarget && !readOnly ? (
-        <WroApproveModal
+        <Modal
           open
-          wro={approveTarget}
-          onClose={() => setApproveTarget(null)}
-          onApproved={async (wro) => {
+          centered
+          width={520}
+          title={
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#16a34a", fontSize: 17, fontWeight: 700 }}>
+              <CheckCircleOutlined style={{ fontSize: 20 }} />
+              <span>Xác nhận duyệt phiếu xuất kho</span>
+            </div>
+          }
+          onCancel={() => {
             setApproveTarget(null);
-            setNotice({
-              type: "success",
-              message: `Đã duyệt ${
-                wro?.code || "WRO"
-              } kèm chuyến bay & chứng từ thông quan.`,
-            });
-            await loadData({ refresh: true });
+            setApproveNote("");
           }}
-        />
+          footer={[
+            <Button
+              key="cancel"
+              onClick={() => {
+                setApproveTarget(null);
+                setApproveNote("");
+              }}
+            >
+              Hủy
+            </Button>,
+            <Button
+              key="approve"
+              type="primary"
+              loading={Boolean(busyId)}
+              onClick={handleConfirmApprove}
+              style={{ backgroundColor: "#16a34a", borderColor: "#16a34a", fontWeight: 600 }}
+            >
+              Xác nhận duyệt
+            </Button>,
+          ]}
+        >
+          <div style={{ paddingTop: 10, display: "flex", flexDirection: "column", gap: 14 }}>
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                borderRadius: 10,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#15803d", marginBottom: 4 }}>
+                Mã WRO: <Typography.Text code style={{ color: "#166534", fontWeight: 800 }}>{approveTarget.code || approveTarget.wroCode || approveTarget.id}</Typography.Text>
+              </div>
+              <div style={{ fontSize: 13, color: "#334155" }}>
+                Khách hàng: <strong>{approveTarget.customerName || "—"}</strong>
+              </div>
+              <div style={{ fontSize: 13, color: "#334155" }}>
+                Người nhận: <strong>{approveTarget.receiverName || approveTarget.consigneeName || "—"}</strong> ({approveTarget.receiverPhone || approveTarget.consigneePhone || "—"})
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="approve-note-input"
+                style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#334155", fontSize: 13 }}
+              >
+                Ghi chú phê duyệt (không bắt buộc):
+              </label>
+              <Input
+                id="approve-note-input"
+                placeholder="Ví dụ: Đã kiểm tra thông tin..."
+                value={approveNote}
+                onChange={(e) => setApproveNote(e.target.value)}
+                style={{ borderRadius: 8 }}
+              />
+            </div>
+          </div>
+        </Modal>
       ) : null}
+
+      {/* Custom Rejection Reason Modal */}
+      {rejectTarget && !readOnly ? (
+        <Modal
+          open
+          centered
+          width={520}
+          title={`Từ chối phiếu xuất kho ${rejectTarget.code || rejectTarget.wroCode || rejectTarget.id}`}
+          onCancel={() => {
+            setRejectTarget(null);
+            setRejectReasonInput("");
+          }}
+          footer={[
+            <Button
+              key="cancel"
+              onClick={() => {
+                setRejectTarget(null);
+                setRejectReasonInput("");
+              }}
+            >
+              Hủy
+            </Button>,
+            <Button
+              key="reject"
+              type="primary"
+              danger
+              loading={Boolean(busyId)}
+              onClick={handleConfirmReject}
+            >
+              Xác nhận từ chối
+            </Button>,
+          ]}
+        >
+          <div style={{ paddingTop: 8 }}>
+            <label
+              htmlFor="reject-reason-input"
+              style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#334155" }}
+            >
+              Nhập lý do từ chối phiếu xuất kho:
+            </label>
+            <Input.TextArea
+              id="reject-reason-input"
+              rows={4}
+              placeholder="Ví dụ: Sai thông tin đóng gói, thiếu chứng từ hải quan, hàng hỏng..."
+              value={rejectReasonInput}
+              onChange={(e) => setRejectReasonInput(e.target.value)}
+            />
+          </div>
+        </Modal>
+      ) : null}
+
+      {/* Shipping Route & Customs Documents Modal */}
+      <WroShippingRouteModal
+        open={Boolean(shippingRouteTarget)}
+        wro={shippingRouteTarget}
+        onClose={() => setShippingRouteTarget(null)}
+        onUpdated={() => loadData({ refresh: true })}
+      />
 
       <WroViewModal
         open={Boolean(viewWroId)}

@@ -281,6 +281,9 @@ function mapCarrier(row) {
     id: text(row?.id || row?.carrierId),
     code: text(row?.carrierCode || row?.code),
     name: text(row?.carrierName || row?.name),
+    contactPerson: text(row?.contactPerson || row?.ContactPerson),
+    contactPhone: text(row?.contactPhone || row?.ContactPhone),
+    raw: row,
   };
 }
 
@@ -289,6 +292,9 @@ function mapShippingMethod(row) {
     id: text(row?.id || row?.shippingMethodId),
     code: text(row?.methodCode || row?.code),
     name: text(row?.methodName || row?.name),
+    estimatedTransitTime: text(row?.estimatedTransitTime || row?.EstimatedTransitTime),
+    description: text(row?.description || row?.Description),
+    raw: row,
   };
   return { ...mapped, mode: detectShippingMode(mapped) };
 }
@@ -1102,22 +1108,18 @@ export async function approveWro(wroId, payload = {}) {
       (payload.customsDocumentUrls || []).map((url) => text(url)).filter(Boolean)
     ),
   ];
-  if (!vehicleNumber) {
-    throw new Error("Vui lòng nhập mã chuyến bay / số hiệu chuyến.");
-  }
-  if (!customsDocumentUrls.length) {
-    throw new Error("Vui lòng upload ít nhất một giấy tờ thông quan.");
-  }
+
+  const body = {
+    status: "RELEASE_APPROVED",
+    vehicleNumber: vehicleNumber || undefined,
+    trackingNumber: text(payload.trackingNumber) || undefined,
+    customsDocumentUrls: customsDocumentUrls.length ? customsDocumentUrls : undefined,
+    note: text(payload.note) || undefined,
+  };
 
   const response = await axiosInstance.put(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
-    {
-      status: "RELEASE_APPROVED",
-      vehicleNumber,
-      trackingNumber: text(payload.trackingNumber) || undefined,
-      customsDocumentUrls,
-      note: text(payload.note) || undefined,
-    }
+    body
   );
   return getAdminApiData(response);
 }
@@ -1236,30 +1238,33 @@ export async function deleteMasterBox(boxId) {
   return box;
 }
 
-async function assignWroShippingRoute(wroId, payload) {
+export async function updateWroShippingRoute(wroId, payload = {}) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
   const body = {
     carrierId: text(payload.carrierId) || undefined,
     shippingMethodId: text(payload.shippingMethodId) || undefined,
+    shippingRouteId: text(payload.shippingRouteId) || undefined,
     shippingRoute: text(payload.shippingRoute) || undefined,
     estimatedDeliveryDays:
       payload.estimatedDeliveryDays != null && payload.estimatedDeliveryDays !== ""
         ? Number(payload.estimatedDeliveryDays)
         : undefined,
+    driverName: text(payload.driverName) || undefined,
+    driverPhone: text(payload.driverPhone) || undefined,
+    vehicleNumber: text(payload.vehicleNumber) || undefined,
+    trackingNumber: text(payload.trackingNumber) || undefined,
+    handoverNotes: text(payload.handoverNotes) || undefined,
+    customsDocumentUrls: Array.isArray(payload.customsDocumentUrls)
+      ? payload.customsDocumentUrls.map((url) => text(url)).filter(Boolean)
+      : undefined,
     note: text(payload.note) || undefined,
   };
-  if (
-    !body.carrierId &&
-    !body.shippingMethodId &&
-    !body.shippingRoute &&
-    body.estimatedDeliveryDays == null &&
-    !body.note
-  ) {
-    return;
-  }
-  await axiosInstance.put(
+
+  const response = await axiosInstance.put(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/shipping-route`,
     body
   );
+  return getAdminApiData(response);
 }
 
 export async function processApprovedWroToReleased(wroId, payload = {}) {
@@ -1308,4 +1313,15 @@ export async function createShipmentFromApprovedWro(wroId, payload) {
   if (!wroId) throw new Error("Thiếu id yêu cầu xuất kho.");
   await processApprovedWroToReleased(wroId, payload);
   return createShipment({ ...payload, wroRequestIds: [wroId] });
+}
+
+export async function uploadOperationsFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await axiosInstance.post("/api/uploads/image", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return getAdminApiData(response);
 }

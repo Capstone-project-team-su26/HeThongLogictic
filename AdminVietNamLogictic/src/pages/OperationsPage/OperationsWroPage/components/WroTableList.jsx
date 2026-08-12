@@ -3,6 +3,7 @@ import { Button, Table, Tag, Typography } from "antd";
 import {
   CheckOutlined,
   CloseOutlined,
+  EditOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
 
@@ -21,6 +22,7 @@ export default function WroTableList({
   onView = () => {},
   onApprove = () => {},
   onReject = () => {},
+  onUpdateShippingRoute = () => {},
   emptyText = "Không có phiếu xuất kho nào.",
 }) {
   const columns = [
@@ -112,7 +114,7 @@ export default function WroTableList({
       title: "Thao tác",
       key: "actions",
       fixed: "right",
-      width: readOnly ? 110 : 255,
+      width: readOnly ? 110 : 270,
       render: (_, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
           <Button
@@ -120,7 +122,7 @@ export default function WroTableList({
             type="link"
             icon={<EyeOutlined />}
             onClick={() => onView(row.id)}
-            style={{ padding: 0, fontSize: 12, fontWeight: 600 }}
+            style={{ padding: "0 2px", fontSize: 12, fontWeight: 600 }}
           >
             Xem chi tiết
           </Button>
@@ -130,23 +132,44 @@ export default function WroTableList({
                 size="small"
                 type="link"
                 icon={<CheckOutlined />}
+                loading={busyId === row.id}
                 onClick={() => onApprove(row)}
-                style={{ color: "#16a34a", padding: 0, fontSize: 12, fontWeight: 600 }}
+                style={{ color: "#16a34a", padding: "0 2px", fontSize: 12, fontWeight: 600 }}
               >
                 Duyệt
               </Button>
+
               <Button
                 size="small"
                 type="link"
                 danger
                 icon={<CloseOutlined />}
                 loading={busyId === row.id}
-                onClick={() => onReject(row.id)}
-                style={{ padding: 0, fontSize: 12, fontWeight: 600 }}
+                onClick={() => onReject(row)}
+                style={{ padding: "0 2px", fontSize: 12, fontWeight: 600 }}
               >
                 Từ chối
               </Button>
             </>
+          ) : !readOnly && row.status === "RELEASE_APPROVED" ? (
+            <Button
+              size="small"
+              type="default"
+              icon={<EditOutlined />}
+              onClick={() => onUpdateShippingRoute(row)}
+              style={{
+                color: "#1d4ed8",
+                background: "#eff6ff",
+                borderColor: "#bfdbfe",
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 650,
+                padding: "0 10px",
+                height: 26,
+              }}
+            >
+              Tuyến VC & Chứng từ
+            </Button>
           ) : null}
         </div>
       ),
