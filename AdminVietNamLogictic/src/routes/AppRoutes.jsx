@@ -29,6 +29,7 @@ import ConsignmentOrder from "../pages/SalePage/CreateRequestPage/CreateRequestO
 import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
 import ConsignmentDocumentsList from "../pages/SalePage/DocumentsPage/ConsignmentDocumentsPage/ConsignmentDocumentsList";
 import PurchaseDocumentsList from "../pages/SalePage/DocumentsPage/PurchaseDocumentsPage/PurchaseDocumentsList";
+import SaleWroPage from "../pages/SalePage/SaleWroPage";
 
 /* ================= ADMIN ================= */
 
@@ -308,6 +309,16 @@ export default function AppRoutes() {
           path="purchase-requests/:purchaseRequestId"
           element={<PurchaseRequestDetail />}
         />
+
+        <Route
+          path="wro/express"
+          element={<SaleWroPage exportTypeFilter="SINGLE" />}
+        />
+        <Route
+          path="wro/batch"
+          element={<SaleWroPage exportTypeFilter="BATCH" />}
+        />
+        <Route path="wro" element={<SaleWroPage />} />
 
         <Route path="customer-service" element={<CustomerServiceChat />} />
       </Route>

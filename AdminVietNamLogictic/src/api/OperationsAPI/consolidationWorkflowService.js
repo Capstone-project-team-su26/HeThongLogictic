@@ -129,7 +129,10 @@ export const WRO_STATUS_META = {
   PACKED: { label: "Đã đóng gói", tone: "processing" },
   RELEASED: { label: "Đã xuất kho", tone: "success" },
   HANDED_OVER: { label: "Đã bàn giao", tone: "success" },
-  IN_TRANSIT: { label: "Đang vận chuyển", tone: "default" },
+  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing" },
+  ARRIVED_IN_VN: { label: "Đã về VN (Thông quan)", tone: "purple" },
+  COMPLETED: { label: "Hoàn thành", tone: "success" },
+  DELIVERED: { label: "Đã giao hàng", tone: "success" },
 };
 
 const ELIGIBLE_INVENTORY_STATUSES = new Set(["AVAILABLE", "READY_FOR_CONSOLIDATION"]);
@@ -1131,6 +1134,19 @@ export async function rejectWro(wroId, rejectionReason = "") {
     {
       status: "RELEASE_REJECTED",
       rejectionReason: text(rejectionReason) || undefined,
+    }
+  );
+  return getAdminApiData(response);
+}
+
+export async function updateWroStatus(wroId, status, rejectionReason = "") {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  if (!status) throw new Error("Thiếu trạng thái mới.");
+  const response = await axiosInstance.put(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
+    {
+      status: text(status),
+      rejectionReason: rejectionReason ? text(rejectionReason) : undefined,
     }
   );
   return getAdminApiData(response);

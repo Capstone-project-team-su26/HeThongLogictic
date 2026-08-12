@@ -25,6 +25,11 @@ export default function WroTableList({
   onUpdateShippingRoute = () => {},
   emptyText = "Không có phiếu xuất kho nào.",
 }) {
+  const currentRole = String(
+    sessionStorage.getItem("role") || ""
+  ).toLowerCase();
+  const isSaleRole = currentRole.includes("sale");
+  const effectiveReadOnly = readOnly || isSaleRole;
   const columns = [
     {
       title: "Mã WRO / Barcode",
@@ -114,7 +119,7 @@ export default function WroTableList({
       title: "Thao tác",
       key: "actions",
       fixed: "right",
-      width: readOnly ? 110 : 270,
+      width: effectiveReadOnly ? 110 : 270,
       render: (_, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
           <Button
@@ -126,7 +131,7 @@ export default function WroTableList({
           >
             Xem chi tiết
           </Button>
-          {!readOnly && wroNeedsApproval(row.status) ? (
+          {!effectiveReadOnly && wroNeedsApproval(row.status) ? (
             <>
               <Button
                 size="small"
@@ -151,7 +156,7 @@ export default function WroTableList({
                 Từ chối
               </Button>
             </>
-          ) : !readOnly && row.status === "RELEASE_APPROVED" ? (
+          ) : !effectiveReadOnly && row.status === "RELEASE_APPROVED" ? (
             <Button
               size="small"
               type="default"
