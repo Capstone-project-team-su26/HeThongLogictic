@@ -129,6 +129,7 @@ export default function WroApproveModal({ open, wro, onClose, onApproved }) {
   return (
     <Modal
       open={open}
+      centered
       title={wro ? `Duyệt WRO ${wro.code}` : "Duyệt phiếu xuất kho"}
       onCancel={onClose}
       width={640}
