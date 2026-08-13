@@ -6,13 +6,13 @@ export default function WroExportTypeTag({ exportType }) {
   if (type === "BATCH") {
     return (
       <Tag color="purple" style={{ fontWeight: 600 }}>
-        Gom lô (BATCH)
+        Xuất theo lô
       </Tag>
     );
   }
   return (
     <Tag color="cyan" style={{ fontWeight: 600 }}>
-      Đơn lẻ (SINGLE)
+      Xuất hỏa tốc
     </Tag>
   );
 }

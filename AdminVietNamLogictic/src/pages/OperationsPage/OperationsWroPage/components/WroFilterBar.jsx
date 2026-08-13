@@ -25,7 +25,7 @@ const STATUS_OPTIONS = [
   { value: "NEEDS_APPROVAL", label: "Cần duyệt (Chờ xử lý)" },
   ...Object.entries(WRO_STATUS_META).map(([value, meta]) => ({
     value,
-    label: `${meta.label} (${value})`,
+    label: meta.label,
   })),
 ];
 
@@ -213,7 +213,7 @@ export default function WroFilterBar({
             }
             className="wro-chip-btn"
           >
-            Gom Lô (BATCH)
+            Xuất Theo Lô
           </Tag.CheckableTag>
 
           <Tag.CheckableTag
@@ -223,7 +223,7 @@ export default function WroFilterBar({
             }
             className="wro-chip-btn"
           >
-            Đơn Lẻ (SINGLE)
+            Xuất Hỏa Tốc
           </Tag.CheckableTag>
         </Space>
 

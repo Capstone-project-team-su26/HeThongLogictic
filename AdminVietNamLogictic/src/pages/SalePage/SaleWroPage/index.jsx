@@ -55,6 +55,14 @@ const INITIAL_FILTERS = {
   dateRange: null,
 };
 
+// Các trạng thái đã bàn giao cho ĐVVC / xuất hàng được phép bấm Thông báo KH
+const HANDED_OVER_STATUSES = new Set([
+  "HANDED_OVER",
+  "SHIPPED",
+  "IN_TRANSIT",
+  "RELEASED",
+]);
+
 const SALE_ALLOWED_STATUSES = [
   {
     value: "ARRIVED_IN_VN",
@@ -64,31 +72,31 @@ const SALE_ALLOWED_STATUSES = [
   },
   {
     value: "IN_TRANSIT",
-    label: "Đang vận chuyển (IN_TRANSIT)",
+    label: "Đang vận chuyển",
     description: "Đơn xuất kho đang trong quá trình vận chuyển quốc tế",
     color: "blue",
   },
   {
     value: "RELEASE_APPROVED",
-    label: "Đã duyệt xuất kho (RELEASE_APPROVED)",
+    label: "Đã duyệt xuất kho",
     description: "Đã phê duyệt thông tin phiếu xuất kho",
     color: "cyan",
   },
   {
     value: "DELIVERED",
-    label: "Đã giao hàng (DELIVERED)",
+    label: "Đã giao hàng",
     description: "Đã giao thành công cho khách hàng",
     color: "green",
   },
   {
     value: "COMPLETED",
-    label: "Hoàn thành (COMPLETED)",
+    label: "Hoàn thành",
     description: "Hoàn tất toàn bộ quy trình xuất kho",
     color: "green",
   },
   {
     value: "RELEASE_REJECTED",
-    label: "Từ chối xuất kho (RELEASE_REJECTED)",
+    label: "Từ chối xuất kho",
     description: "Từ chối yêu cầu xuất kho này",
     color: "red",
   },
@@ -360,16 +368,16 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
   }, [wroList, currentPathType]);
 
   const pageTitle = useMemo(() => {
-    if (currentPathType === "SINGLE") return "Quản lý WRO Hỏa tốc (SINGLE)";
-    if (currentPathType === "BATCH") return "Quản lý WRO Theo lô (BATCH)";
-    return "Quản lý Phiếu xuất kho (WRO)";
+    if (currentPathType === "SINGLE") return "Quản lý Phiếu Xuất Hỏa Tốc";
+    if (currentPathType === "BATCH") return "Quản lý Phiếu Xuất Theo Lô";
+    return "Quản lý Phiếu Xuất Kho";
   }, [currentPathType]);
 
   const pageSubtitle = useMemo(() => {
     if (currentPathType === "SINGLE")
-      return "Danh sách phiếu xuất kho hỏa tốc đơn lẻ (exportType: SINGLE)";
+      return "Danh sách phiếu xuất kho hỏa tốc đơn lẻ";
     if (currentPathType === "BATCH")
-      return "Danh sách phiếu xuất kho theo lô/gom (exportType: BATCH)";
+      return "Danh sách phiếu xuất kho theo lô / gom hàng";
     return "Quản lý và theo dõi thông tin phiếu xuất kho dành cho nhân viên kinh doanh";
   }, [currentPathType]);
 
@@ -476,7 +484,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
             Chi tiết
           </Button>
 
-          {row.status === "ARRIVED_IN_VN" ? null : (
+          {HANDED_OVER_STATUSES.has(String(row.status || "").toUpperCase()) ? (
             <Button
               size="small"
               type="primary"
@@ -493,7 +501,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
             >
               Thông báo KH
             </Button>
-          )}
+          ) : null}
         </div>
       ),
     },
@@ -513,7 +521,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
       >
         <div>
           <div className="wro-hero-banner__tag">
-            <CheckSquareOutlined /> SALE WRO MANAGEMENT
+            <CheckSquareOutlined /> QUẢN LÝ PHIẾU XUẤT KHO (SALE)
           </div>
           <Typography.Title level={2} style={{ color: "#fff", margin: 0, fontWeight: 800 }}>
             {pageTitle}
@@ -647,7 +655,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
                 label: (
                   <Space>
                     <SendOutlined />
-                    <span>WRO Hỏa tốc (SINGLE)</span>
+                    <span>Xuất Hỏa Tốc</span>
                     <Tag color="red">
                       {
                         wroList.filter((r) => String(r.exportType).toUpperCase() === "SINGLE")
@@ -662,7 +670,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
                 label: (
                   <Space>
                     <InboxOutlined />
-                    <span>WRO Theo lô (BATCH)</span>
+                    <span>Xuất Theo Lô</span>
                     <Tag color="purple">
                       {
                         wroList.filter((r) => String(r.exportType).toUpperCase() === "BATCH")
@@ -711,7 +719,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
 
           {currentPathType ? (
             <Tag color={currentPathType === "SINGLE" ? "red" : "purple"} style={{ fontWeight: 700 }}>
-              Loại: {currentPathType === "SINGLE" ? "HỎA TỐC (SINGLE)" : "THEO LÔ (BATCH)"}
+              Loại: {currentPathType === "SINGLE" ? "HỎA TỐC" : "THEO LÔ"}
             </Tag>
           ) : null}
         </div>
