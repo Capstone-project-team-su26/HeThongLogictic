@@ -1177,6 +1177,25 @@ export async function createWroRequest(payload) {
   return mapWro(getAdminApiData(response));
 }
 
+/**
+ * Gửi thông báo cho khách hàng về phiếu xuất kho WRO.
+ * API: POST /api/warehouse-release-requests/{wroId}/notify-customer
+ * @param {string} wroId
+ * @param {Object} [payload={}]
+ */
+export async function notifyWroCustomer(wroId, payload = {}) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  const response = await axiosInstance.post(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/notify-customer`,
+    payload
+  );
+  return getAdminApiData(response);
+}
+
+export async function notifyCustomerWro(wroId, payload = {}) {
+  return notifyWroCustomer(wroId, payload);
+}
+
 /* ===== merged from upstream (operator-flow) ===== */
 
 export const WRO_NEEDS_APPROVAL_STATUSES = new Set([

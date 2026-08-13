@@ -79,6 +79,15 @@ export const API_ENDPOINTS = Object.freeze({
     convert: "/api/exchange-rates/convert",
     detail: (id) => `/api/exchange-rates/${encodeId(id)}`,
   }),
+  warehouseReleaseRequests: Object.freeze({
+    list: "/api/warehouse-release-requests",
+    detail: (id) => `/api/warehouse-release-requests/${encodeId(id)}`,
+    status: (id) => `/api/warehouse-release-requests/${encodeId(id)}/status`,
+    shippingRoute: (id) => `/api/warehouse-release-requests/${encodeId(id)}/shipping-route`,
+    pickingList: (id) => `/api/warehouse-release-requests/${encodeId(id)}/picking-list`,
+    complete: (id) => `/api/warehouse-release-requests/${encodeId(id)}/complete`,
+    notifyCustomer: (id) => `/api/warehouse-release-requests/${encodeId(id)}/notify-customer`,
+  }),
 });
 
 export default API_ENDPOINTS;

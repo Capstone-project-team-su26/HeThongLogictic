@@ -33,6 +33,7 @@ import {
   listCarriers,
   listWarehouses,
   listWroRequests,
+  notifyWroCustomer,
   updateWroStatus,
   wroNeedsApproval,
   WRO_STATUS_META,
@@ -223,22 +224,27 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
     }
   };
 
-  // Quick action: Báo về VN & Sang thông quan ngay
-  const handleQuickArrivedInVn = async (wro) => {
+  // Thông báo cho khách hàng (POST /api/warehouse-release-requests/{id}/notify-customer & PUT ARRIVED_IN_VN)
+  const handleNotifyCustomer = async (wro) => {
     const wroId = wro.id || wro.wroId;
     const wroCode = wro.code || wro.wroCode || wroId;
     setIsUpdatingStatus(true);
     try {
-      await updateWroStatus(wroId, "ARRIVED_IN_VN");
+      await notifyWroCustomer(wroId);
+      try {
+        await updateWroStatus(wroId, "ARRIVED_IN_VN");
+      } catch (stErr) {
+        // Ignored if status was already updated backend side
+      }
       AuthNotify.success(
-        "Đã chuyển sang thông quan!",
-        `Phiếu WRO ${wroCode} đã cập nhật 'ARRIVED_IN_VN' — Báo khách và chuyển hải quan thông quan thành công.`
+        "Gửi thông báo thành công!",
+        `Đã gửi thông báo cho khách hàng & cập nhật phiếu WRO ${wroCode} sang 'Đã về VN'.`
       );
       loadData({ refresh: true });
     } catch (err) {
       AuthNotify.error(
-        "Cập nhật thất bại",
-        getOperationsApiError(err, "Không thể cập nhật trạng thái phiếu WRO sang ARRIVED_IN_VN.")
+        "Gửi thông báo thất bại",
+        getOperationsApiError(err, "Không thể gửi thông báo cho khách hàng.")
       );
     } finally {
       setIsUpdatingStatus(false);
@@ -470,27 +476,24 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
             Chi tiết
           </Button>
 
-          {row.status === "HANDED_OVER" || row.status === "RELEASED" ? (
+          {row.status === "ARRIVED_IN_VN" ? null : (
             <Button
               size="small"
               type="primary"
-              icon={<SafetyCertificateOutlined />}
-              onClick={() => handleQuickArrivedInVn(row)}
+              icon={<SendOutlined />}
+              loading={isUpdatingStatus}
+              onClick={() => handleNotifyCustomer(row)}
               style={{
                 borderRadius: 6,
                 fontSize: 12,
                 fontWeight: 650,
-                background: "#7c3aed",
-                borderColor: "#6d28d9",
+                background: "#0284c7",
+                borderColor: "#0369a1",
               }}
             >
-              Về VN & Thông quan
+              Thông báo KH
             </Button>
-          ) : row.status === "ARRIVED_IN_VN" ? (
-            <Tag color="purple" style={{ fontWeight: 700, margin: 0 }}>
-              Đã về VN
-            </Tag>
-          ) : null}
+          )}
         </div>
       ),
     },
