@@ -389,6 +389,27 @@ const MENU_BY_ROLE = {
         },
       ],
     },
+    {
+      key: "sale-wro",
+      label: "Quản lý WRO",
+      icon: <CheckSquareOutlined />,
+      children: [
+        {
+          key: "sale-wro-express",
+          label: "WRO hỏa tốc",
+          icon: <SendOutlined />,
+          path: "/sale/wro/express",
+          end: true,
+        },
+        {
+          key: "sale-wro-batch",
+          label: "WRO theo lô",
+          icon: <InboxOutlined />,
+          path: "/sale/wro/batch",
+          end: true,
+        },
+      ],
+    },
 
     {
       key: "sale-customer-service",
@@ -570,6 +591,16 @@ export default function Sidebar() {
         pathname.startsWith(
           "/sale/history/"
         ),
+
+      "sale-documents":
+        pathname.startsWith(
+          "/sale/documents/"
+        ),
+
+      "sale-wro":
+        pathname.startsWith(
+          "/sale/wro"
+        ),
     };
   });
 
@@ -656,6 +687,8 @@ export default function Sidebar() {
           "sale-list-and-fees": false,
           "sale-create-request": false,
           "sale-transaction-history": false,
+          "sale-documents": false,
+          "sale-wro": false,
           [groupKey]: true,
         };
       }
@@ -757,18 +790,17 @@ export default function Sidebar() {
                   const isGroupOpen =
                     Boolean(
                       openMenuGroups[
-                        item.key
+                      item.key
                       ]
                     );
 
                   return (
                     <div
                       key={item.key}
-                      className={`vcl-menu-group ${
-                        isGroupActive
-                          ? "vcl-menu-group--active"
-                          : ""
-                      }`}
+                      className={`vcl-menu-group ${isGroupActive
+                        ? "vcl-menu-group--active"
+                        : ""
+                        }`}
                       style={{
                         "--vcl-menu-index":
                           index,
@@ -781,11 +813,10 @@ export default function Sidebar() {
                           isGroupOpen
                         }
                         aria-controls={`${item.key}-submenu`}
-                        className={`vcl-menu-item vcl-menu-dropdown ${
-                          isGroupActive
-                            ? "vcl-menu-item--active"
-                            : ""
-                        }`}
+                        className={`vcl-menu-item vcl-menu-dropdown ${isGroupActive
+                          ? "vcl-menu-item--active"
+                          : ""
+                          }`}
                         onClick={() =>
                           handleToggleMenuGroup(
                             item.key
@@ -803,21 +834,19 @@ export default function Sidebar() {
                         </span>
 
                         <DownOutlined
-                          className={`vcl-menu-item__arrow vcl-menu-dropdown__arrow ${
-                            isGroupOpen
-                              ? "is-open"
-                              : ""
-                          }`}
+                          className={`vcl-menu-item__arrow vcl-menu-dropdown__arrow ${isGroupOpen
+                            ? "is-open"
+                            : ""
+                            }`}
                         />
                       </button>
 
                       <div
                         id={`${item.key}-submenu`}
-                        className={`vcl-menu-submenu ${
-                          isGroupOpen
-                            ? "is-open"
-                            : ""
-                        }`}
+                        className={`vcl-menu-submenu ${isGroupOpen
+                          ? "is-open"
+                          : ""
+                          }`}
                       >
                         <div className="vcl-menu-submenu__inner">
                           {item.children.map(
@@ -840,10 +869,9 @@ export default function Sidebar() {
                                 className={({
                                   isActive,
                                 }) =>
-                                  `vcl-submenu-item${
-                                    isActive
-                                      ? " vcl-submenu-item--active"
-                                      : ""
+                                  `vcl-submenu-item${isActive
+                                    ? " vcl-submenu-item--active"
+                                    : ""
                                   }`
                                 }
                               >
@@ -887,10 +915,9 @@ export default function Sidebar() {
                     className={({
                       isActive,
                     }) =>
-                      `vcl-menu-item${
-                        isActive
-                          ? " vcl-menu-item--active"
-                          : ""
+                      `vcl-menu-item${isActive
+                        ? " vcl-menu-item--active"
+                        : ""
                       }`
                     }
                   >

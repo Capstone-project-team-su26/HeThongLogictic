@@ -129,7 +129,10 @@ export const WRO_STATUS_META = {
   PACKED: { label: "Đã đóng gói", tone: "processing" },
   RELEASED: { label: "Đã xuất kho", tone: "success" },
   HANDED_OVER: { label: "Đã bàn giao", tone: "success" },
-  IN_TRANSIT: { label: "Đang vận chuyển", tone: "default" },
+  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing" },
+  ARRIVED_IN_VN: { label: "Đã về VN (Thông quan)", tone: "purple" },
+  COMPLETED: { label: "Hoàn thành", tone: "success" },
+  DELIVERED: { label: "Đã giao hàng", tone: "success" },
 };
 
 const ELIGIBLE_INVENTORY_STATUSES = new Set(["AVAILABLE", "READY_FOR_CONSOLIDATION"]);
@@ -281,6 +284,9 @@ function mapCarrier(row) {
     id: text(row?.id || row?.carrierId),
     code: text(row?.carrierCode || row?.code),
     name: text(row?.carrierName || row?.name),
+    contactPerson: text(row?.contactPerson || row?.ContactPerson),
+    contactPhone: text(row?.contactPhone || row?.ContactPhone),
+    raw: row,
   };
 }
 
@@ -289,6 +295,9 @@ function mapShippingMethod(row) {
     id: text(row?.id || row?.shippingMethodId),
     code: text(row?.methodCode || row?.code),
     name: text(row?.methodName || row?.name),
+    estimatedTransitTime: text(row?.estimatedTransitTime || row?.EstimatedTransitTime),
+    description: text(row?.description || row?.Description),
+    raw: row,
   };
   return { ...mapped, mode: detectShippingMode(mapped) };
 }
@@ -985,9 +994,21 @@ function mapWro(row) {
   const status = upper(row?.status || row?.Status);
   return {
     id,
+    wroId: id,
     code: text(row?.wroCode || row?.WroCode || id),
+    wroCode: text(row?.wroCode || row?.WroCode || id),
+    exportType: upper(row?.exportType || row?.ExportType || "SINGLE"),
     exportBarcode: text(row?.exportBarcode || row?.ExportBarcode),
     status,
+    createdByName: text(row?.createdByName || row?.CreatedByName),
+    createdByUserRole: text(row?.createdByUserRole || row?.CreatedByUserRole),
+    warehouseName: text(row?.warehouseName || row?.WarehouseName),
+    warehouseAddress: text(row?.warehouseAddress || row?.WarehouseAddress),
+    warehouseContactPhone: text(row?.warehouseContactPhone || row?.WarehouseContactPhone),
+    customerId: text(row?.customerId || row?.CustomerId),
+    customerName: text(row?.customerName || row?.CustomerName),
+    orderId: text(row?.orderId || row?.OrderId),
+    orderCode: text(row?.orderCode || row?.OrderCode),
     receiverName: text(row?.receiverName || row?.ReceiverName || row?.consigneeName),
     receiverPhone: text(row?.receiverPhone || row?.ReceiverPhone || row?.consigneePhone),
     deliveryAddress: text(
@@ -997,16 +1018,22 @@ function mapWro(row) {
         row?.ReceiverAddress ||
         row?.consigneeAddress
     ),
-    warehouseName: text(row?.warehouseName || row?.WarehouseName),
-    customerName: text(row?.customerName || row?.CustomerName),
+    receiverAddress: text(row?.receiverAddress || row?.ReceiverAddress),
+    consigneeName: text(row?.consigneeName || row?.ConsigneeName),
+    consigneePhone: text(row?.consigneePhone || row?.ConsigneePhone),
+    consigneeAddress: text(row?.consigneeAddress || row?.ConsigneeAddress),
+    shelfCode: text(row?.shelfCode || row?.ShelfCode),
+    exportReason: text(row?.exportReason || row?.ExportReason),
     carrierId: text(row?.carrierId || row?.CarrierId) || null,
     carrierName: text(row?.carrierName || row?.CarrierName),
     shippingRouteId: text(row?.shippingRouteId || row?.ShippingRouteId) || null,
     shippingRoute: text(row?.shippingRoute || row?.ShippingRoute),
-    exportReason: text(row?.exportReason || row?.ExportReason),
+    driverName: text(row?.driverName || row?.DriverName),
+    driverPhone: text(row?.driverPhone || row?.DriverPhone),
     vehicleNumber: text(row?.vehicleNumber || row?.VehicleNumber),
     trackingNumber: text(row?.trackingNumber || row?.TrackingNumber),
-    exportBarcode: text(row?.exportBarcode || row?.ExportBarcode),
+    customsStatus: text(row?.customsStatus || row?.CustomsStatus),
+    customsStatusText: text(row?.customsStatusText || row?.CustomsStatusText),
     customsDocumentUrls: Array.isArray(row?.customsDocumentUrls)
       ? row.customsDocumentUrls.filter(Boolean)
       : Array.isArray(row?.CustomsDocumentUrls)
@@ -1018,10 +1045,18 @@ function mapWro(row) {
       itemId: text(item?.itemId || item?.ItemId),
       inventoryId: text(item?.inventoryId || item?.InventoryId),
       quantity: num(item?.quantity ?? item?.Quantity) ?? 1,
+      orderId: text(item?.orderId || item?.OrderId),
+      orderCode: text(item?.orderCode || item?.OrderCode),
+      consignmentType: text(item?.consignmentType || item?.ConsignmentType),
       packageCode: text(item?.packageCode || item?.PackageCode),
       productName: text(item?.productName || item?.ProductName),
+      zoneName: text(item?.zoneName || item?.ZoneName),
       binCode: text(item?.binCode || item?.BinCode),
       shelfCode: text(item?.shelfCode || item?.ShelfCode),
+      actualWeight: num(item?.actualWeight ?? item?.ActualWeight),
+      length: num(item?.length ?? item?.Length),
+      width: num(item?.width ?? item?.Width),
+      height: num(item?.height ?? item?.Height),
     })),
     raw: row,
   };
@@ -1076,22 +1111,18 @@ export async function approveWro(wroId, payload = {}) {
       (payload.customsDocumentUrls || []).map((url) => text(url)).filter(Boolean)
     ),
   ];
-  if (!vehicleNumber) {
-    throw new Error("Vui lòng nhập mã chuyến bay / số hiệu chuyến.");
-  }
-  if (!customsDocumentUrls.length) {
-    throw new Error("Vui lòng upload ít nhất một giấy tờ thông quan.");
-  }
+
+  const body = {
+    status: "RELEASE_APPROVED",
+    vehicleNumber: vehicleNumber || undefined,
+    trackingNumber: text(payload.trackingNumber) || undefined,
+    customsDocumentUrls: customsDocumentUrls.length ? customsDocumentUrls : undefined,
+    note: text(payload.note) || undefined,
+  };
 
   const response = await axiosInstance.put(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
-    {
-      status: "RELEASE_APPROVED",
-      vehicleNumber,
-      trackingNumber: text(payload.trackingNumber) || undefined,
-      customsDocumentUrls,
-      note: text(payload.note) || undefined,
-    }
+    body
   );
   return getAdminApiData(response);
 }
@@ -1103,6 +1134,19 @@ export async function rejectWro(wroId, rejectionReason = "") {
     {
       status: "RELEASE_REJECTED",
       rejectionReason: text(rejectionReason) || undefined,
+    }
+  );
+  return getAdminApiData(response);
+}
+
+export async function updateWroStatus(wroId, status, rejectionReason = "") {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  if (!status) throw new Error("Thiếu trạng thái mới.");
+  const response = await axiosInstance.put(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/status`,
+    {
+      status: text(status),
+      rejectionReason: rejectionReason ? text(rejectionReason) : undefined,
     }
   );
   return getAdminApiData(response);
@@ -1131,6 +1175,25 @@ export async function createWroRequest(payload) {
     items,
   });
   return mapWro(getAdminApiData(response));
+}
+
+/**
+ * Gửi thông báo cho khách hàng về phiếu xuất kho WRO.
+ * API: POST /api/warehouse-release-requests/{wroId}/notify-customer
+ * @param {string} wroId
+ * @param {Object} [payload={}]
+ */
+export async function notifyWroCustomer(wroId, payload = {}) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
+  const response = await axiosInstance.post(
+    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/notify-customer`,
+    payload
+  );
+  return getAdminApiData(response);
+}
+
+export async function notifyCustomerWro(wroId, payload = {}) {
+  return notifyWroCustomer(wroId, payload);
 }
 
 /* ===== merged from upstream (operator-flow) ===== */
@@ -1210,30 +1273,33 @@ export async function deleteMasterBox(boxId) {
   return box;
 }
 
-async function assignWroShippingRoute(wroId, payload) {
+export async function updateWroShippingRoute(wroId, payload = {}) {
+  if (!wroId) throw new Error("Thiếu id phiếu WRO.");
   const body = {
     carrierId: text(payload.carrierId) || undefined,
     shippingMethodId: text(payload.shippingMethodId) || undefined,
+    shippingRouteId: text(payload.shippingRouteId) || undefined,
     shippingRoute: text(payload.shippingRoute) || undefined,
     estimatedDeliveryDays:
       payload.estimatedDeliveryDays != null && payload.estimatedDeliveryDays !== ""
         ? Number(payload.estimatedDeliveryDays)
         : undefined,
+    driverName: text(payload.driverName) || undefined,
+    driverPhone: text(payload.driverPhone) || undefined,
+    vehicleNumber: text(payload.vehicleNumber) || undefined,
+    trackingNumber: text(payload.trackingNumber) || undefined,
+    handoverNotes: text(payload.handoverNotes) || undefined,
+    customsDocumentUrls: Array.isArray(payload.customsDocumentUrls)
+      ? payload.customsDocumentUrls.map((url) => text(url)).filter(Boolean)
+      : undefined,
     note: text(payload.note) || undefined,
   };
-  if (
-    !body.carrierId &&
-    !body.shippingMethodId &&
-    !body.shippingRoute &&
-    body.estimatedDeliveryDays == null &&
-    !body.note
-  ) {
-    return;
-  }
-  await axiosInstance.put(
+
+  const response = await axiosInstance.put(
     `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/shipping-route`,
     body
   );
+  return getAdminApiData(response);
 }
 
 export async function processApprovedWroToReleased(wroId, payload = {}) {
@@ -1282,4 +1348,15 @@ export async function createShipmentFromApprovedWro(wroId, payload) {
   if (!wroId) throw new Error("Thiếu id yêu cầu xuất kho.");
   await processApprovedWroToReleased(wroId, payload);
   return createShipment({ ...payload, wroRequestIds: [wroId] });
+}
+
+export async function uploadOperationsFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await axiosInstance.post("/api/uploads/image", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return getAdminApiData(response);
 }

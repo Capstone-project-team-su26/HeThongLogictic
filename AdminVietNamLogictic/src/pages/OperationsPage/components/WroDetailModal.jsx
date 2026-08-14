@@ -20,6 +20,7 @@ import {
   getOperationsApiError,
   getWroDetail,
   getWroStatusMeta,
+  notifyWroCustomer,
   rejectWro,
   TRANSPORT_MODES,
   wroNeedsApproval,

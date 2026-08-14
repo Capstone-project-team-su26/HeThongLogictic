@@ -1,0 +1,260 @@
+@import "../OperationsPage.css";
+
+/* ==========================================================================
+   SUPER PREMIUM & ADVANCED STYLESHEET FOR WRO MANAGEMENT PAGE
+   ========================================================================== */
+
+/* 1. Hero Banner Accent Styling */
+.wro-hero-banner {
+  background:
+    radial-gradient(circle at 90% 10%, rgba(56, 189, 248, 0.35), transparent 40%),
+    radial-gradient(circle at 10% 90%, rgba(147, 51, 234, 0.25), transparent 40%),
+    linear-gradient(135deg, #0b132b 0%, #1c2541 45%, #1e40af 100%) !important;
+  border: 1px solid rgba(147, 197, 253, 0.25) !important;
+  box-shadow: 0 16px 40px -8px rgba(15, 23, 42, 0.3) !important;
+  border-radius: 22px !important;
+  padding: 26px 30px !important;
+}
+
+.wro-hero-banner__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  margin-bottom: 8px;
+}
+
+.wro-pulse-chip {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1px solid rgba(248, 113, 113, 0.4) !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
+}
+
+.wro-pulse-chip small {
+  color: #fca5a5 !important;
+}
+
+.wro-refresh-btn.ant-btn {
+  height: 44px;
+  padding-inline: 20px;
+  border-radius: 12px;
+  font-weight: 750;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+  transition: all 0.25s ease;
+}
+
+.wro-refresh-btn.ant-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.4);
+}
+
+/* 2. KPI Cards Grid with Icons & Gradient Accents */
+.wro-kpi-grid-enhanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ops-kpi-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.ops-kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.wro-kpi-card__icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.wro-kpi-card--blue .wro-kpi-card__icon-box {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.wro-kpi-card--blue .ops-kpi-card__value {
+  color: #1d4ed8;
+}
+
+.wro-kpi-card--amber .wro-kpi-card__icon-box {
+  background: #fffbeb;
+  color: #d97706;
+}
+.wro-kpi-card--amber .ops-kpi-card__value {
+  color: #b45309;
+}
+
+.wro-kpi-card--purple .wro-kpi-card__icon-box {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+.wro-kpi-card--purple .ops-kpi-card__value {
+  color: #6d28d9;
+}
+
+.wro-kpi-card--cyan .wro-kpi-card__icon-box {
+  background: #ecfeff;
+  color: #0891b2;
+}
+.wro-kpi-card--cyan .ops-kpi-card__value {
+  color: #0e7490;
+}
+
+.wro-kpi-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 3. Advanced Multi-field Filter Panel */
+.wro-filter-panel {
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.wro-filter-panel__top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wro-filter-panel__advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.wro-filter-panel__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.wro-chip-btn {
+  padding: 4px 12px !important;
+  border-radius: 16px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  transition: all 0.2s ease !important;
+}
+
+.wro-chip-btn.ant-tag-checkable-checked {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.2) !important;
+}
+
+.wro-filter-field label {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wro-filter-field .ant-input,
+.wro-filter-field .ant-select-selector,
+.wro-filter-field .ant-picker {
+  border-radius: 8px !important;
+}
+
+/* 4. Table & Tabs Card */
+.ops-table-card {
+  border-radius: 18px !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden;
+}
+
+.ops-table-card .ops-wro-tabs > .ant-tabs-nav {
+  padding: 10px 18px 0 !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.ops-table-card .ops-wro-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 10px 20px !important;
+  border-radius: 12px 12px 0 0 !important;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ops-table-card .ops-wro-tabs > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #ffffff !important;
+  border-color: #e2e8f0 #e2e8f0 #ffffff !important;
+  box-shadow: 0 -2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.ops-table-card .ops-wro-tabs > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #2563eb !important;
+  font-weight: 800;
+}
+
+/* Horizontal scrollbar styling for table */
+.ops-table-card .ant-table-content::-webkit-scrollbar,
+.ops-table-card .ant-table-body::-webkit-scrollbar {
+  height: 8px !important;
+  width: 8px !important;
+}
+
+.ops-table-card .ant-table-content::-webkit-scrollbar-thumb,
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 6px !important;
+}
+
+.ops-table-card .ant-table-content::-webkit-scrollbar-thumb:hover,
+.ops-table-card .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+/* Sticky Action Column Fix */
+.ops-table-card .ant-table-cell-fix-right {
+  background: #ffffff !important;
+}
+
+.ops-table-card .ant-table-thead > tr > th.ant-table-cell-fix-right {
+  background: #f1f5f9 !important;
+}
