@@ -638,7 +638,7 @@ export default function WarehouseLocationsPage() {
                     rowKey={getLocationId}
                     columns={tableColumns}
                     dataSource={filteredLocations}
-                    pagination={{ pageSize: 15, showSizeChanger: true }}
+                    pagination={{ pageSize: 10, showSizeChanger: true }}
                     scroll={{ x: 1000 }}
                   />
                 </div>

@@ -367,7 +367,7 @@ export default function OperationsInspectionsPage() {
           sticky={{ offsetHeader: 0 }}
           scroll={{ x: 1600, y: "calc(100vh - 520px)" }}
           pagination={{
-            pageSize: 15,
+            pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ["10", "15", "25", "50"],
             showTotal: (total) => `Tổng ${total} biên bản`,

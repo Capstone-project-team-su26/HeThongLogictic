@@ -414,7 +414,7 @@ export default function SaleReleasePage() {
         dataSource={filtered}
         loading={loading}
         scroll={{ x: 1180 }}
-        pagination={{ pageSize: 12, showSizeChanger: false }}
+        pagination={{ pageSize: 10, showSizeChanger: true }}
         locale={{
           emptyText: (
             <Empty

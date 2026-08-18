@@ -331,7 +331,7 @@ export default function OperationsInboundApprovalsPage() {
           sticky={{ offsetHeader: 0 }}
           scroll={{ x: 1200, y: "calc(100vh - 460px)" }}
           pagination={{
-            pageSize: 15,
+            pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ["10", "15", "25", "50"],
             showTotal: (total) => `Tổng ${total} phiếu`,

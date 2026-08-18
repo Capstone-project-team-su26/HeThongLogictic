@@ -147,10 +147,10 @@ export default function AdminCashFlowPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [txPageNumber, setTxPageNumber] = useState(1);
-  const [txPageSize, setTxPageSize] = useState(20);
+  const [txPageSize, setTxPageSize] = useState(10);
   const [txTotalCount, setTxTotalCount] = useState(0);
 
   // Tab duyệt thủ công
@@ -159,7 +159,7 @@ export default function AdminCashFlowPage() {
   const [pendingSource, setPendingSource] = useState("");
   const [pendingSearch, setPendingSearch] = useState("");
   const [pendingPageNumber, setPendingPageNumber] = useState(1);
-  const [pendingPageSize, setPendingPageSize] = useState(20);
+  const [pendingPageSize, setPendingPageSize] = useState(10);
   const [pendingTotalCount, setPendingTotalCount] = useState(0);
   const [activeRow, setActiveRow] = useState(null);
   const [approveOpen, setApproveOpen] = useState(false);
