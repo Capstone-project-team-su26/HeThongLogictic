@@ -31,6 +31,8 @@ import {
   EyeOutlined,
   FileTextOutlined,
   InboxOutlined,
+  RollbackOutlined,
+  HomeOutlined,
   LeftOutlined,
   MailOutlined,
   PhoneOutlined,
@@ -57,6 +59,12 @@ import {
   findPricingRuleByCode,
   getActivePricingRulesApi,
 } from "../../../../api/SaleAPI/ConsignmentAPI/pricingRuleService";
+import { listParcelReturnsByOrder } from "../../../../api/OperationsAPI/parcelReturnService";
+import ShipmentJourney from "../../../../components/ShipmentJourney/ShipmentJourney";
+import {
+  describeJourneyScale,
+  summarizeJourney,
+} from "../../../../components/ShipmentJourney/journeySummary";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
 import "./ConsignmentDetail.css";
 
@@ -1404,6 +1412,10 @@ export default function ConsignmentDetail({
     "";
 
   const [detail, setDetail] = useState(null);
+
+  // Hồ sơ hàng hoàn của đơn. Tải riêng vì API chi tiết đơn không kèm phần này.
+  const [parcelReturns, setParcelReturns] = useState([]);
+
   const [productTypes, setProductTypes] = useState([]);
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1445,12 +1457,20 @@ export default function ConsignmentDetail({
       setError("");
       setMasterDataWarning("");
 
-      const [detailResult, productTypeResult, pricingRuleResult] =
+      const [detailResult, productTypeResult, pricingRuleResult, returnResult] =
         await Promise.allSettled([
           getConsignmentDetailApi(orderId),
           getProductTypesApi(),
           getActivePricingRulesApi(),
+          listParcelReturnsByOrder(orderId),
         ]);
+
+      // Hồ sơ hàng hoàn hỏng thì vẫn cho xem đơn: đây là thông tin thêm, không phải phần lõi.
+      setParcelReturns(
+        returnResult.status === "fulfilled"
+          ? returnResult.value?.items || []
+          : []
+      );
 
       if (detailResult.status === "rejected") {
         throw detailResult.reason;
@@ -1545,6 +1565,31 @@ export default function ConsignmentDetail({
       ? detail.items
       : [];
   }, [detail?.items]);
+
+  /* Hành trình vận chuyển quốc tế của đơn, kèm số liệu cho phần tiêu đề. */
+  const journey = useMemo(() => {
+    const summary = summarizeJourney(
+      detail?.shipments
+    );
+
+    return {
+      ...summary,
+      // Số kiện kho đã phân loại là khách gửi lại — quyết định có cần Sale xác nhận hay không.
+      storeAtVnCount: summary.groups
+        .flatMap(
+          (group) =>
+            group?.parcels || []
+        )
+        .filter(
+          (parcel) =>
+            String(
+              parcel?.destinationHandling ||
+                ""
+            ).toUpperCase() ===
+            "STORE_AT_VN"
+        ).length,
+    };
+  }, [detail]);
 
   const productTypeMap = useMemo(() => {
     return new Map(
@@ -2646,6 +2691,19 @@ export default function ConsignmentDetail({
                 value={`${packageCount} kiện`}
               />
 
+              {/*
+                Nguyện vọng khách khai lúc đặt đơn. Sale cần thấy trước khi hàng về để còn
+                chuẩn bị: giao ngay thì lo tuyến nội địa, gửi kho thì lo chỗ kệ và báo phí.
+              */}
+              <DetailItem
+                icon={<HomeOutlined />}
+                label="Khi hàng về Việt Nam"
+                value={
+                  detail?.defaultDestinationHandlingText ||
+                  "Khách chưa chọn — mặc định giao ngay"
+                }
+              />
+
               <DetailItem
                 icon={<FileTextOutlined />}
                 label="Hệ số quy đổi"
@@ -2713,6 +2771,114 @@ export default function ConsignmentDetail({
               />
             </div>
           </section>
+
+          {/* ================= SHIPMENT JOURNEY ================= */}
+
+          {/*
+            Chỉ hiện khi đơn đã có kiện. Đơn còn đang báo giá mà bày ra khối hành trình rỗng
+            thì Sale tưởng hệ thống mất dữ liệu.
+          */}
+          {journey.groups.length > 0 && (
+            <section className="consignment-detail-card">
+              <SectionTitle
+                icon={<InboxOutlined />}
+                title="Hành trình lô hàng"
+                description="Kiện của đơn đang đi lô nào, tới đâu, và kho Việt Nam kiểm đếm ra sao."
+                extra={
+                  <Tag className="consignment-package-tag">
+                    {describeJourneyScale(
+                      journey
+                    )}
+                  </Tag>
+                }
+              />
+
+              {/*
+                Chỉ báo trạng thái, không phải chỗ bấm. Việc thông báo cho kho nằm ở mục
+                "Đơn hàng cần xử lý" và chỉ mở sau khi khách tất toán.
+              */}
+              {journey.storeAtVnCount > 0 &&
+                (detail?.warehouseNotifiedAt ? (
+                  <div className="storage-eligible-banner is-done">
+                    <CheckCircleOutlined />
+
+                    <span>
+                      Đã thông báo cho kho
+                      lúc{" "}
+                      {formatDateTime(
+                        detail.warehouseNotifiedAt
+                      )}
+                      {detail.warehouseNotifiedNote
+                        ? ` — “${detail.warehouseNotifiedNote}”`
+                        : ""}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="storage-eligible-banner">
+                    <div>
+                      <strong>
+                        {
+                          journey.storeAtVnCount
+                        }{" "}
+                        kiện khách xin gửi
+                        lại kho VN
+                      </strong>
+
+                      <p>
+                        Sau khi khách tất
+                        toán, vào mục{" "}
+                        <strong>
+                          Đơn hàng cần xử lý
+                        </strong>{" "}
+                        để thông báo cho kho
+                        lập phiếu nhập.
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+              <ShipmentJourney
+                groups={journey.groups}
+                discrepancyCount={
+                  journey.discrepancyCount
+                }
+              />
+            </section>
+          )}
+
+          {/* ================= PARCEL RETURNS ================= */}
+
+          {/*
+            Chỉ hiện khi đơn thật sự có kiện giao hỏng. Đơn giao trót lọt mà vẫn có khối "hàng
+            hoàn về" rỗng chỉ làm Sale hoang mang.
+          */}
+          {parcelReturns.length > 0 && (
+            <section className="consignment-detail-card">
+              <SectionTitle
+                icon={<RollbackOutlined />}
+                title="Hàng hoàn về"
+                description="Kiện giao không thành công và tình hình xử lý."
+              />
+
+              <div className="consignment-detail-info-grid">
+                {parcelReturns.map((item) => (
+                  <DetailItem
+                    key={item.returnId}
+                    icon={<RollbackOutlined />}
+                    label={`${item.packageCode || item.returnCode} · ${item.reasonText}`}
+                    value={
+                      item.resolutionText
+                        ? `${item.statusText} — ${item.resolutionText}${
+                            item.feeBearerText ? ` (${item.feeBearerText})` : ""
+                          }`
+                        : `${item.statusText} · đã mở ${item.daysOpen} ngày`
+                    }
+                    fullWidth
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* ================= PRICING RULES ================= */}
 

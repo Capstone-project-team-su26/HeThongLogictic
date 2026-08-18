@@ -1250,6 +1250,23 @@ export default function PendingConsignmentList({
                               🏬 Kho: <strong>{item.warehouseName}</strong>
                             </span>
                           )}
+
+                          {/*
+                            Chỉ hiện khi khách có chọn. Đơn không chọn thì mặc định giao ngay,
+                            hiện thêm một chip "chưa chọn" cho mọi đơn cũ chỉ tổ rối danh sách.
+                          */}
+                          {item.defaultDestinationHandlingText && (
+                            <span
+                              className={`info-chip destination-chip ${
+                                item.defaultDestinationHandling === "STORE_AT_VN"
+                                  ? "destination-chip--store"
+                                  : "destination-chip--deliver"
+                              }`}
+                            >
+                              🇻🇳 Về VN:{" "}
+                              <strong>{item.defaultDestinationHandlingText}</strong>
+                            </span>
+                          )}
                         </div>
 
                         <div className="sub-header-right">

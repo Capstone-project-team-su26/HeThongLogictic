@@ -677,6 +677,11 @@ function mapShipment(row) {
       parcelId: text(item?.parcelId || item?.ParcelId),
       packageCode: text(item?.packageCode || item?.PackageCode),
       weight: num(item?.weight ?? item?.Weight),
+      // Đơn và khách của kiện: màn chênh lệch kiểm đếm cần biết kiện lệch là của ai để
+      // OM gọi báo khách, khỏi phải tra ngược từng mã kiện.
+      orderId: text(item?.orderId || item?.OrderId),
+      orderCode: text(item?.orderCode || item?.OrderCode),
+      customerName: text(item?.customerName || item?.CustomerName),
     })),
     raw: row,
   };

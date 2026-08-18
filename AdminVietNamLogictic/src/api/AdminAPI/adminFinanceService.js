@@ -9,6 +9,9 @@ import {
  * - GET /api/admin/finance/summary
  * - GET /api/admin/finance/orders
  * - GET /api/admin/finance/transactions
+ * - GET /api/admin/finance/transactions/pending-approval
+ * - PUT /api/admin/finance/transactions/{paymentId}/approve
+ * - PUT /api/admin/finance/transactions/{paymentId}/reject
  */
 
 const toNumber = (value) => {
@@ -93,7 +96,8 @@ export const getAdminFinanceSummary = async (
     return normalizeFinanceSummary(getAdminApiData(response));
   } catch (error) {
     throw new Error(
-      getAdminApiError(error, "Không tải được tổng quan dòng tiền.")
+      getAdminApiError(error, "Không tải được tổng quan dòng tiền."),
+      { cause: error }
     );
   }
 };
@@ -127,7 +131,8 @@ export const getAdminFinanceOrders = async (
     };
   } catch (error) {
     throw new Error(
-      getAdminApiError(error, "Không tải được danh sách công nợ.")
+      getAdminApiError(error, "Không tải được danh sách công nợ."),
+      { cause: error }
     );
   }
 };
@@ -162,8 +167,105 @@ export const getAdminFinanceTransactions = async (
       getAdminApiError(
         error,
         "Không tải được danh sách giao dịch thanh toán."
-      )
+      ),
+      { cause: error }
     );
+  }
+};
+
+const normalizePendingTransaction = (item = {}) => ({
+  paymentId: String(item?.paymentId ?? ""),
+  source: String(item?.source ?? "").toUpperCase(),
+  orderId: String(item?.orderId ?? ""),
+  consignmentCode: String(item?.consignmentCode ?? ""),
+  customerName: String(item?.customerName ?? ""),
+  amount: toNumber(item?.amount),
+  paymentMethod: String(item?.paymentMethod ?? "").toUpperCase(),
+  status: String(item?.status ?? "").toUpperCase(),
+  installmentType: String(item?.installmentType ?? "").toUpperCase(),
+  orderStatus: String(item?.orderStatus ?? "").toUpperCase(),
+  orderCode: item?.orderCode ?? null,
+  createdAt: item?.createdAt ?? null,
+  waitingDays: toNumber(item?.waitingDays),
+});
+
+const normalizeManualResult = (data = {}) => ({
+  paymentId: String(data?.paymentId ?? ""),
+  source: String(data?.source ?? "").toUpperCase(),
+  paymentStatus: String(data?.paymentStatus ?? "").toUpperCase(),
+  orderId: String(data?.orderId ?? ""),
+  consignmentCode: String(data?.consignmentCode ?? ""),
+  orderStatusBefore: String(data?.orderStatusBefore ?? ""),
+  orderStatusAfter: String(data?.orderStatusAfter ?? ""),
+  amount: toNumber(data?.amount),
+  transactionCode: String(data?.transactionCode ?? ""),
+  paidAt: data?.paidAt ?? null,
+});
+
+/**
+ * Khoản tiền đang treo chờ đối soát tay: khách chuyển khoản tay (OFFLINE →
+ * PENDING_RECONCILIATION) hoặc đã phát hành link cổng thanh toán mà webhook chưa về (PENDING).
+ */
+export const getAdminPendingTransactions = async (filters = {}, options = {}) => {
+  const params = cleanParams({
+    pageNumber: filters?.pageNumber ?? filters?.page ?? 1,
+    pageSize: filters?.pageSize ?? 20,
+    source: filters?.source,
+    search: filters?.search,
+  });
+
+  try {
+    const response = await axiosInstance.get(
+      "/api/admin/finance/transactions/pending-approval",
+      {
+        params,
+        signal: options.signal,
+      }
+    );
+
+    const page = normalizePaged(getAdminApiData(response) ?? {}, params);
+    return {
+      ...page,
+      items: page.items.map(normalizePendingTransaction),
+    };
+  } catch (error) {
+    throw new Error(
+      getAdminApiError(error, "Không tải được danh sách giao dịch chờ duyệt."),
+      { cause: error }
+    );
+  }
+};
+
+/** Admin xác nhận đã thấy tiền về trong sao kê. */
+export const approveAdminTransaction = async (paymentId, payload = {}) => {
+  try {
+    const response = await axiosInstance.put(
+      `/api/admin/finance/transactions/${paymentId}/approve`,
+      {
+        transactionCode: payload?.transactionCode ?? null,
+        note: payload?.note ?? null,
+      }
+    );
+    return normalizeManualResult(getAdminApiData(response));
+  } catch (error) {
+    throw new Error(getAdminApiError(error, "Duyệt giao dịch thất bại."), {
+      cause: error,
+    });
+  }
+};
+
+/** Admin từ chối khoản treo. Lý do là bắt buộc, BE trả 400 nếu bỏ trống. */
+export const rejectAdminTransaction = async (paymentId, reason) => {
+  try {
+    const response = await axiosInstance.put(
+      `/api/admin/finance/transactions/${paymentId}/reject`,
+      { reason }
+    );
+    return normalizeManualResult(getAdminApiData(response));
+  } catch (error) {
+    throw new Error(getAdminApiError(error, "Từ chối giao dịch thất bại."), {
+      cause: error,
+    });
   }
 };
 
@@ -171,6 +273,9 @@ const adminFinanceService = {
   getAdminFinanceSummary,
   getAdminFinanceOrders,
   getAdminFinanceTransactions,
+  getAdminPendingTransactions,
+  approveAdminTransaction,
+  rejectAdminTransaction,
 };
 
 export default adminFinanceService;

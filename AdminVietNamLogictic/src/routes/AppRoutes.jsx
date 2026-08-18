@@ -13,6 +13,8 @@ import SaleDashboard from "../pages/SalePage/SaleDashboard/SaleDashboard";
 import PendingConsignmentList from "../pages/SalePage/ConsignmentsPage/PendingConsignmentList";
 
 import ConsignmentDetail from "../pages/SalePage/ConsignmentsPage/ConsigmentsDetail/ConsignmentDetail";
+import SaleSettlementPage from "../pages/SalePage/SettlementPage/SaleSettlementPage";
+import SaleReleasePage from "../pages/SalePage/SettlementPage/SaleReleasePage";
 
 import CreateConsignmentQuotation from "../pages/SalePage/ConsignmentsPage/CreateConsigmentsQotation/CreateConsignmentQuotation";
 
@@ -37,6 +39,7 @@ import AdminDashboard from "../pages/AdminPage/AdminDashboard";
 import AdminUsersPage from "../pages/AdminPage/AdminUsersPage";
 import WarehouseLocationsPage from "../pages/AdminPage/WarehouseLocationsPage";
 import AdminCashFlowPage from "../pages/AdminPage/AdminCashFlowPage";
+import AdminDeliveriesPage from "../pages/AdminPage/AdminDeliveriesPage";
 import {
   AdditionalServiceFeesAdminPage,
   CarriersAdminPage,
@@ -59,6 +62,10 @@ import OperationsDashboard from "../pages/OperationsPage/OperationsDashboard";
 import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage";
 import OperationsWroPage from "../pages/OperationsPage/OperationsWroPage";
 import OperationsShipmentsPage from "../pages/OperationsPage/OperationsShipmentsPage";
+import OperationsInboundApprovalsPage from "../pages/OperationsPage/OperationsInboundApprovalsPage";
+import OperationsDeliveryApprovalsPage from "../pages/OperationsPage/OperationsDeliveryApprovalsPage";
+import OperationsParcelReturnsPage from "../pages/OperationsPage/OperationsParcelReturnsPage";
+import OperationsInspectionsPage from "../pages/OperationsPage/OperationsInspectionsPage";
 import OperationsPurchaseStorePage from "../pages/OperationsPage/OperationsPurchaseStorePage";
 
 /* ================= ROLE CONFIG ================= */
@@ -238,6 +245,7 @@ export default function AppRoutes() {
           path="wro"
           element={<OperationsWroPage readOnly />}
         />
+        <Route path="deliveries" element={<AdminDeliveriesPage />} />
         <Route path="cash-flow" element={<AdminCashFlowPage />} />
       </Route>
 
@@ -264,6 +272,10 @@ export default function AppRoutes() {
         />
 
         <Route path="create-order/consignment" element={<ConsignmentOrder />} />
+
+        {/* Chặng cuối: chốt tiền với khách rồi cho hàng rời kho */}
+        <Route path="settlements" element={<SaleSettlementPage />} />
+        <Route path="releases" element={<SaleReleasePage />} />
 
         {/* Chi tiết đơn ký gửi */}
         <Route path="consignments/:orderId" element={<ConsignmentDetail />} />
@@ -338,6 +350,10 @@ export default function AppRoutes() {
         <Route path="shipments" element={<OperationsShipmentsPage />} />
         <Route path="parcels" element={<OperationsParcelsPage />} />
         <Route path="purchase-store" element={<OperationsPurchaseStorePage />} />
+        <Route path="inbound-approvals" element={<OperationsInboundApprovalsPage />} />
+        <Route path="delivery-approvals" element={<OperationsDeliveryApprovalsPage />} />
+        <Route path="parcel-returns" element={<OperationsParcelReturnsPage />} />
+        <Route path="inspections" element={<OperationsInspectionsPage />} />
         <Route path="releases" element={<Navigate to="/operations-manager/wro" replace />} />
       </Route>
 
