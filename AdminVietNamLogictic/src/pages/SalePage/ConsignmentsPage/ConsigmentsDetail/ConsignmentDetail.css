@@ -4176,3 +4176,58 @@ box-shadow: none;
     font-size: 12px;
   }
 }
+
+
+/* =========================
+   XÁC NHẬN ĐỦ ĐIỀU KIỆN NHẬP KHO
+========================= */
+
+.storage-eligible-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 13px 15px;
+  margin-bottom: 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background:
+    linear-gradient(
+      145deg,
+      #fffbeb,
+      #ffffff
+    );
+}
+
+.storage-eligible-banner strong {
+  color: #92400e;
+  font-size: 13px;
+}
+
+.storage-eligible-banner p {
+  margin: 3px 0 0;
+  color: #a16207;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* Đã xác nhận rồi thì chỉ còn là dòng trạng thái, không phải việc phải làm nữa. */
+.storage-eligible-banner.is-done {
+  align-items: flex-start;
+  border-color: #86efac;
+  background:
+    linear-gradient(
+      145deg,
+      #f0fdf4,
+      #ffffff
+    );
+  color: #15803d;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.storage-eligible-banner.is-done .anticon {
+  margin-top: 2px;
+  font-size: 13px;
+}

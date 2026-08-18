@@ -4,16 +4,21 @@ import {
   Alert,
   Button,
   DatePicker,
+  Descriptions,
   Input,
+  Modal,
   Select,
   Space,
   Table,
   Tabs,
   Tag,
+  Tooltip,
+  message,
 } from "antd";
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CloseCircleOutlined,
   DollarOutlined,
   ExclamationCircleOutlined,
   EyeOutlined,
@@ -23,9 +28,12 @@ import {
 } from "@ant-design/icons";
 
 import {
+  approveAdminTransaction,
   getAdminFinanceOrders,
   getAdminFinanceSummary,
   getAdminFinanceTransactions,
+  getAdminPendingTransactions,
+  rejectAdminTransaction,
 } from "../../api/AdminAPI/adminFinanceService";
 import "./AdminPage.css";
 
@@ -75,6 +83,39 @@ const PAYMENT_STATUS_OPTIONS = [
   { value: "UNPAID", label: "Chưa thanh toán" },
 ];
 
+const PENDING_SOURCE_OPTIONS = [
+  { value: "", label: "Cả ký gửi và mua hộ" },
+  { value: "CONSIGNMENT", label: "Ký gửi" },
+  { value: "PURCHASE", label: "Mua hộ" },
+];
+
+const INSTALLMENT_LABELS = {
+  DEPOSIT: "Tiền cọc",
+  FINAL_PAYMENT: "Tất toán",
+  FULL_PAYMENT: "Trả trọn gói",
+  STORAGE_FEE: "Phí lưu kho",
+};
+
+/**
+ * PENDING_RECONCILIATION là khách chọn chuyển khoản tay, hệ thống không hề phát hành link cổng
+ * thanh toán — bắt buộc có người đối soát. PENDING là đã phát hành link mà webhook chưa về, có thể
+ * do khách chưa trả, cũng có thể do webhook rớt. Hai ca này cần Admin đọc sao kê khác nhau.
+ */
+const getPendingStatusMeta = (status) => {
+  const key = String(status || "").toUpperCase();
+  if (key === "PENDING_RECONCILIATION")
+    return {
+      color: "purple",
+      label: "Chờ đối soát",
+      hint: "Khách chọn chuyển khoản tay. Không có link cổng thanh toán nào, chỉ đối chiếu sao kê mới biết tiền đã về.",
+    };
+  return {
+    color: "gold",
+    label: "Chờ webhook",
+    hint: "Đã phát hành link cổng thanh toán nhưng chưa nhận được xác nhận. Kiểm tra sao kê trước khi duyệt tay.",
+  };
+};
+
 const getPaymentStatusMeta = (status) => {
   const key = String(status || "").toUpperCase();
   if (key === "PAID" || key === "SUCCESS")
@@ -111,6 +152,22 @@ export default function AdminCashFlowPage() {
   const [txPageNumber, setTxPageNumber] = useState(1);
   const [txPageSize, setTxPageSize] = useState(20);
   const [txTotalCount, setTxTotalCount] = useState(0);
+
+  // Tab duyệt thủ công
+  const [pending, setPending] = useState([]);
+  const [pendingError, setPendingError] = useState("");
+  const [pendingSource, setPendingSource] = useState("");
+  const [pendingSearch, setPendingSearch] = useState("");
+  const [pendingPageNumber, setPendingPageNumber] = useState(1);
+  const [pendingPageSize, setPendingPageSize] = useState(20);
+  const [pendingTotalCount, setPendingTotalCount] = useState(0);
+  const [activeRow, setActiveRow] = useState(null);
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [bankReference, setBankReference] = useState("");
+  const [approveNote, setApproveNote] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const loadSummaryAndOrders = useCallback(
     async ({ refresh = false } = {}) => {
@@ -193,9 +250,99 @@ export default function AdminCashFlowPage() {
     [dateRange, txPageNumber, txPageSize]
   );
 
+  const loadPending = useCallback(
+    async ({ refresh = false } = {}) => {
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
+      setPendingError("");
+
+      try {
+        const page = await getAdminPendingTransactions({
+          pageNumber: pendingPageNumber,
+          pageSize: pendingPageSize,
+          source: pendingSource,
+          search: pendingSearch,
+        });
+        setPending(page.items);
+        setPendingTotalCount(page.totalCount);
+      } catch (error) {
+        setPending([]);
+        setPendingTotalCount(0);
+        setPendingError(
+          error?.message || "Không tải được danh sách giao dịch chờ duyệt."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [pendingPageNumber, pendingPageSize, pendingSource, pendingSearch]
+  );
+
+  const openApprove = (row) => {
+    setActiveRow(row);
+    setBankReference("");
+    setApproveNote("");
+    setApproveOpen(true);
+  };
+
+  const openReject = (row) => {
+    setActiveRow(row);
+    setRejectReason("");
+    setRejectOpen(true);
+  };
+
+  const handleApprove = async () => {
+    if (!activeRow) return;
+    setSubmitting(true);
+    try {
+      const result = await approveAdminTransaction(activeRow.paymentId, {
+        transactionCode: bankReference.trim() || null,
+        note: approveNote.trim() || null,
+      });
+      message.success(
+        result.orderStatusAfter && result.orderStatusAfter !== result.orderStatusBefore
+          ? `Đã ghi nhận thu tiền. Đơn chuyển ${result.orderStatusBefore} → ${result.orderStatusAfter}.`
+          : "Đã ghi nhận thu tiền."
+      );
+      setApproveOpen(false);
+      setActiveRow(null);
+      loadPending({ refresh: true });
+    } catch (error) {
+      message.error(error?.message || "Duyệt giao dịch thất bại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!activeRow) return;
+    if (!rejectReason.trim()) {
+      message.warning("Phải ghi lý do từ chối.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await rejectAdminTransaction(activeRow.paymentId, rejectReason.trim());
+      message.success("Đã từ chối giao dịch.");
+      setRejectOpen(false);
+      setActiveRow(null);
+      loadPending({ refresh: true });
+    } catch (error) {
+      message.error(error?.message || "Từ chối giao dịch thất bại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "orders") {
       loadSummaryAndOrders();
+      return;
+    }
+
+    if (activeTab === "pending") {
+      loadPending();
       return;
     }
 
@@ -216,11 +363,13 @@ export default function AdminCashFlowPage() {
       }
     })();
     loadTransactions();
-  }, [activeTab, dateRange, loadSummaryAndOrders, loadTransactions]);
+  }, [activeTab, dateRange, loadSummaryAndOrders, loadTransactions, loadPending]);
 
   const handleRefresh = () => {
     if (activeTab === "orders") {
       loadSummaryAndOrders({ refresh: true });
+    } else if (activeTab === "pending") {
+      loadPending({ refresh: true });
     } else {
       loadTransactions({ refresh: true });
     }
@@ -410,6 +559,107 @@ export default function AdminCashFlowPage() {
     },
   ];
 
+  const pendingColumns = [
+    {
+      title: "Mã đơn",
+      dataIndex: "consignmentCode",
+      fixed: "left",
+      width: 190,
+      render: (value, row) => (
+        <div>
+          <strong>{value || "—"}</strong>
+          <div>
+            <Tag color={row.source === "PURCHASE" ? "geekblue" : "cyan"}>
+              {row.source === "PURCHASE" ? "Mua hộ" : "Ký gửi"}
+            </Tag>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Khách hàng",
+      dataIndex: "customerName",
+      render: (value) => value || "—",
+    },
+    {
+      title: "Đợt",
+      dataIndex: "installmentType",
+      width: 120,
+      render: (value) => INSTALLMENT_LABELS[value] || value || "—",
+    },
+    {
+      title: "Số tiền",
+      dataIndex: "amount",
+      align: "right",
+      width: 140,
+      render: (value) => (
+        <span style={{ fontWeight: 600 }}>{formatCurrency(value)}</span>
+      ),
+    },
+    {
+      title: "Phương thức",
+      dataIndex: "paymentMethod",
+      width: 120,
+      render: (value) => value || "—",
+    },
+    {
+      title: "Tình trạng",
+      dataIndex: "status",
+      width: 150,
+      render: (value) => {
+        const meta = getPendingStatusMeta(value);
+        return (
+          <Tooltip title={meta.hint}>
+            <Tag color={meta.color}>{meta.label}</Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: "Treo",
+      dataIndex: "waitingDays",
+      width: 90,
+      align: "right",
+      render: (value) => (
+        <span style={{ color: value >= 3 ? "#dc2626" : "#64748b" }}>
+          {value} ngày
+        </span>
+      ),
+    },
+    {
+      title: "Trạng thái đơn",
+      dataIndex: "orderStatus",
+      width: 170,
+      render: (value) => value || "—",
+    },
+    {
+      title: "Xử lý",
+      key: "manual-actions",
+      fixed: "right",
+      width: 170,
+      render: (_, row) => (
+        <Space>
+          <Button
+            size="small"
+            type="primary"
+            icon={<CheckCircleOutlined />}
+            onClick={() => openApprove(row)}
+          >
+            Duyệt
+          </Button>
+          <Button
+            size="small"
+            danger
+            icon={<CloseCircleOutlined />}
+            onClick={() => openReject(row)}
+          >
+            Từ chối
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   const summaryItems = [
     {
       label: "Tổng phải thu",
@@ -500,6 +750,29 @@ export default function AdminCashFlowPage() {
                 />
               </>
             ) : null}
+            {activeTab === "pending" ? (
+              <>
+                <Select
+                  value={pendingSource}
+                  options={PENDING_SOURCE_OPTIONS}
+                  onChange={(value) => {
+                    setPendingSource(value || "");
+                    setPendingPageNumber(1);
+                  }}
+                  style={{ minWidth: 200 }}
+                />
+                <Input.Search
+                  allowClear
+                  placeholder="Tìm mã đơn, khách hàng..."
+                  defaultValue={pendingSearch}
+                  onSearch={(value) => {
+                    setPendingSearch(String(value || "").trim());
+                    setPendingPageNumber(1);
+                  }}
+                  style={{ width: 280 }}
+                />
+              </>
+            ) : null}
             <Button
               icon={<ReloadOutlined spin={refreshing} />}
               disabled={refreshing || loading}
@@ -510,7 +783,8 @@ export default function AdminCashFlowPage() {
           </Space>
         </div>
 
-        {!summaryError ? (
+        {/* Tab duyệt tay không dùng KPI kỳ này, mà chỉ quan tâm khoản đang treo. */}
+        {!summaryError && activeTab !== "pending" ? (
           <div
             style={{
               display: "grid",
@@ -642,9 +916,144 @@ export default function AdminCashFlowPage() {
                   </div>
                 ),
             },
+            {
+              key: "pending",
+              label: `Duyệt thủ công (${pendingTotalCount})`,
+              children:
+                pendingError && !pending.length ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    message="Không tải được giao dịch chờ duyệt"
+                    description={pendingError}
+                    action={
+                      <Button size="small" onClick={handleRefresh}>
+                        Thử lại
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <>
+                    <Alert
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 12 }}
+                      message="Đối chiếu sao kê ngân hàng trước khi bấm duyệt"
+                      description="Duyệt là ghi nhận đã thu tiền thật: đơn sẽ nhảy trạng thái y như khi cổng thanh toán báo về, và Sale lập được phiếu tiếp theo. Thao tác này không có nút hoàn tác."
+                    />
+                    <div className="admin-page__table">
+                      <Table
+                        rowKey={(row) => row.paymentId}
+                        columns={pendingColumns}
+                        dataSource={pending}
+                        loading={loading && activeTab === "pending"}
+                        pagination={{
+                          current: pendingPageNumber,
+                          pageSize: pendingPageSize,
+                          total: pendingTotalCount,
+                          showSizeChanger: true,
+                          showTotal: (total) => `Tổng ${total} khoản chờ duyệt`,
+                          onChange: (page, size) => {
+                            setPendingPageNumber(page);
+                            setPendingPageSize(size);
+                          },
+                        }}
+                        scroll={{ x: 1300 }}
+                        locale={{
+                          emptyText: "Không có khoản nào đang chờ đối soát.",
+                        }}
+                      />
+                    </div>
+                  </>
+                ),
+            },
           ]}
         />
       </section>
+
+      <Modal
+        open={approveOpen}
+        title="Xác nhận đã nhận được tiền"
+        okText="Ghi nhận đã thu"
+        cancelText="Huỷ"
+        confirmLoading={submitting}
+        onOk={handleApprove}
+        onCancel={() => setApproveOpen(false)}
+      >
+        {activeRow ? (
+          <>
+            <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Đơn">
+                {activeRow.consignmentCode || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Khách hàng">
+                {activeRow.customerName || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Số tiền">
+                <strong>{formatCurrency(activeRow.amount)}</strong>
+              </Descriptions.Item>
+              <Descriptions.Item label="Đợt">
+                {INSTALLMENT_LABELS[activeRow.installmentType] ||
+                  activeRow.installmentType ||
+                  "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nội dung CK">
+                {activeRow.orderCode ?? "—"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 4 }}>
+                Mã giao dịch trên sao kê{" "}
+                <span style={{ color: "#64748b" }}>(nên nhập để đối chiếu về sau)</span>
+              </div>
+              <Input
+                value={bankReference}
+                onChange={(event) => setBankReference(event.target.value)}
+                placeholder="VD: FT26081712345678"
+              />
+            </div>
+
+            <div>
+              <div style={{ marginBottom: 4 }}>Ghi chú</div>
+              <Input.TextArea
+                rows={2}
+                value={approveNote}
+                onChange={(event) => setApproveNote(event.target.value)}
+                placeholder="Ai xác nhận, đối chiếu theo sao kê ngày nào..."
+              />
+            </div>
+          </>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={rejectOpen}
+        title="Từ chối giao dịch"
+        okText="Từ chối"
+        okButtonProps={{ danger: true }}
+        cancelText="Huỷ"
+        confirmLoading={submitting}
+        onOk={handleReject}
+        onCancel={() => setRejectOpen(false)}
+      >
+        {activeRow ? (
+          <>
+            <p>
+              Từ chối khoản <strong>{formatCurrency(activeRow.amount)}</strong> của đơn{" "}
+              <strong>{activeRow.consignmentCode || "—"}</strong>. Khoản này sẽ chuyển sang
+              CANCELLED và khách phải tạo lại đợt thanh toán mới.
+            </p>
+            <div style={{ marginBottom: 4 }}>Lý do (bắt buộc)</div>
+            <Input.TextArea
+              rows={3}
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder="VD: không tìm thấy khoản tiền tương ứng trên sao kê ngày 17/08"
+            />
+          </>
+        ) : null}
+      </Modal>
     </div>
   );
 }

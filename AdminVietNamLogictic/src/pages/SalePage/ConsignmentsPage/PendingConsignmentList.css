@@ -676,6 +676,28 @@ l-container select {
   font-size: 12px;
 }
 
+/*
+ * Nguyện vọng của khách khi hàng về kho VN.
+ * Hai màu tách bạch để Sale liếc qua danh sách là biết đơn nào cần chuẩn bị chỗ kệ.
+ */
+.destination-chip {
+  padding: 2px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.destination-chip--deliver {
+  color: #047857;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+}
+
+.destination-chip--store {
+  color: #b45309;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
 .sub-header-right {
   margin-left: auto;
   display: flex;

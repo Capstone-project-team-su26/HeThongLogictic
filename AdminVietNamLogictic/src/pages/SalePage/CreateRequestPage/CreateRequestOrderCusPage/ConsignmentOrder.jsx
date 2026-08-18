@@ -79,6 +79,14 @@ const PACKAGE_NUMBER_FIELDS = [
   },
 ];
 
+/**
+ * Nguyện vọng của khách khi hàng cập kho VN. Để rỗng là "chưa chọn" — hợp lệ, không bắt buộc.
+ */
+const DESTINATION_HANDLING_OPTIONS = [
+  { value: "DIRECT_DELIVERY", label: "Giao ngay khi về Việt Nam" },
+  { value: "STORE_AT_VN", label: "Gửi lại kho Việt Nam (có phí lưu kho)" },
+];
+
 const INITIAL_FORM = {
   route: "",
   shippingOption: "",
@@ -86,6 +94,7 @@ const INITIAL_FORM = {
   receiverPhone: "",
   selectedDeliveryAddress: "",
   note: "",
+  defaultDestinationHandling: "",
   inspectPackage: true,
   optionalServices: {
     requiresPacking: false,
@@ -2474,6 +2483,10 @@ export default function ConsignmentOrder() {
             ?.requiresInsurance
         ),
 
+        // Nguyện vọng khi hàng về VN. Rỗng = khách chưa chọn, BE hiểu là giao ngay.
+        defaultDestinationHandling:
+          form.defaultDestinationHandling,
+
         note: form.note.trim(),
         items: requestItems,
       };
@@ -2605,6 +2618,33 @@ export default function ConsignmentOrder() {
                 placeholder="-- Chọn hình thức vận chuyển --"
                 onChange={(value) => updateForm("shippingOption", value)}
               />
+            </div>
+
+            {/*
+              Sale hỏi khách qua điện thoại rồi tick hộ. Bỏ trống vẫn tạo được đơn — lúc hàng
+              về kho mặc định giao ngay, và khách gọi đổi ý thì kho vẫn ghi đè được.
+            */}
+            <div className="left-inner-section border-top-dash">
+              <SelectField
+                label="KHI HÀNG VỀ VIỆT NAM"
+                value={form.defaultDestinationHandling}
+                error={formErrors.defaultDestinationHandling}
+                options={DESTINATION_HANDLING_OPTIONS}
+                loading={false}
+                disabled={isSubmitting}
+                placeholder="-- Chưa chọn (mặc định giao ngay) --"
+                onChange={(value) =>
+                  updateForm("defaultDestinationHandling", value)
+                }
+              />
+
+              <div className="route-select-helper">
+                <InfoCircleOutlined />
+                <span>
+                  Gửi lại kho VN sẽ phát sinh phí lưu kho sau kỳ miễn phí, thu
+                  một lần lúc khách đến lấy hàng.
+                </span>
+              </div>
             </div>
 
             <div className="left-inner-section border-top-dash">

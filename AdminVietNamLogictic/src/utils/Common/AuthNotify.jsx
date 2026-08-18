@@ -12,7 +12,10 @@ const baseConfig = {
 const open = (type, title, description) => {
   notification[type]({
     ...baseConfig,
-    title,
+    // antd đọc tiêu đề ở `message`. Truyền `title` thì nó coi như không có nội dung và bỏ qua
+    // luôn cả thông báo — nghĩa là mọi lỗi trong app đều im lặng, người dùng bấm nút không
+    // thấy gì xảy ra.
+    message: title,
     description,
     style: {
       borderRadius: 14,

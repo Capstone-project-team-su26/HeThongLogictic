@@ -57,6 +57,11 @@ import {
 } from "../../../../api/SaleAPI/ConsignmentAPI/warehouseService";
 import { getWarehouses } from "../../../../api/AdminAPI/adminService";
 import AuthNotify from "../../../../utils/Common/AuthNotify";
+import ShipmentJourney from "../../../../components/ShipmentJourney/ShipmentJourney";
+import {
+  describeJourneyScale,
+  summarizeJourney,
+} from "../../../../components/ShipmentJourney/journeySummary";
 
 import CreatePurchaseRequestQuotationModal from "./CreatePurchaseRequestQuotationModal";
 import ConfirmPurchaseModal from "./ConfirmPurchaseModal";
@@ -1599,6 +1604,15 @@ export default function PurchaseRequestDetail() {
     [detail?.status, detail?.statusDisplayName]
   );
 
+  /* Hành trình vận chuyển quốc tế của đơn, kèm số liệu cho phần tiêu đề. */
+  const journey = useMemo(
+    () =>
+      summarizeJourney(
+        detail?.shipments
+      ),
+    [detail]
+  );
+
   const items = useMemo(
     () =>
       Array.isArray(
@@ -2375,6 +2389,43 @@ export default function PurchaseRequestDetail() {
             </div>
           </section>
         </div>
+
+        {/*
+          Chỉ hiện khi đơn đã có kiện. Đơn còn đang báo giá mà bày ra khối hành trình rỗng
+          thì Sale tưởng hệ thống mất dữ liệu.
+        */}
+        {journey.groups.length > 0 && (
+          <section className="purchase-detail-card">
+            <div className="purchase-detail-section-heading purchase-detail-section-heading--between">
+              <div className="purchase-detail-section-heading__group">
+                <InboxOutlined />
+
+                <div>
+                  <span>
+                    HÀNH TRÌNH VẬN CHUYỂN
+                  </span>
+
+                  <h2>
+                    Hàng đang đi tới đâu
+                  </h2>
+                </div>
+              </div>
+
+              <Tag className="purchase-service-count-tag">
+                {describeJourneyScale(
+                  journey
+                )}
+              </Tag>
+            </div>
+
+            <ShipmentJourney
+              groups={journey.groups}
+              discrepancyCount={
+                journey.discrepancyCount
+              }
+            />
+          </section>
+        )}
 
         <section className="purchase-detail-card purchase-services-section">
           {selectedServiceCards.length > 0 && (

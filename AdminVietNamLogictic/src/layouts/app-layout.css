@@ -55,6 +55,21 @@
     background: #f8fafc;
   }
 
+  /* Sale uses the full viewport without the shared top header. */
+  .app-layout--without-header .app-layout__body {
+    height: 100vh;
+    margin-top: 0;
+  }
+
+  .app-layout--without-header .app-layout__body > aside {
+    top: 0;
+    height: 100vh;
+  }
+
+  .app-layout--without-header .app-layout__content {
+    height: 100vh;
+  }
+
   @media screen and (max-width: 1100px) {
     .app-layout {
       --app-sidebar-width: 258px;

@@ -1,0 +1,75 @@
+/*
+ * Hai màn chặng cuối của Sale. Bám theo bảng màu các màn Sale đang có: nền trắng, viền #e7ebf3,
+ * chữ phụ #64748b, nhấn xanh #2563eb.
+ */
+
+.sale-settlement-page {
+  padding: 20px 22px;
+}
+
+.sale-settlement-page__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.sale-settlement-page__head h4.ant-typography {
+  margin: 0 0 4px;
+}
+
+.sale-settlement-fees {
+  padding: 14px 15px;
+  border: 1px solid #e7ebf3;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.sale-settlement-fees__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sale-settlement-fees__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 160px minmax(0, 1fr) 36px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sale-settlement-fees__total {
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px dashed #dbe2ee;
+  color: #334155;
+  font-size: 13px;
+  text-align: right;
+}
+
+.sale-release-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid #e7ebf3;
+  border-radius: 12px;
+  background: #fbfcfe;
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.sale-release-summary strong {
+  color: #172033;
+}
+
+@media (max-width: 820px) {
+  .sale-settlement-fees__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

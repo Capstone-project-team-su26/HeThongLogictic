@@ -169,6 +169,23 @@ const normalizeConsignmentItem = (item = {}, index = 0) => {
   };
 };
 
+/**
+ * Nguyện vọng của khách khi hàng về kho VN.
+ *
+ * BE chỉ nhận hai giá trị này; thứ khác coi như khách chưa chọn và lúc hàng về mặc định
+ * giao ngay. Trả null thay vì đoán để kho biết mà hỏi lại khách.
+ *
+ * @param {unknown} value
+ * @returns {"DIRECT_DELIVERY" | "STORE_AT_VN" | null}
+ */
+const normalizeDestinationHandling = (value) => {
+  const normalized = String(value ?? "").trim().toUpperCase();
+
+  return normalized === "DIRECT_DELIVERY" || normalized === "STORE_AT_VN"
+    ? normalized
+    : null;
+};
+
 export const normalizeCreateConsignmentPayload = (payload = {}) => {
   const route = normalizeText(payload?.route);
   const shippingOption = normalizeText(payload?.shippingOption);
@@ -199,6 +216,9 @@ export const normalizeCreateConsignmentPayload = (payload = {}) => {
     requiresPacking: Boolean(payload?.requiresPacking),
     requiresWoodenCrate: Boolean(payload?.requiresWoodenCrate),
     requiresInsurance: Boolean(payload?.requiresInsurance),
+    defaultDestinationHandling: normalizeDestinationHandling(
+      payload?.defaultDestinationHandling
+    ),
     note: normalizeText(payload?.note) || null,
     items,
   };

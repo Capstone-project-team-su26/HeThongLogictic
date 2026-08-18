@@ -14,7 +14,9 @@ import {
   CustomerServiceOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  DollarOutlined,
   DownOutlined,
+  ExportOutlined,
   CheckSquareOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -22,6 +24,8 @@ import {
   LogoutOutlined,
   MonitorOutlined,
   SendOutlined,
+  RollbackOutlined,
+  FileSearchOutlined as InspectionOutlined,
   PlusCircleOutlined,
   RightOutlined,
   SafetyCertificateOutlined,
@@ -107,6 +111,12 @@ const MENU_BY_ROLE = {
           label: "Phiếu xuất kho",
           icon: <CheckSquareOutlined />,
           path: "/admin/wro",
+        },
+        {
+          key: "admin-deliveries",
+          label: "Đơn đang giao",
+          icon: <SendOutlined />,
+          path: "/admin/deliveries",
         },
         {
           key: "admin-cash-flow",
@@ -262,6 +272,30 @@ const MENU_BY_ROLE = {
       icon: <InboxOutlined />,
       path: "/operations-manager/parcels",
     },
+    {
+      key: "operations-inbound-approvals",
+      label: "Duyệt nhập kho VN",
+      icon: <CheckSquareOutlined />,
+      path: "/operations-manager/inbound-approvals",
+    },
+    {
+      key: "operations-delivery-approvals",
+      label: "Duyệt giao hàng",
+      icon: <SendOutlined />,
+      path: "/operations-manager/delivery-approvals",
+    },
+    {
+      key: "operations-parcel-returns",
+      label: "Hàng hoàn về",
+      icon: <RollbackOutlined />,
+      path: "/operations-manager/parcel-returns",
+    },
+    {
+      key: "operations-inspections",
+      label: "Chênh lệch kiểm đếm",
+      icon: <InspectionOutlined />,
+      path: "/operations-manager/inspections",
+    },
   ],
 
   sale: [
@@ -338,6 +372,18 @@ const MENU_BY_ROLE = {
       label: "Quản lý mua hộ",
       icon: <ShoppingCartOutlined />,
       path: "/sale/purchase-requests",
+    },
+    {
+      key: "sale-settlements",
+      label: "Hàng chờ tất toán",
+      icon: <DollarOutlined />,
+      path: "/sale/settlements",
+    },
+    {
+      key: "sale-releases",
+      label: "Đơn hàng cần xử lý",
+      icon: <ExportOutlined />,
+      path: "/sale/releases",
     },
     // {
     //   key: "sale-quotations",
