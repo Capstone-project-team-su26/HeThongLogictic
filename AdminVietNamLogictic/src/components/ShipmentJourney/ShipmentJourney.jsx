@@ -19,17 +19,22 @@ import "./ShipmentJourney.css";
 
 /** Màu tag theo chặng của lô — dùng chung cách gọi màu với màn Vận chuyển của OM. */
 const SHIPMENT_TONE_MAP = {
-  MANIFESTED: "processing",
-  CUSTOMS_EXPORT_PENDING: "warning",
+  CREATED: "default",
+  READY_TO_SHIP: "processing",
   IN_TRANSIT: "processing",
-  CUSTOMS_IMPORT_PENDING: "warning",
+  ARRIVED_VN: "processing",
   ARRIVED: "success",
   ARRIVED_DESTINATION: "success",
-  ARRIVED_IN_VN: "success",
-  CUSTOMS_REJECTED: "error",
   HOLD: "error",
   ISSUE: "error",
   CANCELLED: "error",
+
+  // Lô cũ còn trong DB — giữ màu để không rơi về "default" trông như chưa chạy.
+  MANIFESTED: "processing",
+  CUSTOMS_EXPORT_PENDING: "warning",
+  CUSTOMS_IMPORT_PENDING: "warning",
+  CUSTOMS_REJECTED: "error",
+  ARRIVED_IN_VN: "success",
 };
 
 const PARCEL_TONE_MAP = {

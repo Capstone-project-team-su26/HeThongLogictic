@@ -33,7 +33,6 @@ import {
   listCarriers,
   listWarehouses,
   listWroRequests,
-  notifyWroCustomer,
   updateWroStatus,
   wroNeedsApproval,
   WRO_STATUS_META,
@@ -48,51 +47,21 @@ import "../../OperationsPage/OperationsWroPage/OperationsWroPage.css";
 const INITIAL_FILTERS = {
   status: "",
   search: "",
-  customsStatus: "",
   warehouseId: "",
   carrierId: "",
   exportType: "",
   dateRange: null,
 };
 
-// Các trạng thái đã bàn giao cho ĐVVC / xuất hàng được phép bấm Thông báo KH
-const HANDED_OVER_STATUSES = new Set([
-  "HANDED_OVER",
-  "SHIPPED",
-  "IN_TRANSIT",
-  "RELEASED",
-]);
-
+// Phiếu xuất kho nay DUYỆT MỘT LẦN rồi hết việc: mọi mốc sau đó (đang đi, về VN, hoàn tất)
+// thuộc về LÔ vận chuyển, xem màn "Theo dõi lô về Việt Nam". Để lại các mốc cũ ở đây thì sale
+// bấm vào chỉ nhận 400 từ API.
 const SALE_ALLOWED_STATUSES = [
-  {
-    value: "ARRIVED_IN_VN",
-    label: "Đã về VN (Báo khách & Chuyển thông quan)",
-    description: "Cập nhật phiếu xuất kho đã về VN và chuyển sang hải quan thông quan",
-    color: "purple",
-  },
-  {
-    value: "IN_TRANSIT",
-    label: "Đang vận chuyển",
-    description: "Đơn xuất kho đang trong quá trình vận chuyển quốc tế",
-    color: "blue",
-  },
   {
     value: "RELEASE_APPROVED",
     label: "Đã duyệt xuất kho",
     description: "Đã phê duyệt thông tin phiếu xuất kho",
     color: "cyan",
-  },
-  {
-    value: "DELIVERED",
-    label: "Đã giao hàng",
-    description: "Đã giao thành công cho khách hàng",
-    color: "green",
-  },
-  {
-    value: "COMPLETED",
-    label: "Hoàn thành",
-    description: "Hoàn tất toàn bộ quy trình xuất kho",
-    color: "green",
   },
   {
     value: "RELEASE_REJECTED",
@@ -128,7 +97,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
 
   // Status update modal state
   const [statusTarget, setStatusTarget] = useState(null);
-  const [selectedStatus, setSelectedStatus] = useState("ARRIVED_IN_VN");
+  const [selectedStatus, setSelectedStatus] = useState("RELEASE_APPROVED");
   const [rejectionReason, setRejectionReason] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
@@ -200,7 +169,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
   };
 
   // Status Update Execution (PUT /api/warehouse-release-requests/{id}/status)
-  const handleOpenStatusModal = (wro, defaultTargetStatus = "ARRIVED_IN_VN") => {
+  const handleOpenStatusModal = (wro, defaultTargetStatus = "RELEASE_APPROVED") => {
     setStatusTarget(wro);
     setSelectedStatus(defaultTargetStatus);
     setRejectionReason("");
@@ -232,33 +201,6 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
     }
   };
 
-  // Thông báo cho khách hàng (POST /api/warehouse-release-requests/{id}/notify-customer & PUT ARRIVED_IN_VN)
-  const handleNotifyCustomer = async (wro) => {
-    const wroId = wro.id || wro.wroId;
-    const wroCode = wro.code || wro.wroCode || wroId;
-    setIsUpdatingStatus(true);
-    try {
-      await notifyWroCustomer(wroId);
-      try {
-        await updateWroStatus(wroId, "ARRIVED_IN_VN");
-      } catch (stErr) {
-        // Ignored if status was already updated backend side
-      }
-      AuthNotify.success(
-        "Gửi thông báo thành công!",
-        `Đã gửi thông báo cho khách hàng & cập nhật phiếu WRO ${wroCode} sang 'Đã về VN'.`
-      );
-      loadData({ refresh: true });
-    } catch (err) {
-      AuthNotify.error(
-        "Gửi thông báo thất bại",
-        getOperationsApiError(err, "Không thể gửi thông báo cho khách hàng.")
-      );
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
   // Client-side Filter Processor
   const filteredList = useMemo(() => {
     return wroList.filter((row) => {
@@ -278,15 +220,6 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
         } else if (row.status !== filters.status) {
           return false;
         }
-      }
-
-      // Filter by Customs Status
-      if (
-        filters.customsStatus &&
-        row.customsStatus !== filters.customsStatus &&
-        row.customsStatusText !== filters.customsStatus
-      ) {
-        return false;
       }
 
       // Filter by Warehouse
@@ -353,8 +286,10 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
 
     const total = relevantList.length;
     const pendingApproval = relevantList.filter((row) => wroNeedsApproval(row.status)).length;
-    const arrivedInVn = relevantList.filter(
-      (row) => row.status === "ARRIVED_IN_VN" || row.customsStatus === "CUSTOMS_PENDING"
+    // Phiếu đã bốc xong, đang chờ kho gom thành lô. Trước đây ô này đếm "đã về VN" theo
+    // trạng thái của phiếu — mốc đó nay nằm trên lô nên đếm ở đây luôn ra 0.
+    const arrivedInVn = relevantList.filter((row) =>
+      ["PICKED", "PACKED", "PACKING"].includes(String(row.status || "").toUpperCase())
     ).length;
     const released = relevantList.filter(
       (row) =>
@@ -484,24 +419,6 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
             Chi tiết
           </Button>
 
-          {HANDED_OVER_STATUSES.has(String(row.status || "").toUpperCase()) ? (
-            <Button
-              size="small"
-              type="primary"
-              icon={<SendOutlined />}
-              loading={isUpdatingStatus}
-              onClick={() => handleNotifyCustomer(row)}
-              style={{
-                borderRadius: 6,
-                fontSize: 12,
-                fontWeight: 650,
-                background: "#0284c7",
-                borderColor: "#0369a1",
-              }}
-            >
-              Thông báo KH
-            </Button>
-          ) : null}
         </div>
       ),
     },
@@ -603,7 +520,7 @@ export default function SaleWroPage({ exportTypeFilter: propExportType } = {}) {
           </div>
           <div className="wro-kpi-card__body">
             <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 700 }}>
-              ĐÃ VỀ VN / CHỜ THÔNG QUAN
+              ĐÃ BỐC XONG / CHỜ GOM LÔ
             </Typography.Text>
             <div className="ops-kpi-card__value" style={{ fontSize: 24, fontWeight: 800 }}>
               {stats.arrivedInVn.toLocaleString("vi-VN")}

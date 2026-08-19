@@ -32,6 +32,8 @@ import CustomerServiceChat from "../pages/SalePage/Chat/CustomerServiceChat";
 import ConsignmentDocumentsList from "../pages/SalePage/DocumentsPage/ConsignmentDocumentsPage/ConsignmentDocumentsList";
 import PurchaseDocumentsList from "../pages/SalePage/DocumentsPage/PurchaseDocumentsPage/PurchaseDocumentsList";
 import SaleWroPage from "../pages/SalePage/SaleWroPage";
+import SaleShipmentsPage from "../pages/SalePage/SaleShipmentsPage";
+import SaleGoshipOrdersPage from "../pages/SalePage/SaleGoshipOrdersPage";
 
 /* ================= ADMIN ================= */
 
@@ -40,6 +42,8 @@ import AdminUsersPage from "../pages/AdminPage/AdminUsersPage";
 import WarehouseLocationsPage from "../pages/AdminPage/WarehouseLocationsPage";
 import AdminCashFlowPage from "../pages/AdminPage/AdminCashFlowPage";
 import AdminDeliveriesPage from "../pages/AdminPage/AdminDeliveriesPage";
+import AdminShipmentsPage from "../pages/AdminPage/AdminShipmentsPage";
+import AdminReceivingNotesPage from "../pages/AdminPage/AdminReceivingNotesPage";
 import {
   AdditionalServiceFeesAdminPage,
   CarriersAdminPage,
@@ -63,6 +67,7 @@ import OperationsParcelsPage from "../pages/OperationsPage/OperationsParcelsPage
 import OperationsWroPage from "../pages/OperationsPage/OperationsWroPage";
 import OperationsShipmentsPage from "../pages/OperationsPage/OperationsShipmentsPage";
 import OperationsInboundApprovalsPage from "../pages/OperationsPage/OperationsInboundApprovalsPage";
+import OperationsReceivingApprovalsPage from "../pages/OperationsPage/OperationsReceivingApprovalsPage";
 import OperationsDeliveryApprovalsPage from "../pages/OperationsPage/OperationsDeliveryApprovalsPage";
 import OperationsParcelReturnsPage from "../pages/OperationsPage/OperationsParcelReturnsPage";
 import OperationsInspectionsPage from "../pages/OperationsPage/OperationsInspectionsPage";
@@ -245,6 +250,8 @@ export default function AppRoutes() {
           path="wro"
           element={<OperationsWroPage readOnly />}
         />
+        <Route path="shipments" element={<AdminShipmentsPage />} />
+        <Route path="receiving-notes" element={<AdminReceivingNotesPage />} />
         <Route path="deliveries" element={<AdminDeliveriesPage />} />
         <Route path="cash-flow" element={<AdminCashFlowPage />} />
       </Route>
@@ -331,6 +338,8 @@ export default function AppRoutes() {
           element={<SaleWroPage exportTypeFilter="BATCH" />}
         />
         <Route path="wro" element={<SaleWroPage />} />
+        <Route path="shipments" element={<SaleShipmentsPage />} />
+        <Route path="goship-orders" element={<SaleGoshipOrdersPage />} />
 
         <Route path="customer-service" element={<CustomerServiceChat />} />
       </Route>
@@ -348,6 +357,10 @@ export default function AppRoutes() {
         <Route index element={<OperationsDashboard />} />
         <Route path="wro" element={<OperationsWroPage />} />
         <Route path="shipments" element={<OperationsShipmentsPage />} />
+        <Route
+          path="receiving-approvals"
+          element={<OperationsReceivingApprovalsPage />}
+        />
         <Route path="parcels" element={<OperationsParcelsPage />} />
         <Route path="purchase-store" element={<OperationsPurchaseStorePage />} />
         <Route path="inbound-approvals" element={<OperationsInboundApprovalsPage />} />

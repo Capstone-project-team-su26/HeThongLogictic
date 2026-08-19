@@ -46,63 +46,115 @@ export const MASTER_BOX_STATUS_META = {
   CANCELLED: { label: "Đã hủy", tone: "error" },
 };
 
+/**
+ * Vòng đời lô — bám đúng InternationalShipmentService bên BE:
+ *
+ *   CREATED → READY_TO_SHIP → IN_TRANSIT → ARRIVED_VN → ARRIVED_DESTINATION
+ *
+ * `actor` cho biết mốc đó là việc của ai, để màn hình bày đúng nút cho đúng vai.
+ * `hint` là câu giải thích ngắn hiện dưới nút — người bấm biết mình đang xác nhận điều gì.
+ *
+ * MANIFESTED / CUSTOMS_* là trạng thái của lô CŨ trong DB, giữ nhãn để hiện đúng chữ
+ * nhưng không còn đặt mới được.
+ */
 export const SHIPMENT_STATUS_META = {
-  CREATED: { label: "Mới tạo", tone: "warning", tab: "PREPARING" },
+  CREATED: { label: "Mới gom lô", tone: "warning", tab: "PREPARING" },
   LOT_CREATED: { label: "Lô mới tạo", tone: "warning", tab: "PREPARING" },
   PREPARING: { label: "Đang chuẩn bị", tone: "warning", tab: "PREPARING" },
-  MANIFESTED: { label: "Đã manifest", tone: "processing", tab: "PREPARING" },
-  CUSTOMS_EXPORT_PENDING: {
-    label: "Chờ thông quan xuất",
-    tone: "warning",
-    tab: "CUSTOMS",
+  READY_TO_SHIP: { label: "Sẵn sàng xuất kho", tone: "processing", tab: "PREPARING" },
+  IN_TRANSIT: {
+    label: "Đang chuyển về VN",
+    tone: "processing",
+    tab: "IN_TRANSIT",
   },
-  IN_TRANSIT: { label: "Đang vận chuyển", tone: "processing", tab: "IN_TRANSIT" },
-  CUSTOMS_IMPORT_PENDING: {
-    label: "Chờ thông quan nhập",
-    tone: "warning",
-    tab: "CUSTOMS",
+  ARRIVED_VN: {
+    label: "Đã về VN, chờ về kho",
+    tone: "processing",
+    tab: "ARRIVED",
   },
   ARRIVED: { label: "Đã đến kho đích", tone: "success", tab: "ARRIVED" },
-  ARRIVED_DESTINATION: { label: "Đã đến kho đích", tone: "success", tab: "ARRIVED" },
-  ARRIVED_IN_VN: { label: "Đã đến kho VN", tone: "success", tab: "ARRIVED" },
-  CUSTOMS_REJECTED: { label: "Hải quan từ chối", tone: "error", tab: "ISSUE" },
+  ARRIVED_DESTINATION: { label: "Đã về tới kho VN", tone: "success", tab: "ARRIVED" },
   HOLD: { label: "Tạm giữ", tone: "error", tab: "ISSUE" },
   ISSUE: { label: "Sự cố", tone: "error", tab: "ISSUE" },
   CANCELLED: { label: "Đã hủy", tone: "error", tab: "ISSUE" },
+
+  // ── Trạng thái của lô cũ, chỉ để hiển thị ──
+  MANIFESTED: { label: "Đã manifest (cũ)", tone: "default", tab: "PREPARING" },
+  CUSTOMS_EXPORT_PENDING: {
+    label: "Chờ thông quan xuất (cũ)",
+    tone: "default",
+    tab: "IN_TRANSIT",
+  },
+  CUSTOMS_IMPORT_PENDING: {
+    label: "Chờ thông quan nhập (cũ)",
+    tone: "default",
+    tab: "IN_TRANSIT",
+  },
+  CUSTOMS_REJECTED: { label: "Hải quan từ chối (cũ)", tone: "error", tab: "ISSUE" },
+  ARRIVED_IN_VN: { label: "Đã đến kho VN", tone: "success", tab: "ARRIVED" },
 };
 
-/** 5 tab màn Vận chuyển — khớp BE statusTab. */
+/**
+ * Mốc nào của ai, kèm câu mô tả cho nút bấm.
+ * Khớp `ResolveRolesFor` bên BE: hai mốc đầu là của kho, hai mốc sau của sale.
+ */
+export const SHIPMENT_ACTION_META = {
+  READY_TO_SHIP: {
+    actor: "warehouse",
+    button: "Sẵn sàng xuất kho",
+    hint: "Kho đã xếp xong hàng, chờ đối tác tới lấy.",
+  },
+  IN_TRANSIT: {
+    actor: "warehouse",
+    button: "Đối tác đã lấy hàng",
+    hint: "Hàng rời kho: hệ thống nhả ô kệ, trừ tồn kho và ghi nhật ký xuất kho.",
+  },
+  ARRIVED_VN: {
+    actor: "sale",
+    button: "Hàng đã về Việt Nam",
+    hint: "Khách được thông báo tự động. Hàng đang chờ xe chuyển về kho.",
+  },
+  ARRIVED_DESTINATION: {
+    actor: "sale",
+    button: "Đã về tới kho VN",
+    hint: "Mở khoá cho kho VN mở lô đối soát từng kiện.",
+  },
+  HOLD: { actor: "any", button: "Tạm giữ", hint: "Lô đang bị giữ lại, chưa đi tiếp được." },
+  ISSUE: { actor: "any", button: "Báo sự cố", hint: "Đánh dấu lô có vấn đề cần người xử lý." },
+};
+
+export const getShipmentActionMeta = (status) =>
+  SHIPMENT_ACTION_META[upper(status)] || {
+    actor: "any",
+    button: SHIPMENT_STATUS_META[upper(status)]?.label || status,
+    hint: "",
+  };
+
+/** 4 tab màn Vận chuyển — khớp BE statusTab (tab CUSTOMS đã bỏ cùng hai chặng thông quan). */
 export const SHIPMENT_STATUS_TABS = [
   { key: "PREPARING", label: "Đang chuẩn bị" },
   { key: "IN_TRANSIT", label: "Đang đi" },
-  { key: "CUSTOMS", label: "Thông quan" },
-  { key: "ARRIVED", label: "Đã đến" },
+  { key: "ARRIVED", label: "Đã về" },
   { key: "ISSUE", label: "Sự cố" },
 ];
 
-/** targetStatus → các status hiện tại được phép chuyển tới (mirror BE). */
+/**
+ * targetStatus → các status hiện tại được phép chuyển tới.
+ * Mirror đúng bảng `AllowedTransitions` trong InternationalShipmentService — lệch một dòng là
+ * màn hình bày ra nút mà API từ chối.
+ */
 const SHIPMENT_ALLOWED_FROM = {
-  MANIFESTED: ["CREATED"],
-  CUSTOMS_EXPORT_PENDING: ["MANIFESTED", "CUSTOMS_REJECTED", "HOLD"],
-  IN_TRANSIT: ["CUSTOMS_EXPORT_PENDING", "MANIFESTED", "HOLD"],
-  CUSTOMS_IMPORT_PENDING: ["IN_TRANSIT", "CUSTOMS_REJECTED", "HOLD"],
-  ARRIVED_DESTINATION: ["CUSTOMS_IMPORT_PENDING", "IN_TRANSIT"],
-  CUSTOMS_REJECTED: ["CUSTOMS_EXPORT_PENDING", "CUSTOMS_IMPORT_PENDING"],
-  HOLD: [
-    "CREATED",
-    "MANIFESTED",
-    "CUSTOMS_EXPORT_PENDING",
-    "IN_TRANSIT",
-    "CUSTOMS_IMPORT_PENDING",
-    "CUSTOMS_REJECTED",
-  ],
+  READY_TO_SHIP: ["CREATED", "MANIFESTED", "HOLD"],
+  IN_TRANSIT: ["READY_TO_SHIP", "HOLD"],
+  ARRIVED_VN: ["IN_TRANSIT", "HOLD"],
+  ARRIVED_DESTINATION: ["ARRIVED_VN"],
+  HOLD: ["CREATED", "MANIFESTED", "READY_TO_SHIP", "IN_TRANSIT", "ARRIVED_VN"],
   ISSUE: [
     "CREATED",
     "MANIFESTED",
-    "CUSTOMS_EXPORT_PENDING",
+    "READY_TO_SHIP",
     "IN_TRANSIT",
-    "CUSTOMS_IMPORT_PENDING",
-    "CUSTOMS_REJECTED",
+    "ARRIVED_VN",
     "HOLD",
   ],
 };
@@ -112,11 +164,24 @@ export function mapShipmentStatusToTab(status) {
   return SHIPMENT_STATUS_META[key]?.tab || "PREPARING";
 }
 
+/** Thứ tự đường đi chính, để mốc kế tiếp luôn nằm đầu danh sách thay vì HOLD/ISSUE. */
+const SHIPMENT_MAIN_PATH = [
+  "READY_TO_SHIP",
+  "IN_TRANSIT",
+  "ARRIVED_VN",
+  "ARRIVED_DESTINATION",
+];
+
 export function getNextShipmentStatuses(currentStatus) {
   const current = upper(currentStatus);
   return Object.entries(SHIPMENT_ALLOWED_FROM)
     .filter(([, from]) => from.some((item) => upper(item) === current))
-    .map(([target]) => target);
+    .map(([target]) => target)
+    .sort((a, b) => {
+      const ia = SHIPMENT_MAIN_PATH.indexOf(a);
+      const ib = SHIPMENT_MAIN_PATH.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
 }
 
 export const WRO_STATUS_META = {
@@ -753,12 +818,27 @@ export async function getShipmentDetail(shipmentId) {
   return mapShipment(getAdminApiData(response));
 }
 
-export async function updateShipmentStatus(shipmentId, status, note = "") {
+/**
+ * Đổi trạng thái lô. Dùng cho CẢ bốn mốc, kể cả ARRIVED_DESTINATION — BE nay định tuyến mốc đó
+ * vào đúng thân xử lý của `/arrive` nên không cần gọi API riêng nữa.
+ *
+ * `carrierTrackingCode` bỏ trống thì BE giữ nguyên mã cũ, không xoá mất mã sale đã nhập.
+ */
+export async function updateShipmentStatus(
+  shipmentId,
+  status,
+  note = "",
+  carrierTrackingCode = ""
+) {
   if (!shipmentId) throw new Error("Thiếu id lô vận chuyển.");
   if (!status) throw new Error("Thiếu trạng thái mới.");
   const response = await axiosInstance.put(
     `/api/international-shipments/${encodeURIComponent(shipmentId)}/status`,
-    { status: upper(status), note: text(note) || undefined }
+    {
+      status: upper(status),
+      note: text(note) || undefined,
+      carrierTrackingCode: text(carrierTrackingCode) || undefined,
+    }
   );
   return getAdminApiData(response);
 }
@@ -1307,7 +1387,15 @@ export async function updateWroShippingRoute(wroId, payload = {}) {
   return getAdminApiData(response);
 }
 
-export async function processApprovedWroToReleased(wroId, payload = {}) {
+/**
+ * Đưa một phiếu xuất kho đã duyệt đi hết phần việc của kho gốc: lập phiếu picking, xác nhận bốc
+ * hàng, gán tuyến. Xong bước này phiếu ở `PICKED` — trạng thái cuối của nó — và đủ điều kiện gom
+ * vào lô vận chuyển.
+ *
+ * Không gọi `/complete` nữa: bàn giao cho đối tác giờ là thao tác trên lô (mốc `IN_TRANSIT`),
+ * endpoint cũ đã bị khoá và trả 400.
+ */
+export async function processApprovedWroToPicked(wroId, payload = {}) {
   const detail = await getWroDetail(wroId);
 
   const pickingResponse = await axiosInstance.post(
@@ -1331,27 +1419,21 @@ export async function processApprovedWroToReleased(wroId, payload = {}) {
     throw new Error("Phiếu picking không có item để xác nhận.");
   }
 
-  // Confirm → WRO = PACKING
+  // Xác nhận bốc hàng → WRO = PICKED, tồn kho chuyển sang PICKED theo.
   await axiosInstance.put(
     `/api/picking-lists/${encodeURIComponent(pickingListId)}/confirm`,
     { items: pickingItems }
   );
 
-  // Gán tuyến khi đang PACKING (gán sau RELEASED sẽ đẩy sang IN_TRANSIT)
+  // Gán tuyến/đối tác vận chuyển để lô có sẵn thông tin, không đụng tới trạng thái phiếu.
   await assignWroShippingRoute(wroId, payload);
-
-  // Complete từ PACKING → RELEASED (không gọi /packing trước)
-  await axiosInstance.put(
-    `/api/warehouse-release-requests/${encodeURIComponent(wroId)}/complete`,
-    { items: pickingItems }
-  );
 
   return { wroId, items: pickingItems };
 }
 
 export async function createShipmentFromApprovedWro(wroId, payload) {
   if (!wroId) throw new Error("Thiếu id yêu cầu xuất kho.");
-  await processApprovedWroToReleased(wroId, payload);
+  await processApprovedWroToPicked(wroId, payload);
   return createShipment({ ...payload, wroRequestIds: [wroId] });
 }
 

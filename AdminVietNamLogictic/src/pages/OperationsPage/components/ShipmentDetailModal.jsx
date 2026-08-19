@@ -4,7 +4,6 @@ import {
   Button,
   Input,
   Modal,
-  Select,
   Space,
   Table,
   Tag,
@@ -16,10 +15,12 @@ import { LinkOutlined, UploadOutlined } from "@ant-design/icons";
 import {
   getNextShipmentStatuses,
   getOperationsApiError,
+  getShipmentActionMeta,
   getShipmentDetail,
   SHIPMENT_STATUS_META,
   updateShipmentStatus,
 } from "../../../api/OperationsAPI/consolidationWorkflowService";
+import ShipmentJourneySteps from "../../../components/Shipment/ShipmentJourneySteps";
 import { uploadImages } from "../../../api/Upload/UploadImage";
 import AuthNotify from "../../../utils/Common/AuthNotify";
 
@@ -225,23 +226,42 @@ export default function ShipmentDetailModal({ open, shipmentId, onClose, onChang
           />
 
           <Typography.Title level={5} style={{ marginTop: 16 }}>
+            Hành trình lô
+          </Typography.Title>
+          <ShipmentJourneySteps status={shipment.status} />
+
+          <Typography.Title level={5} style={{ marginTop: 16 }}>
             Cập nhật trạng thái
           </Typography.Title>
           {!nextOptions.length ? (
             <Alert type="info" showIcon message="Lô không còn bước chuyển trạng thái tiếp theo." />
           ) : (
             <div className="ops-form-grid">
-              <div>
-                <label>Trạng thái mới</label>
-                <Select
-                  style={{ width: "100%" }}
-                  value={nextStatus || undefined}
-                  options={nextOptions.map((value) => ({
-                    value,
-                    label: SHIPMENT_STATUS_META[value]?.label || value,
-                  }))}
-                  onChange={setNextStatus}
-                />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label>Mốc tiếp theo</label>
+                {/* Nút thay vì dropdown: mỗi mốc nói rõ bấm vào thì chuyện gì xảy ra, và mốc
+                    đang chọn được tô đậm. OM không phải nhớ ý nghĩa của chuỗi viết hoa. */}
+                <Space wrap style={{ display: "flex", marginTop: 4 }}>
+                  {nextOptions.map((value) => {
+                    const action = getShipmentActionMeta(value);
+                    const isDanger = value === "HOLD" || value === "ISSUE";
+                    return (
+                      <Button
+                        key={value}
+                        danger={isDanger}
+                        type={nextStatus === value ? "primary" : "default"}
+                        onClick={() => setNextStatus(value)}
+                      >
+                        {action.button}
+                      </Button>
+                    );
+                  })}
+                </Space>
+                {nextStatus ? (
+                  <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {getShipmentActionMeta(nextStatus).hint}
+                  </Typography.Paragraph>
+                ) : null}
               </div>
               <div>
                 <label>Upload ảnh / chứng từ (tuỳ chọn)</label>
@@ -272,7 +292,7 @@ export default function ShipmentDetailModal({ open, shipmentId, onClose, onChang
               </div>
               <div>
                 <Button type="primary" loading={saving} onClick={handleUpdateStatus}>
-                  Cập nhật trạng thái
+                  Xác nhận mốc này
                 </Button>
               </div>
             </div>

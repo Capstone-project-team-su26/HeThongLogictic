@@ -23,6 +23,7 @@ import {
   InboxOutlined,
   LogoutOutlined,
   MonitorOutlined,
+  CarOutlined,
   SendOutlined,
   RollbackOutlined,
   FileSearchOutlined as InspectionOutlined,
@@ -111,6 +112,18 @@ const MENU_BY_ROLE = {
           label: "Phiếu xuất kho",
           icon: <CheckSquareOutlined />,
           path: "/admin/wro",
+        },
+        {
+          key: "admin-shipments",
+          label: "Lô vận chuyển",
+          icon: <SendOutlined />,
+          path: "/admin/shipments",
+        },
+        {
+          key: "admin-receiving-notes",
+          label: "Phiếu tiếp nhận kho",
+          icon: <FileTextOutlined />,
+          path: "/admin/receiving-notes",
         },
         {
           key: "admin-deliveries",
@@ -273,6 +286,12 @@ const MENU_BY_ROLE = {
       path: "/operations-manager/parcels",
     },
     {
+      key: "operations-receiving-approvals",
+      label: "Duyệt tiếp nhận kho gốc",
+      icon: <CheckSquareOutlined />,
+      path: "/operations-manager/receiving-approvals",
+    },
+    {
       key: "operations-inbound-approvals",
       label: "Duyệt nhập kho VN",
       icon: <CheckSquareOutlined />,
@@ -384,6 +403,18 @@ const MENU_BY_ROLE = {
       label: "Đơn hàng cần xử lý",
       icon: <ExportOutlined />,
       path: "/sale/releases",
+    },
+    {
+      key: "sale-shipments",
+      label: "Theo dõi lô về VN",
+      icon: <SendOutlined />,
+      path: "/sale/shipments",
+    },
+    {
+      key: "sale-goship-orders",
+      label: "Đơn GoShip",
+      icon: <CarOutlined />,
+      path: "/sale/goship-orders",
     },
     // {
     //   key: "sale-quotations",
