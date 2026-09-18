@@ -1,0 +1,123 @@
+/* Màn duyệt giá ngoại lệ của Admin — dùng lại tông trắng/xám của các màn quản trị. */
+
+.price-approval-page {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.price-approval-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.price-approval-header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.price-approval-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  max-width: 720px;
+}
+
+.price-approval-notice {
+  border-radius: 12px;
+}
+
+.price-approval-table .ant-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.price-approval-order,
+.price-approval-total,
+.price-approval-override,
+.price-approval-fees > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.price-approval-order small,
+.price-approval-total small,
+.price-approval-override small,
+.price-approval-fees span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.price-approval-override p {
+  margin: 0;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.price-approval-fees {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.price-approval-empty {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.price-approval-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.price-approval-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.price-approval-modal__order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.price-approval-modal__reason {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #b45309;
+  font-size: 13px;
+}
+
+.price-approval-modal label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.price-approval-modal label b {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.price-approval-modal__hint.ant-tag {
+  align-self: flex-start;
+  margin: 0;
+  white-space: normal;
+}

@@ -1,0 +1,769 @@
+{
+  "src/features/admin/api/adminFinanceService.js": {
+    "named": [
+      "approveAdminTransaction",
+      "getAdminFinanceOrders",
+      "getAdminFinanceSummary",
+      "getAdminFinanceTransactions",
+      "getAdminPendingTransactions",
+      "rejectAdminTransaction"
+    ],
+    "hasDefault": true,
+    "originalLines": 282,
+    "realApi": true
+  },
+  "src/features/admin/api/adminService.js": {
+    "named": [
+      "createAdditionalServiceFee",
+      "createAdminUser",
+      "createExchangeRate",
+      "createPackageConfiguration",
+      "createPricingRule",
+      "createProductType",
+      "createRestrictedItem",
+      "createServicePricing",
+      "createShippingMethod",
+      "createShippingRoute",
+      "createSupplier",
+      "createUnitOfMeasure",
+      "createWarehouse",
+      "createWarehouseLayoutItem",
+      "createWarehouseLocation",
+      "deleteAdditionalServiceFee",
+      "deleteExchangeRate",
+      "deletePackageConfiguration",
+      "deletePricingRule",
+      "deleteProductType",
+      "deleteRestrictedItem",
+      "deleteServicePricing",
+      "deleteShippingMethod",
+      "deleteShippingRoute",
+      "deleteSupplier",
+      "deleteUnitOfMeasure",
+      "deleteWarehouse",
+      "deleteWarehouseLayoutItem",
+      "deleteWarehouseLocation",
+      "getActiveWarehouseLocations",
+      "getAdditionalServiceFeeDetail",
+      "getAdditionalServiceFees",
+      "getAdminApiData",
+      "getAdminApiError",
+      "getAdminApiList",
+      "getAdminUserDetail",
+      "getAdminUsers",
+      "getExchangeRateDetail",
+      "getExchangeRates",
+      "getInventories",
+      "getPackageConfigurationDetail",
+      "getPackageConfigurations",
+      "getPricingRuleDetail",
+      "getPricingRules",
+      "getProductTypeDetail",
+      "getProductTypes",
+      "getRestrictedItemDetail",
+      "getRestrictedItems",
+      "getServicePricingDetail",
+      "getServicePricings",
+      "getShippingMethodDetail",
+      "getShippingMethods",
+      "getShippingRouteDetail",
+      "getShippingRoutes",
+      "getSupplierDetail",
+      "getSuppliers",
+      "getUnitOfMeasureDetail",
+      "getUnitsOfMeasure",
+      "getWarehouseInventories",
+      "getWarehouseLayout",
+      "getWarehouseLayoutStatus",
+      "getWarehouseLayoutZones",
+      "getWarehouseLocations",
+      "getWarehouses",
+      "lockAdminUser",
+      "unlockAdminUser",
+      "updateAdditionalServiceFee",
+      "updateAdminUserRole",
+      "updateExchangeRate",
+      "updatePackageConfiguration",
+      "updatePricingRule",
+      "updateProductType",
+      "updateRestrictedItem",
+      "updateServicePricing",
+      "updateShippingMethod",
+      "updateShippingRoute",
+      "updateSupplier",
+      "updateUnitOfMeasure",
+      "updateWarehouse",
+      "updateWarehouseLayoutItem",
+      "updateWarehouseLocation"
+    ],
+    "hasDefault": false,
+    "originalLines": 714
+  },
+  "src/features/attachments/api/attachmentService.js": {
+    "named": [
+      "ACCEPTED_MIME_TYPES",
+      "ACCEPT_ATTRIBUTE",
+      "ATTACHMENT_ENTITY",
+      "DOCUMENT_TYPE_LABELS",
+      "MAX_ATTACHMENT_BYTES",
+      "downloadAttachment",
+      "fetchAttachmentBlob",
+      "getAttachmentApiError",
+      "getDocumentTypeLabel",
+      "isImageAttachment",
+      "listAttachments",
+      "openAttachment",
+      "uploadAttachment",
+      "validateAttachmentFile"
+    ],
+    "hasDefault": true,
+    "originalLines": 150,
+    "realApi": true
+  },
+  "src/features/auth/api/authService.js": {
+    "named": [
+      "getUserProfileApi",
+      "loginApi",
+      "updateUserProfileApi"
+    ],
+    "hasDefault": false,
+    "originalLines": 114,
+    "realApi": true,
+    "realApiNote": "Đăng nhập + hồ sơ cá nhân (POST /api/Auth/login, GET|PUT /api/User/profile)."
+  },
+  "src/features/catalog/api/restrictedItemService.js": {
+    "named": [
+      "RESTRICTION_TYPE",
+      "getActiveRestrictedItemsApi",
+      "getRestrictedItemDetailApi",
+      "getRestrictedItemListApi",
+      "getRestrictedItemsApi",
+      "normalizeRestrictedItem"
+    ],
+    "hasDefault": true,
+    "originalLines": 124
+  },
+  "src/features/catalog/api/transportCatalogService.js": {
+    "named": [
+      "createCarrierApi",
+      "createShippingRouteApi",
+      "deleteCarrierApi",
+      "deleteShippingRouteApi",
+      "getActiveCarriersApi",
+      "getCarrierDetailApi",
+      "getCarriersApi",
+      "getShippingRouteDetailApi",
+      "getShippingRoutesApi",
+      "updateCarrierApi",
+      "updateShippingRouteApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 152,
+    "realApi": true
+  },
+  "src/features/chat/api/conversationApi.js": {
+    "named": [
+      "createConversationApi",
+      "getConversationDetailApi",
+      "getConversationsApi",
+      "markConversationAsReadApi",
+      "sendConversationMessageApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 337
+  },
+  "src/features/chat/api/saleAiService.js": {
+    "named": [
+      "buildCustomerReply",
+      "buildWarnings",
+      "getSalesAiError",
+      "mapStatusLabel",
+      "normalizeSalesOrderStatusResponse",
+      "querySalesOrderStatus"
+    ],
+    "hasDefault": true,
+    "originalLines": 254
+  },
+  "src/features/consignment/api/consignmentMasterService.js": {
+    "named": [
+      "getConsignmentMasterDataApi",
+      "getConsignmentRoutesApi",
+      "getConsignmentShippingOptionsApi",
+      "getProductTypesApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 137,
+    "realApi": true,
+    "realApiNote": "Loại hàng, tuyến, phương án vận chuyển."
+  },
+  "src/features/consignment/api/consignmentMasterService.mock.js": {
+    "named": [
+      "getConsignmentMasterDataApi",
+      "getConsignmentRoutesApi",
+      "getConsignmentShippingOptionsApi",
+      "getProductTypesApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 137,
+    "mockCopyOf": "src/features/consignment/api/consignmentMasterService.js"
+  },
+  "src/features/consignment/api/consignmentReceiptService.js": {
+    "named": [
+      "getConsignmentReceiptApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 81,
+    "realApi": true
+  },
+  "src/features/consignment/api/consignmentReceiptService.mock.js": {
+    "named": [
+      "getConsignmentReceiptApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 81
+  },
+  "src/features/consignment/api/consignmentService.js": {
+    "named": [
+      "approveConsignmentApi",
+      "calculateVolumeM3FromItems",
+      "convertM3ToCm3",
+      "createConsignmentApi",
+      "estimateQuotationApi",
+      "getConsignmentDetailApi",
+      "getConsignmentReceiptApi",
+      "getConsignmentsApi",
+      "normalizeConsignmentStatusPayload",
+      "normalizeCreateConsignmentPayload",
+      "normalizeQuotationPayload",
+      "rejectConsignmentApi",
+      "sendQuotationApi",
+      "updateConsignmentStatusApi",
+      "validateConsignmentItemsApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 1093,
+    "realApi": true,
+    "realApiNote": "Danh sách / chi tiết / đổi trạng thái đơn ký gửi + gửi báo giá."
+  },
+  "src/features/consignment/api/consignmentService.mock.js": {
+    "named": [
+      "approveConsignmentApi",
+      "calculateVolumeM3FromItems",
+      "convertM3ToCm3",
+      "createConsignmentApi",
+      "estimateQuotationApi",
+      "getConsignmentDetailApi",
+      "getConsignmentReceiptApi",
+      "getConsignmentsApi",
+      "normalizeConsignmentStatusPayload",
+      "normalizeCreateConsignmentPayload",
+      "normalizeQuotationPayload",
+      "rejectConsignmentApi",
+      "sendQuotationApi",
+      "updateConsignmentStatusApi",
+      "validateConsignmentItemsApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 1093,
+    "mockCopyOf": "src/features/consignment/api/consignmentService.js"
+  },
+  "src/features/consignment/api/deliveryAddressService.js": {
+    "named": [
+      "createDeliveryAddressApi",
+      "deleteDeliveryAddressApi",
+      "getDeliveryAddressesApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 84
+  },
+  "src/features/consignment/api/quotationService.js": {
+    "named": [
+      "PRICE_APPROVAL_DECISION",
+      "PRICE_APPROVAL_STATUS",
+      "QUOTATION_STATUS",
+      "decideQuotationPriceApprovalApi",
+      "getOrderLevelFees",
+      "getOrderQuotationApi",
+      "getPendingPriceApprovalQueueApi",
+      "getQuotationByIdApi",
+      "groupFeesByOrderItem",
+      "normalizeQuotationDetail",
+      "normalizeQuotationFee"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "realApiNote": "Đọc báo giá của đơn + Admin duyệt giá ngoại lệ (PUT /api/quotations/{id}/price-approval)."
+  },
+  "src/features/customer/api/customerService.js": {
+    "named": [
+      "createCustomerApi",
+      "deleteCustomerApi",
+      "findCustomerById",
+      "getActiveCustomersApi",
+      "getCustomerByIdApi",
+      "getCustomersApi",
+      "mapCustomersToOptions",
+      "normalizeCustomer",
+      "normalizeCustomerPayload",
+      "normalizeCustomerStatus",
+      "updateCustomerApi",
+      "validateCustomerUniqueness"
+    ],
+    "hasDefault": true,
+    "originalLines": 588
+  },
+  "src/features/incident/api/parcelIncidentService.js": {
+    "named": [
+      "INCIDENT_STATUS_META",
+      "INCIDENT_TYPE_LABELS",
+      "RESOLUTION_LABELS",
+      "getAllowedResolutions",
+      "getIncidentApiError",
+      "getIncidentDetail",
+      "getIncidentStatusMeta",
+      "getIncidentTypeLabel",
+      "getResolutionLabel",
+      "isAwaitingCompensation",
+      "listAwaitingCompensation",
+      "listIncidents",
+      "markCompensationPaid",
+      "requiresIncidentPhoto",
+      "resolveIncident"
+    ],
+    "hasDefault": true,
+    "originalLines": 199,
+    "realApi": true
+  },
+  "src/features/operations/api/destinationApprovalService.js": {
+    "named": [
+      "DELIVERY_STATUS_META",
+      "INBOUND_STATUS_META",
+      "approveDeliveryRequest",
+      "approveInboundRequest",
+      "getApprovalApiError",
+      "getDeliveryRequestDetail",
+      "getDeliveryStatusMeta",
+      "getInboundRequestDetail",
+      "getInboundStatusMeta",
+      "listDeliveryRequests",
+      "listInboundRequests",
+      "recordDeliveryProof",
+      "rejectDeliveryRequest",
+      "rejectInboundRequest"
+    ],
+    "hasDefault": true,
+    "originalLines": 131,
+    "realApi": true
+  },
+  "src/features/operations/api/inventoryService.js": {
+    "named": [
+      "INVENTORY_STATUS_META",
+      "getInventoryApiError",
+      "getInventoryStatusMeta",
+      "listInventories"
+    ],
+    "hasDefault": true,
+    "originalLines": 39,
+    "realApi": true
+  },
+  "src/features/operations/api/parcelInspectionService.js": {
+    "named": [
+      "CONDITION_META",
+      "getConditionMeta",
+      "getInspectionApiError",
+      "getShipmentInspectionOverview",
+      "listParcelInspections"
+    ],
+    "hasDefault": true,
+    "originalLines": 110,
+    "realApi": true
+  },
+  "src/features/operations/api/warehouseReleaseService.js": {
+    "named": [
+      "WRO_PARCEL_STATUS_META",
+      "WRO_STATUS_META",
+      "WRO_STATUS_TABS",
+      "decideWarehouseRelease",
+      "getWarehouseReleaseDetail",
+      "getWroApiError",
+      "getWroParcelStatusMeta",
+      "getWroStatusMeta",
+      "listWarehouseReleases",
+      "openPickingSheetPdf",
+      "openReleaseNotePdf"
+    ],
+    "hasDefault": true,
+    "originalLines": 150,
+    "realApi": true
+  },
+  "src/features/payment/api/orderPaymentService.js": {
+    "named": [
+      "getOrderPaymentHistoryApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 217,
+    "realApi": true
+  },
+  "src/features/pricing/api/exchangeRateService.js": {
+    "named": [
+      "CURRENCY_CODES",
+      "CURRENCY_NAMES",
+      "convertCurrencyApi",
+      "getExchangeRatesApi",
+      "normalizeConvertResult",
+      "normalizeExchangeRateItem"
+    ],
+    "hasDefault": false,
+    "originalLines": 184
+  },
+  "src/features/pricing/api/packageConfigurationService.js": {
+    "named": [
+      "PACKAGE_CONFIGURATION_CODE",
+      "PACKAGE_CONFIGURATION_STATUS",
+      "calculateItemPackageFee",
+      "calculateItemsPackageFee",
+      "findPackageConfigurationByCode",
+      "findPackageConfigurationById",
+      "getActivePackageConfigurationsApi",
+      "getPackageConfigurationDisplayName",
+      "getPackageConfigurationFee",
+      "getPackageConfigurationsApi",
+      "mapPackageConfigurationsToOptions",
+      "normalizePackageConfiguration",
+      "resolveItemPackageConfiguration",
+      "suggestPackageConfigurationApi",
+      "validatePackageConfigurationForItem"
+    ],
+    "hasDefault": true,
+    "originalLines": 676,
+    "realApi": true,
+    "realApiNote": "GET /api/package-configurations (mảng trần) + suggest."
+  },
+  "src/features/pricing/api/packageConfigurationService.mock.js": {
+    "named": [
+      "PACKAGE_CONFIGURATION_CODE",
+      "PACKAGE_CONFIGURATION_STATUS",
+      "calculateItemPackageFee",
+      "calculateItemsPackageFee",
+      "findPackageConfigurationByCode",
+      "findPackageConfigurationById",
+      "getActivePackageConfigurationsApi",
+      "getPackageConfigurationDisplayName",
+      "getPackageConfigurationFee",
+      "getPackageConfigurationsApi",
+      "mapPackageConfigurationsToOptions",
+      "normalizePackageConfiguration",
+      "resolveItemPackageConfiguration",
+      "suggestPackageConfigurationApi",
+      "validatePackageConfigurationForItem"
+    ],
+    "hasDefault": true,
+    "originalLines": 676,
+    "mockCopyOf": "src/features/pricing/api/packageConfigurationService.js"
+  },
+  "src/features/pricing/api/pricingRuleService.js": {
+    "named": [
+      "CALCULATION_TYPE",
+      "CONDITION_TYPE",
+      "PRICING_RULE_CODE",
+      "PRICING_RULE_STATUS",
+      "calculatePricingBreakdown",
+      "calculatePricingRuleAmount",
+      "filterPricingRulesByStatus",
+      "findPricingRuleByCode",
+      "getActivePricingRulesApi",
+      "getCommonPricingValues",
+      "getPackageConfigurations",
+      "getPricingRuleDetailApi",
+      "getPricingRuleValue",
+      "getPricingRules",
+      "getPricingRulesApi",
+      "isPricingRuleActive",
+      "isPricingRuleEligible",
+      "mapPricingRulesByCode",
+      "normalizePricingRule",
+      "suggestPackageConfiguration"
+    ],
+    "hasDefault": true,
+    "originalLines": 979,
+    "realApi": true,
+    "realApiNote": "GET /api/pricing-rules (mảng trần)."
+  },
+  "src/features/pricing/api/pricingRuleService.mock.js": {
+    "named": [
+      "CALCULATION_TYPE",
+      "CONDITION_TYPE",
+      "PRICING_RULE_CODE",
+      "PRICING_RULE_STATUS",
+      "calculatePricingBreakdown",
+      "calculatePricingRuleAmount",
+      "filterPricingRulesByStatus",
+      "findPricingRuleByCode",
+      "getActivePricingRulesApi",
+      "getCommonPricingValues",
+      "getPackageConfigurations",
+      "getPricingRuleDetailApi",
+      "getPricingRuleValue",
+      "getPricingRules",
+      "getPricingRulesApi",
+      "isPricingRuleActive",
+      "isPricingRuleEligible",
+      "mapPricingRulesByCode",
+      "normalizePricingRule",
+      "suggestPackageConfiguration"
+    ],
+    "hasDefault": true,
+    "originalLines": 979,
+    "mockCopyOf": "src/features/pricing/api/pricingRuleService.js"
+  },
+  "src/features/pricing/api/servicePricingService.js": {
+    "named": [
+      "filterServicePricings",
+      "findMatchingServicePricing",
+      "findServicePricingById",
+      "formatVnd",
+      "getServicePricingDetailApi",
+      "getServicePricingsApi",
+      "mapServicePricingsToOptions",
+      "normalizeServicePricing"
+    ],
+    "hasDefault": true,
+    "originalLines": 391,
+    "realApi": true,
+    "realApiNote": "GET /api/service-pricings (mảng trần)."
+  },
+  "src/features/pricing/api/servicePricingService.mock.js": {
+    "named": [
+      "filterServicePricings",
+      "findMatchingServicePricing",
+      "findServicePricingById",
+      "formatVnd",
+      "getServicePricingDetailApi",
+      "getServicePricingsApi",
+      "mapServicePricingsToOptions",
+      "normalizeServicePricing"
+    ],
+    "hasDefault": true,
+    "originalLines": 391,
+    "mockCopyOf": "src/features/pricing/api/servicePricingService.js"
+  },
+  "src/features/purchase/api/confirmPurchaseApi.js": {
+    "named": [
+      "approveStorePurchaseApi",
+      "confirmPurchaseApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 129
+  },
+  "src/features/purchase/api/purchaseRequestService.js": {
+    "named": [
+      "PURCHASE_REQUEST_STATUS",
+      "PURCHASE_SHIPPING_OPTION",
+      "approveStorePurchaseApi",
+      "confirmPurchaseApi",
+      "createPurchaseRequestApi",
+      "createPurchaseRequestQuotationApi",
+      "getPurchaseRequestDetailApi",
+      "getPurchaseRequestsApi",
+      "normalizeCreatePurchaseRequestPayload"
+    ],
+    "hasDefault": true,
+    "originalLines": 934
+  },
+  "src/features/receiving/api/receivingNoteService.js": {
+    "named": [
+      "AWAITING_TAB_KEY",
+      "RECEIVING_APPROVAL_STAGE_META",
+      "RECEIVING_STATUS_META",
+      "RECEIVING_STATUS_TABS",
+      "approveReceivingNote",
+      "getApprovalStageMeta",
+      "getReceivingApiError",
+      "getReceivingNoteByOrder",
+      "getReceivingNoteDetail",
+      "getReceivingStatusMeta",
+      "listReceivingNotes",
+      "rejectReceivingNote"
+    ],
+    "hasDefault": true,
+    "originalLines": 130,
+    "realApi": true
+  },
+  "src/features/settlement/api/actionQueueService.js": {
+    "named": [
+      "RECEIVING_NOTE_GROUP",
+      "createReceivingNote",
+      "getActionQueueApiError",
+      "listActionQueue"
+    ],
+    "hasDefault": true,
+    "originalLines": 0,
+    "realApi": true
+  },
+  "src/features/settlement/api/settlementService.js": {
+    "named": [
+      "SETTLEMENT_BLOCKER_HINTS",
+      "createDeliveryRequest",
+      "createFinalPayment",
+      "createPurchaseFinalPayment",
+      "getOrderPayments",
+      "getSettlementApiError",
+      "getSettlementPreview",
+      "listAwaitingSettlement",
+      "notifyWarehouse"
+    ],
+    "hasDefault": true,
+    "originalLines": 130,
+    "realApi": true
+  },
+  "src/features/shipment/api/internationalShipmentService.js": {
+    "named": [
+      "MILESTONE_REQUIREMENT_NOTE",
+      "SHIPMENT_STATUS_META",
+      "SHIPMENT_STATUS_TABS",
+      "getShipmentApiError",
+      "getShipmentDetail",
+      "getShipmentStatusMeta",
+      "getShipmentTimeline",
+      "getTrackingQueue",
+      "listShipments",
+      "openShipmentManifest",
+      "updateShipmentMilestone"
+    ],
+    "hasDefault": true,
+    "originalLines": 170,
+    "realApi": true
+  },
+  "src/features/tracking/api/orderTrackingService.js": {
+    "named": [
+      "TRACKING_STAGES",
+      "completeOrder",
+      "getOrderTracking",
+      "getStageMeta",
+      "getTrackingApiError",
+      "listTrackedOrders",
+      "setExportHold"
+    ],
+    "hasDefault": true,
+    "originalLines": 122,
+    "realApi": true
+  },
+  "src/features/warehouse/api/warehouseManagerService.js": {
+    "named": [
+      "assignWarehouseManager",
+      "getWarehouseManager",
+      "getWarehouseManagerCandidates"
+    ],
+    "hasDefault": true,
+    "originalLines": 0,
+    "realApi": true
+  },
+  "src/features/warehouse/api/warehouseService.js": {
+    "named": [
+      "findWarehouseByCode",
+      "findWarehouseById",
+      "getActiveWarehousesApi",
+      "getDestinationWarehousesApi",
+      "getOriginWarehousesApi",
+      "getWarehousesApi",
+      "mapWarehousesToOptions",
+      "normalizeWarehouse"
+    ],
+    "hasDefault": true,
+    "originalLines": 264,
+    "realApi": true,
+    "realApiNote": "GET /api/warehouses, /api/warehouses/active ({ items })."
+  },
+  "src/features/warehouse/api/warehouseService.mock.js": {
+    "named": [
+      "findWarehouseByCode",
+      "findWarehouseById",
+      "getActiveWarehousesApi",
+      "getDestinationWarehousesApi",
+      "getOriginWarehousesApi",
+      "getWarehousesApi",
+      "mapWarehousesToOptions",
+      "normalizeWarehouse"
+    ],
+    "hasDefault": true,
+    "originalLines": 264,
+    "mockCopyOf": "src/features/warehouse/api/warehouseService.js"
+  },
+  "src/features/warehouse/api/warehouseZoneService.js": {
+    "named": [
+      "ZONE_TYPE_OPTIONS",
+      "getZoneApiError",
+      "getZoneTypeMeta",
+      "listMisplacedParcels",
+      "listWarehouseZones",
+      "updateWarehouseZone"
+    ],
+    "hasDefault": true,
+    "originalLines": 77,
+    "realApi": true
+  },
+  "src/shared/api/apiEndpoints.js": {
+    "named": [
+      "API_ENDPOINTS"
+    ],
+    "hasDefault": true,
+    "originalLines": 94
+  },
+  "src/shared/api/apiEnvelope.js": {
+    "named": [
+      "getArrayItems",
+      "getPagedData",
+      "getResponseData",
+      "removeEmptyParams"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "realApiNote": "Bóc vỏ response của backend (data / items / object trần)."
+  },
+  "src/shared/api/fileDownload.js": {
+    "named": [
+      "fetchFileBlob",
+      "openFileInNewTab",
+      "saveFile"
+    ],
+    "hasDefault": true,
+    "originalLines": 135,
+    "realApi": true
+  },
+  "src/shared/api/httpClient.js": {
+    "named": [
+      "API_BASE_URL",
+      "DEFAULT_API_BASE_URL",
+      "DEFAULT_TIMEOUT_MS",
+      "createHttpClient",
+      "isCanceledRequest",
+      "isSessionExpiredError"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "realApiNote": "Axios instance dùng chung: baseURL, Bearer token, xử lý 401."
+  },
+  "src/shared/api/uploadImage.js": {
+    "named": [
+      "uploadAxios",
+      "uploadImage",
+      "uploadImages"
+    ],
+    "hasDefault": true,
+    "originalLines": 374
+  },
+  "src/shared/api/vietnamAddressService.js": {
+    "named": [
+      "composeVietnamAddress",
+      "getDistrictsByProvinceCode",
+      "getFullAddressByCodes",
+      "getProvinces",
+      "getVietnamDistrictsApi",
+      "getVietnamProvincesApi",
+      "getVietnamWardsApi",
+      "getWardsByDistrictCode"
+    ],
+    "hasDefault": true,
+    "originalLines": 125
+  }
+}

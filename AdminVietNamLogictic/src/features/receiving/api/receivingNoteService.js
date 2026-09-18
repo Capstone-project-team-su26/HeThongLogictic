@@ -1,0 +1,202 @@
+/*
+ * Phiếu nhập kho (tiếp nhận) tại kho GỐC — ĐÃ NỐI API THẬT (đợt 3).
+ *
+ * Vòng đời (api-ky-gui-1.md bước 6–8):
+ *
+ *   Sale lập → PENDING_APPROVAL ──(quản lý kho duyệt, approvalStage RECEIVE)──→ ACTIVE (có PDF WRN-)
+ *                               ↘ REJECTED
+ *   ACTIVE → kho kiểm đếm → khớp: APPROVED (tự chốt)
+ *                         → lệch: RECEIVED / PARTIALLY_RECEIVED + requiresReview
+ *                                 ──(approvalStage DISCREPANCY)──→ APPROVED / REJECTED
+ *
+ *   GET  /api/warehouse-receiving-notes?status=&warehouseId=&search=&pageNumber=&pageSize=
+ *        → { message, data: { items, totalCount, pageNumber, pageSize, totalPages } }
+ *   GET  /api/warehouse-receiving-notes/{id}                   → { message, data: Detail }
+ *   GET  /api/warehouse-receiving-notes/by-consignment/{orderId} → Detail TRẦN (404 khi chưa có)
+ *   PUT  /api/warehouse-receiving-notes/{id}/status
+ *        duyệt  { status: "APPROVED", reason? }   (Admin duyệt thay quản lý kho: bắt buộc reason)
+ *        từ chối { status: "REJECTED", rejectionReason }
+ *
+ * Backend chỉ lọc MỘT status. Tab "Cần quyết định" (AWAITING_TAB_KEY) lấy mọi phiếu
+ * rồi lọc awaitingApproval — backend đã xếp phiếu chờ duyệt lên đầu danh sách.
+ */
+
+import httpClient from "@shared/api/httpClient";
+import {
+  getPagedData,
+  getResponseData,
+  removeEmptyParams,
+} from "@shared/api/apiEnvelope";
+import { getAdminApiError } from "@features/admin/api/adminService";
+
+export { getAdminApiError as getReceivingApiError };
+
+const ENDPOINT = "/api/warehouse-receiving-notes";
+
+/* Backend giới hạn pageSize tối đa 200. */
+const MAX_PAGE_SIZE = 200;
+
+/* ====================== Trạng thái ====================== */
+
+export const RECEIVING_STATUS_META = Object.freeze({
+  PENDING_APPROVAL: { label: "Chờ duyệt nhận hàng", tone: "warning" },
+  ACTIVE: { label: "Chờ khách mang hàng tới", tone: "default" },
+  PARTIALLY_RECEIVED: { label: "Nhận một phần", tone: "processing" },
+  RECEIVED: { label: "Đã kiểm đếm", tone: "processing" },
+  APPROVED: { label: "Đã chốt nhận hàng", tone: "success" },
+  REJECTED: { label: "Bị từ chối", tone: "error" },
+});
+
+/** Giai đoạn chờ quyết định của phiếu (`approvalStage`). */
+export const RECEIVING_APPROVAL_STAGE_META = Object.freeze({
+  RECEIVE: { label: "Duyệt nhận hàng", color: "gold" },
+  DISCREPANCY: { label: "Xem chênh lệch", color: "red" },
+});
+
+/** Tab ảo: mọi phiếu đang chờ quyết định (cả RECEIVE lẫn DISCREPANCY). */
+export const AWAITING_TAB_KEY = "AWAITING";
+
+/** Tab của màn duyệt — trừ tab ảo, key là đúng giá trị `status` API nhận. */
+export const RECEIVING_STATUS_TABS = Object.freeze([
+  { key: AWAITING_TAB_KEY, label: "Cần quyết định" },
+  { key: "PENDING_APPROVAL", label: "Chờ duyệt nhận hàng" },
+  { key: "ACTIVE", label: "Chờ khách mang hàng" },
+  { key: "PARTIALLY_RECEIVED", label: "Nhận một phần" },
+  { key: "RECEIVED", label: "Đã kiểm đếm" },
+  { key: "APPROVED", label: "Đã chốt" },
+  { key: "REJECTED", label: "Bị từ chối" },
+  { key: "", label: "Tất cả" },
+]);
+
+export const getReceivingStatusMeta = (status) =>
+  RECEIVING_STATUS_META[String(status || "").toUpperCase()] || {
+    label: status || "—",
+    tone: "default",
+  };
+
+export const getApprovalStageMeta = (stage) =>
+  RECEIVING_APPROVAL_STAGE_META[String(stage || "").toUpperCase()] || null;
+
+/* ====================== Tiện ích ====================== */
+
+const trimText = (value) => String(value ?? "").trim();
+
+const requireId = (value, message) => {
+  const id = trimText(value);
+  if (!id) throw new Error(message);
+  return id;
+};
+
+/* ====================== Đọc ====================== */
+
+/**
+ * Danh sách phiếu → { items, totalCount, pageNumber, pageSize }.
+ *
+ * @param {{ status?: string, warehouseId?: string, search?: string,
+ *   pageNumber?: number, pageSize?: number }} [filters]
+ */
+export async function listReceivingNotes({
+  status = "",
+  warehouseId = "",
+  search = "",
+  pageNumber = 1,
+  pageSize = MAX_PAGE_SIZE,
+} = {}) {
+  const wantsAwaiting = trimText(status).toUpperCase() === AWAITING_TAB_KEY;
+  const size = Math.min(Number(pageSize) || MAX_PAGE_SIZE, MAX_PAGE_SIZE);
+
+  const response = await httpClient.get(ENDPOINT, {
+    params: removeEmptyParams({
+      status: wantsAwaiting ? "" : status,
+      warehouseId,
+      search,
+      pageNumber: wantsAwaiting ? 1 : pageNumber,
+      pageSize: size,
+    }),
+  });
+
+  const page = getPagedData(getResponseData(response), { pageNumber, pageSize: size });
+
+  if (!wantsAwaiting) {
+    return {
+      items: page.items,
+      totalCount: page.totalCount,
+      pageNumber: page.pageNumber,
+      pageSize: page.pageSize,
+    };
+  }
+
+  const items = page.items.filter((row) => row?.awaitingApproval);
+
+  return {
+    items,
+    totalCount: items.length,
+    pageNumber: 1,
+    pageSize: size,
+  };
+}
+
+/** Chi tiết phiếu: expectedItems (thùng gỗ + dịch vụ), items (biên bản đối chiếu), parcels. */
+export async function getReceivingNoteDetail(receivingNoteId) {
+  const id = requireId(receivingNoteId, "Thiếu mã phiếu tiếp nhận.");
+  const response = await httpClient.get(`${ENDPOINT}/${encodeURIComponent(id)}`);
+  return getResponseData(response);
+}
+
+/** Phiếu đang hoạt động của một đơn. 404 khi đơn chưa có phiếu (giữ lỗi để nơi gọi đọc status). */
+export async function getReceivingNoteByOrder(orderId) {
+  const id = requireId(orderId, "Thiếu mã đơn hàng.");
+  const response = await httpClient.get(
+    `${ENDPOINT}/by-consignment/${encodeURIComponent(id)}`,
+  );
+  return getResponseData(response);
+}
+
+/* ====================== Duyệt ====================== */
+
+/**
+ * Duyệt phiếu — dùng cho cả hai giai đoạn (RECEIVE: cho khách mang hàng tới;
+ * DISCREPANCY: chốt biên bản lệch). `reason` bắt buộc khi Admin duyệt thay quản lý kho.
+ *
+ * @param {string} receivingNoteId
+ * @param {string} [reason]
+ */
+export async function approveReceivingNote(receivingNoteId, reason) {
+  const id = requireId(receivingNoteId, "Thiếu mã phiếu tiếp nhận.");
+  const note = trimText(reason);
+
+  const response = await httpClient.put(`${ENDPOINT}/${encodeURIComponent(id)}/status`, {
+    status: "APPROVED",
+    ...(note ? { reason: note } : {}),
+  });
+
+  return getResponseData(response);
+}
+
+/** Từ chối phiếu — bắt buộc lý do (chặn tại chỗ trước khi gọi). */
+export async function rejectReceivingNote(receivingNoteId, rejectionReason) {
+  const id = requireId(receivingNoteId, "Thiếu mã phiếu tiếp nhận.");
+  const reason = trimText(rejectionReason);
+  if (!reason) throw new Error("Từ chối phiếu thì bắt buộc ghi lý do.");
+
+  const response = await httpClient.put(`${ENDPOINT}/${encodeURIComponent(id)}/status`, {
+    status: "REJECTED",
+    rejectionReason: reason,
+  });
+
+  return getResponseData(response);
+}
+
+export default {
+  listReceivingNotes,
+  getReceivingNoteDetail,
+  getReceivingNoteByOrder,
+  approveReceivingNote,
+  rejectReceivingNote,
+  getReceivingStatusMeta,
+  getApprovalStageMeta,
+  RECEIVING_STATUS_META,
+  RECEIVING_APPROVAL_STAGE_META,
+  RECEIVING_STATUS_TABS,
+  AWAITING_TAB_KEY,
+};
