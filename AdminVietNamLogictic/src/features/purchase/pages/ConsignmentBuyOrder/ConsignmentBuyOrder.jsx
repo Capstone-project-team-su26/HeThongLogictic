@@ -27,7 +27,12 @@ import {
   getConsignmentRoutesApi,
   getConsignmentShippingOptionsApi,
   getProductTypesApi,
-} from "@features/consignment/api/consignmentMasterService.mock";
+/*
+ * API THẬT: tuyến và phương thức vận chuyển đọc từ bảng giá đang hiệu lực. Bản mock liệt kê
+ * cả "Tiết kiệm" và "Đường biển" — production không bán hai phương thức đó, chọn vào thì
+ * backend không tìm ra dòng giá để tính cước.
+ */
+} from "@features/consignment/api/consignmentMasterService";
 
 import {
   createDeliveryAddressApi,
@@ -36,6 +41,7 @@ import {
 } from "@features/consignment/api/deliveryAddressService";
 
 import { createPurchaseRequestApi } from "@features/purchase/api/purchaseRequestService";
+import CustomerPickerField from "@features/customer/components/CustomerPickerField/CustomerPickerField";
 
 import {
   getDistrictsByProvinceCode,
@@ -137,6 +143,13 @@ export default function ConsignmentBuyOrder() {
   const itemsRef = useRef([]);
 
   const [form, setForm] = useState(INITIAL_FORM);
+
+  /*
+   * Khách hàng của đơn — KHÁC người nhận. Không có khoá này thì backend không tra được
+   * đơn thuộc về ai và trả 400, nên màn chặn ngay tại chỗ.
+   */
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerError, setCustomerError] = useState("");
 
   const [items, setItems] = useState([createEmptyItem()]);
 
@@ -1032,6 +1045,22 @@ export default function ConsignmentBuyOrder() {
 
     setItemErrors(result.itemErrors);
 
+    /* Chưa chọn khách thì backend chắc chắn từ chối — chặn ngay, báo tại ô. */
+    const missingCustomer = !selectedCustomer?.id;
+
+    setCustomerError(missingCustomer ? "Vui lòng chọn khách hàng cần tạo yêu cầu." : "");
+
+    if (missingCustomer) {
+      AuthNotify.warning(
+        "Chưa chọn khách hàng",
+        "Yêu cầu mua hộ phải thuộc về một khách hàng có trong hệ thống.",
+      );
+
+      scrollToFirstError();
+
+      return false;
+    }
+
     if (!result.isValid) {
       AuthNotify.warning(
         "Thông tin chưa đầy đủ",
@@ -1121,6 +1150,7 @@ export default function ConsignmentBuyOrder() {
       );
 
       const result = await createPurchaseRequestApi({
+        customerId: selectedCustomer?.id || "",
         route: form.route,
         shippingOption: form.shippingOption,
         receiverName: form.receiverName.trim(),
@@ -1199,6 +1229,27 @@ export default function ConsignmentBuyOrder() {
 
           <div className="purchase-buy-left-unified-wrapper-box">
             <div className="purchase-buy-left-inner-section">
+              <label className="purchase-buy-field-label purchase-buy-required-label">
+                KHÁCH HÀNG CỦA ĐƠN
+              </label>
+
+              <CustomerPickerField
+                value={selectedCustomer?.id || ""}
+                customer={selectedCustomer}
+                disabled={isSubmitting}
+                error={customerError}
+                onSelect={(customer) => {
+                  setSelectedCustomer(customer);
+                  setCustomerError("");
+                }}
+              />
+
+              {customerError && (
+                <div className="purchase-buy-field-error-message">{customerError}</div>
+              )}
+            </div>
+
+            <div className="purchase-buy-left-inner-section purchase-buy-border-top-dash">
               <SelectField
                 label="TUYẾN HÀNG"
                 value={form.route}

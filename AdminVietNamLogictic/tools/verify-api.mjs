@@ -121,6 +121,7 @@ try {
     finance: await load("/src/features/admin/api/adminFinanceService.js"),
     warehouseManager: await load("/src/features/warehouse/api/warehouseManagerService.js"),
     receipt: await load("/src/features/consignment/api/consignmentReceiptService.js"),
+    customerLookup: await load("/src/features/customer/api/customerLookupService.js"),
     receiptUrl: await load("/src/shared/utils/receiptUrl.js"),
   };
 } catch (error) {
@@ -492,6 +493,7 @@ if (loadError) {
     warehouseManager,
     receipt,
     receiptUrl,
+    customerLookup,
   } = mods;
 
   const httpClient = httpMod.default;
@@ -1204,6 +1206,369 @@ if (loadError) {
     },
   );
 
+  /* ---------- Sale tạo đơn ký gửi HỘ KHÁCH ---------- */
+
+  const STAFF_CUSTOMER_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+  const STAFF_ITEM = {
+    productName: "Bình gốm",
+    productType: "Đồ gốm",
+    quantity: 2,
+    weight: 2.5,
+    width: 30,
+    height: 20,
+    length: 40,
+    declaredValue: 1500000,
+    referenceUrls: ["https://cdn.example.test/a.jpg"],
+    domesticTrackingCode: "SPX123",
+    packageConfigurationId: null,
+  };
+
+  const STAFF_PAYLOAD = {
+    customerId: STAFF_CUSTOMER_ID,
+    route: "CN_VN",
+    shippingOption: "EXPRESS",
+    receiverName: "Trần Thị B",
+    receiverPhone: "0912345678",
+    receiverAddress: "12 Lê Lợi, Bến Nghé, Quận 1, TP Hồ Chí Minh",
+    defaultDestinationHandling: "DIRECT_DELIVERY",
+    note: "Giao giờ hành chính",
+    items: [STAFF_ITEM],
+  };
+
+  await check(
+    "createConsignmentApi: POST /api/staff/consignments, body ĐÚNG CreateConsignmentByStaffRequest (không thừa khoá)",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/staff/consignments",
+          reply: () =>
+            ok(
+              {
+                message: "Tạo yêu cầu ký gửi thay khách hàng thành công.",
+                data: {
+                  orderId: ORDER_ID,
+                  consignmentCode: "VCL-20260922101500-110022",
+                  customerId: STAFF_CUSTOMER_ID,
+                  status: "APPROVED",
+                  itemCount: 1,
+                },
+              },
+              201,
+            ),
+        },
+      ];
+
+      /* Màn hình còn giữ vài khoá của luồng cũ; chúng KHÔNG được lọt vào body. */
+      const result = await consignment.createConsignmentApi({
+        ...STAFF_PAYLOAD,
+        pricingRuleIds: [INSPECTION_RULE_ID],
+        requiresInspection: true,
+        requiresPacking: true,
+        requiresWoodenCrate: false,
+        requiresInsurance: true,
+      });
+
+      const req = onlyRequest();
+
+      return all(
+        expectEqual("endpoint", [req?.method, req?.url], ["POST", "/api/staff/consignments"]),
+        expectEqual(
+          "đúng bộ khoá của DTO",
+          Object.keys(req?.body ?? {}).sort(),
+          [
+            "customerId",
+            "defaultDestinationHandling",
+            "items",
+            "note",
+            "receiverAddress",
+            "receiverName",
+            "receiverPhone",
+            "route",
+            "shippingOption",
+          ],
+        ),
+        expectEqual("customerId đi đúng chỗ", req?.body?.customerId, STAFF_CUSTOMER_ID),
+        expectEqual(
+          "kiện hàng đúng khoá ConsignmentItemRequest",
+          Object.keys(req?.body?.items?.[0] ?? {}).sort(),
+          [
+            "declaredValue",
+            "domesticTrackingCode",
+            "height",
+            "length",
+            "packageConfigurationId",
+            "productName",
+            "productType",
+            "quantity",
+            "referenceUrls",
+            "weight",
+            "width",
+          ],
+        ),
+        expectEqual("đã bóc { message, data }", result?.consignmentCode, "VCL-20260922101500-110022"),
+        expectEqual("đơn Sale tạo hộ vào thẳng APPROVED", result?.status, "APPROVED"),
+      );
+    },
+  );
+
+  await check(
+    "createConsignmentApi: thiếu cả ba khoá tra khách → chặn tại FE, không gọi mạng",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [];
+
+      const { resolved, error } = await rejection(
+        consignment.createConsignmentApi({
+          ...STAFF_PAYLOAD,
+          customerId: "",
+        }),
+      );
+
+      return all(
+        expectEqual("phải ném lỗi", resolved, false),
+        expectEqual(
+          "đúng câu của CustomerLookupHelper",
+          error?.message,
+          "Vui lòng chọn khách hàng có sẵn hoặc nhập email/số điện thoại để tìm kiếm.",
+        ),
+        expectEqual("không gửi request nào", requests.length, 0),
+      );
+    },
+  );
+
+  await check(
+    "createConsignmentApi: 404 không tra ra khách → câu tiếng Việt của backend",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/staff/consignments",
+          reply: () =>
+            fail(404, {
+              message: `Không tìm thấy khách hàng với ID ${STAFF_CUSTOMER_ID}`,
+            }),
+        },
+      ];
+
+      const { resolved, error } = await rejection(
+        consignment.createConsignmentApi(STAFF_PAYLOAD),
+      );
+
+      return all(
+        expectEqual("phải ném lỗi", resolved, false),
+        expectEqual("status còn nguyên cho chỗ gọi", error?.response?.status, 404),
+        expectEqual(
+          "message hiện lên màn",
+          error?.message,
+          `Không tìm thấy khách hàng với ID ${STAFF_CUSTOMER_ID}`,
+        ),
+      );
+    },
+  );
+
+  await check(
+    "createConsignmentApi: 400 hàng cấm → giữ nguyên câu backend",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/staff/consignments",
+          reply: () =>
+            fail(400, {
+              message:
+                "Không thể tạo ký gửi. Các mặt hàng sau thuộc danh mục cấm: Pin lithium",
+            }),
+        },
+      ];
+
+      const { resolved, error } = await rejection(
+        consignment.createConsignmentApi(STAFF_PAYLOAD),
+      );
+
+      return all(
+        expectEqual("phải ném lỗi", resolved, false),
+        expectEqual(
+          "message",
+          error?.message,
+          "Không thể tạo ký gửi. Các mặt hàng sau thuộc danh mục cấm: Pin lithium",
+        ),
+      );
+    },
+  );
+
+  await check(
+    "validateConsignmentItemsApi: canCreate=false → ném lỗi kèm tên mặt hàng cấm",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/orders/consignments/validate-items",
+          reply: () =>
+            ok({
+              message: "Kiểm tra hàng hóa thành công.",
+              data: {
+                canCreate: false,
+                results: [
+                  {
+                    productName: "Pin lithium",
+                    level: "BANNED",
+                    matchedItem: "Pin",
+                    reason: "Hàng nguy hiểm",
+                  },
+                ],
+              },
+            }),
+        },
+      ];
+
+      const { resolved, error } = await rejection(
+        consignment.validateConsignmentItemsApi([STAFF_ITEM]),
+      );
+
+      const req = onlyRequest();
+
+      return all(
+        expectEqual("endpoint", [req?.method, req?.url], ["POST", "/api/orders/consignments/validate-items"]),
+        expectEqual("body bọc { items }", Object.keys(req?.body ?? {}), ["items"]),
+        expectEqual("phải ném lỗi", resolved, false),
+        expectEqual(
+          "message",
+          error?.message,
+          "Không thể tạo đơn: các mặt hàng sau thuộc danh mục cấm — Pin lithium.",
+        ),
+      );
+    },
+  );
+
+  await check(
+    "validateConsignmentItemsApi: chỉ có hàng hạn chế → vẫn cho tạo, trả warnings",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/orders/consignments/validate-items",
+          reply: () =>
+            ok({
+              message: "Kiểm tra hàng hóa thành công.",
+              data: {
+                canCreate: true,
+                results: [
+                  { productName: "Bình gốm", level: "RESTRICTED", matchedItem: "Gốm sứ" },
+                ],
+              },
+            }),
+        },
+      ];
+
+      const result = await consignment.validateConsignmentItemsApi([STAFF_ITEM]);
+
+      return all(
+        expectEqual("canCreate", result.canCreate, true),
+        expectEqual("giữ cảnh báo", result.warnings?.[0]?.level, "RESTRICTED"),
+      );
+    },
+  );
+
+  await check(
+    "searchCustomersApi: GET /api/customers?search=, bóc { items }, bỏ bản ghi thiếu id",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "GET",
+          url: "/api/customers",
+          reply: () =>
+            ok({
+              items: [
+                {
+                  id: STAFF_CUSTOMER_ID,
+                  customerCode: "KH-0007",
+                  fullName: "Nguyễn Văn A",
+                  email: "a@example.test",
+                  phone: "0900000000",
+                  address: "Hà Nội",
+                  status: "ACTIVE",
+                },
+                { fullName: "Bản ghi hỏng, không có id" },
+              ],
+            }),
+        },
+      ];
+
+      const rows = await customerLookup.searchCustomersApi({ search: " nguyen " });
+      const req = onlyRequest();
+
+      return all(
+        expectEqual("endpoint", [req?.method, req?.url], ["GET", "/api/customers"]),
+        expectEqual("từ khoá đã trim", req?.params, { search: "nguyen" }),
+        expectEqual("bỏ bản ghi thiếu id", rows.length, 1),
+        expectEqual(
+          "đủ ba thông tin cho thẻ ghim",
+          [rows[0].fullName, rows[0].phone, rows[0].email],
+          ["Nguyễn Văn A", "0900000000", "a@example.test"],
+        ),
+        expectEqual("id chính là Customer.Id", rows[0].id, STAFF_CUSTOMER_ID),
+      );
+    },
+  );
+
+  await check(
+    "getCustomerDeliveryAddressesApi: sổ địa chỉ theo KHÁCH, không phải theo tài khoản Sale",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "GET",
+          url: `/api/customers/${STAFF_CUSTOMER_ID}/delivery-addresses`,
+          reply: () =>
+            ok({
+              message: "Lấy sổ địa chỉ của khách hàng thành công.",
+              data: [
+                { id: "aaaaaaaa-1111-4111-8111-111111111111", address: "12 Lê Lợi, Quận 1", isDefault: true },
+              ],
+            }),
+        },
+      ];
+
+      const rows = await customerLookup.getCustomerDeliveryAddressesApi(
+        STAFF_CUSTOMER_ID,
+      );
+
+      return all(
+        expectEqual(
+          "endpoint",
+          onlyRequest()?.url,
+          `/api/customers/${STAFF_CUSTOMER_ID}/delivery-addresses`,
+        ),
+        expectEqual("KHÔNG gọi /api/delivery-addresses", requests.length, 1),
+        expectEqual("đã bóc { message, data }", rows.length, 1),
+        expectEqual("địa chỉ", rows[0].address, "12 Lê Lợi, Quận 1"),
+      );
+    },
+  );
+
+  await check("getCustomerDeliveryAddressesApi: id sai khuôn → chặn trước khi gọi", async () => {
+    resetState({ token: "tok" });
+    routes = [];
+
+    const { resolved, error } = await rejection(
+      customerLookup.getCustomerDeliveryAddressesApi("khong-phai-uuid"),
+    );
+
+    return all(
+      expectEqual("phải ném lỗi", resolved, false),
+      expectEqual("message", error?.message, "Mã khách hàng không đúng định dạng UUID."),
+      expectEqual("không gửi request nào", requests.length, 0),
+    );
+  });
+
   /* ---------- Danh mục ---------- */
 
   await check("warehouses/active: bọc { items }, chỉ giữ kho ORIGIN đang hoạt động", async () => {
@@ -1570,16 +1935,21 @@ const OUT_OF_WAVE_IMPORTS = [
   ["src/features/documents/pages/ConsignmentDocumentsList/ConsignmentDocumentsList.jsx", "consignmentReceiptService"],
   ["src/features/dashboard/pages/SaleDashboard/SaleDashboard.jsx", "consignmentService"],
   ["src/features/dashboard/pages/SaleDashboard/SaleDashboard.jsx", "servicePricingService"],
-  ["src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.jsx", "consignmentService"],
-  ["src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.jsx", "consignmentMasterService"],
+  /*
+   * ConsignmentOrder.jsx ĐÃ RA KHỎI danh sách này với consignmentService và
+   * consignmentMasterService: màn "Sale tạo đơn hộ khách" nay gọi thật
+   * POST /api/staff/consignments. Dịch vụ bổ sung (pricingRuleService) vẫn là mock,
+   * nên dòng dưới đây còn nguyên.
+   */
   ["src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.jsx", "pricingRuleService"],
   ["src/features/consignment/components/PackageOptionalServices/PackageOptionalServices.jsx", "pricingRuleService"],
-  ["src/features/purchase/pages/ConsignmentBuyOrder/ConsignmentBuyOrder.jsx", "consignmentMasterService"],
-  ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.jsx", "pricingRuleService"],
-  ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.jsx", "warehouseService"],
+  /*
+   * ConsignmentBuyOrder.jsx đã RA KHỎI danh sách với consignmentMasterService: tuyến và
+   * phương thức vận chuyển nay đọc từ bảng giá thật (production chỉ có Express/Standard),
+   * mock liệt kê thêm "Tiết kiệm"/"Đường biển" không có dòng giá nên chọn vào là hỏng báo giá.
+   */
   ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.helpers.js", "pricingRuleService"],
   ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.constants.js", "pricingRuleService"],
-  ["src/features/purchase/components/ConfirmPurchaseModal/ConfirmPurchaseModal.jsx", "warehouseService"],
   ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx", "pricingRuleService"],
   ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx", "servicePricingService"],
   ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.helpers.js", "pricingRuleService"],

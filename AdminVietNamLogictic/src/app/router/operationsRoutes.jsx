@@ -16,7 +16,6 @@ import OperationsInboundApprovalsPage from "@features/operations/pages/Operation
 import OperationsReceivingApprovalsPage from "@features/receiving/pages/OperationsReceivingApprovalsPage/OperationsReceivingApprovalsPage";
 import OperationsDeliveryApprovalsPage from "@features/operations/pages/OperationsDeliveryApprovalsPage/OperationsDeliveryApprovalsPage";
 import OperationsInspectionsPage from "@features/operations/pages/OperationsInspectionsPage/OperationsInspectionsPage";
-import OperationsPurchaseStorePage from "@features/operations/pages/OperationsPurchaseStorePage/OperationsPurchaseStorePage";
 import OperationsIncidentsPage from "@features/incident/pages/OperationsIncidentsPage/OperationsIncidentsPage";
 import WarehouseZonesPage from "@features/warehouse/pages/WarehouseZonesPage/WarehouseZonesPage";
 
@@ -36,10 +35,6 @@ export const operationsRoutes = (
       element={<OperationsReceivingApprovalsPage />}
     />
     <Route path={rel(OPERATIONS.parcels)} element={<OperationsParcelsPage />} />
-    <Route
-      path={rel(OPERATIONS.purchaseStore)}
-      element={<OperationsPurchaseStorePage />}
-    />
     <Route
       path={rel(OPERATIONS.inboundApprovals)}
       element={<OperationsInboundApprovalsPage />}

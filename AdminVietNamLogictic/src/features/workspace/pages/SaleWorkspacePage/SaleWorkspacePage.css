@@ -1,0 +1,135 @@
+/*
+ * Thanh tab dính ở đỉnh vùng nội dung. Phần thân KHÔNG có padding: mỗi màn cũ tự mang
+ * khung riêng (ops-page, vcl-container, service-pricings-page...). Thân là flex item co
+ * giãn để màn nào đặt height:100% (ví dụ khung chat CSKH) vẫn nhận đủ chiều cao.
+ */
+.sale-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  min-width: 0;
+  background: #f8fafc;
+}
+
+.sale-workspace__nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(6px);
+}
+
+.sale-workspace__heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sale-workspace__heading strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.2px;
+}
+
+.sale-workspace__heading span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.sale-workspace__tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.sale-workspace__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sale-workspace__tab:hover {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.sale-workspace__tab--active,
+.sale-workspace__tab--active:hover {
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.28);
+}
+
+.sale-workspace__tab-icon {
+  display: inline-flex;
+  font-size: 14px;
+}
+
+.sale-workspace__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.sale-workspace__body > * {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media screen and (max-width: 900px) {
+  .sale-workspace__nav {
+    padding: 10px 16px;
+  }
+
+  .sale-workspace__heading span {
+    display: none;
+  }
+}
+
+/* Số việc đang chờ của tab — cùng bộ đếm với badge trên menu. */
+.sale-workspace__tab-badge {
+  min-width: 20px;
+  padding: 0 6px;
+
+  border-radius: 999px;
+
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.sale-workspace__tab--active .sale-workspace__tab-badge {
+  background: #ffffff;
+  color: #b91c1c;
+}

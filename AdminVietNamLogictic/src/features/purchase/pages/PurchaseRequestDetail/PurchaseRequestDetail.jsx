@@ -63,7 +63,6 @@ import {
 } from "@features/shipment/components/ShipmentJourney/journeySummary";
 
 import CreatePurchaseRequestQuotationModal from "@features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal";
-import ConfirmPurchaseModal from "@features/purchase/components/ConfirmPurchaseModal/ConfirmPurchaseModal";
 
 import {
   CREATE_QUOTATION_STATUSES,
@@ -909,11 +908,6 @@ export default function PurchaseRequestDetail() {
     setQuotationModalOpen,
   ] = useState(false);
 
-  const [
-    confirmPurchaseModalOpen,
-    setConfirmPurchaseModalOpen,
-  ] = useState(false);
-
   const [, setSystemWarehouses] = useState([]);
 
   const loadDetail =
@@ -1325,24 +1319,6 @@ export default function PurchaseRequestDetail() {
   }, [detail?.quotation, detail?.status, items.length]);
 
 
-  const canConfirmPurchase = useMemo(() => {
-    if (!detail) return false;
-    const currentStatus = normalizeUpperText(detail?.status);
-
-    // Nút "Xác nhận mua hộ" chỉ hiển thị ở các bước Sale xử lý:
-    // Đã cọc/thanh toán -> Hàng đang đặt về -> Hàng đã về kho.
-    // Khi sang bước WAITING_STORED (Hàng chờ nhập kho), nút ẩn hoàn toàn (chỉ Manager / Ops mới có quyền duyệt nhập kho).
-    const ALLOWED_PURCHASE_STATUSES = new Set([
-      "PAID",
-      "DEPOSIT_PAID",
-      "PURCHASED",
-      "SELLER_SHIPPED",
-      "ARRIVED_ORIGIN_WAREHOUSE",
-    ]);
-
-    return ALLOWED_PURCHASE_STATUSES.has(currentStatus);
-  }, [detail]);
-
   const handleQuotationCreated =
     useCallback(async () => {
       setQuotationModalOpen(
@@ -1430,28 +1406,6 @@ export default function PurchaseRequestDetail() {
                 className="purchase-create-quotation-button"
               >
                 Tạo báo giá
-              </Button>
-            )}
-
-            {canConfirmPurchase && (
-              <Button
-                type="primary"
-                icon={
-                  <ShoppingOutlined />
-                }
-                onClick={() =>
-                  setConfirmPurchaseModalOpen(
-                    true
-                  )
-                }
-                style={{
-                  background: "linear-gradient(135deg, #16a34a, #15803d)",
-                  borderColor: "#16a34a",
-                  fontWeight: 800,
-                  boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)",
-                }}
-              >
-                Xác nhận mua hộ
               </Button>
             )}
 
@@ -2339,20 +2293,6 @@ export default function PurchaseRequestDetail() {
         }
       />
 
-      <ConfirmPurchaseModal
-        open={confirmPurchaseModalOpen}
-        onClose={() =>
-          setConfirmPurchaseModalOpen(false)
-        }
-        onSuccess={async (data) => {
-          setConfirmPurchaseModalOpen(false);
-          if (data?.status) {
-            setDetail((prev) => (prev ? { ...prev, status: data.status } : prev));
-          }
-          await loadDetail();
-        }}
-        purchaseRequest={detail}
-      />
     </main>
   );
 }

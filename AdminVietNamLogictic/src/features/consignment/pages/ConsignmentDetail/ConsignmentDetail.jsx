@@ -1213,7 +1213,7 @@ export default function ConsignmentDetail({
             type="default"
             icon={<RobotOutlined />}
             onClick={() =>
-              navigate("/sale/customer-service", {
+              navigate("/sale/customers?tab=support", {
                 state: {
                   aiOrderCode:
                     detail?.consignmentCode || "",

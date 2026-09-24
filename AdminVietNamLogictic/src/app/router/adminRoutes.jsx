@@ -34,6 +34,7 @@ import {
 
 /* Duyệt giá ngoại lệ — thao tác riêng của Admin, không phải màn chỉ xem. */
 import AdminPriceApprovalList from "@features/consignment/pages/AdminPriceApprovalList/AdminPriceApprovalList";
+import SupplierOrdersPage from "@features/purchase/pages/SupplierOrdersPage/SupplierOrdersPage";
 
 /* Màn dùng chung với Sale / Operations, chỉ khác cờ readOnly. */
 import PendingConsignmentList from "@features/consignment/pages/PendingConsignmentList/PendingConsignmentList";
@@ -57,6 +58,10 @@ export const adminRoutes = (
     <Route
       path={rel(ADMIN.priceApprovals)}
       element={<AdminPriceApprovalList />}
+    />
+    <Route
+      path={rel(ADMIN.purchaseOrders)}
+      element={<SupplierOrdersPage />}
     />
 
     {/* URL cũ còn nằm trong bookmark của nhân sự — giữ lại chuyển hướng */}

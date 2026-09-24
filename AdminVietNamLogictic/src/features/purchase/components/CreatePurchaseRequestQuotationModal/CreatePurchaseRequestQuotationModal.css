@@ -33,6 +33,17 @@
 
   overflow: hidden;
 
+  /*
+   * Ép cả modal nằm gọn trong màn hình rồi mới chia chỗ cho ba phần (đầu / thân / chân).
+   * Trước đây chỉ phần thân bị giới hạn bằng một con số ước lượng (100vh - 320px), mà riêng
+   * đầu modal đã ~250px + chân ~120px + lề trên 100px = 470px — nội dung vừa dài ra là
+   * tràn khỏi màn hình và cụt mất hàng tổng kết ở chân.
+   */
+  max-height: calc(100vh - 64px);
+
+  display: flex;
+  flex-direction: column;
+
   background: #f8fafc;
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 24px;
@@ -44,6 +55,13 @@
 
 .purchase-quotation-modal .ant-modal-body {
   padding: 0;
+
+  /* Thân modal là phần co giãn duy nhất; đầu và chân giữ nguyên kích thước thật. */
+  flex: 1 1 auto;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
 }
 
 /* =========================================================
@@ -256,9 +274,9 @@
 ========================================================= */
 
 .purchase-quotation-modal__body {
-  max-height:
-    calc(100vh - 320px);
-  min-height: 320px;
+  /* Chiều cao do khung cha chia, không tự đoán bằng phép trừ nữa. */
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 24px 30px;
 
   display: flex;
@@ -579,10 +597,13 @@
    BASE FEES (PHÍ MUA HỘ & VẬN CHUYỂN)
 ========================================================= */
 
+/*
+ * Tự xếp theo bề ngang: 5 ô phí (mua hộ, vận chuyển, ship nội địa, đơn giá cước, cân ước
+ * tính) xếp 2 cột thì thành 3 hàng và đẩy modal cao vống lên. minmax để màn rộng xếp 3 cột.
+ */
 .purchase-quotation-base-fee-grid {
   display: grid;
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 16px;
 }
 
@@ -1418,4 +1439,54 @@
   border-radius: 8px !important;
   background: #f8fafc !important;
   border-color: #cbd5e1 !important;
+}
+/* =====================================================
+   SALE SỬA PHỤ PHÍ CHO TỪNG KHÁCH
+
+   Mỗi thẻ quy tắc có ô sửa tiền + công tắc áp dụng. Mức hệ thống vẫn giữ để đối chiếu,
+   sửa lệch thì hiện ô lý do (đi kèm báo giá) và nút khôi phục.
+===================================================== */
+
+.purchase-quotation-fee-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.purchase-quotation-fee-edit .ant-input-number {
+  width: 100%;
+}
+
+.purchase-quotation-fee-edit__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.purchase-quotation-fee-edit__reset {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1677ff;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.purchase-quotation-fee-edit__locked {
+  display: block;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+  color: #94a3b8;
+  font-size: 11.5px;
 }

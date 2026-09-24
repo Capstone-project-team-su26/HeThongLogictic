@@ -3,10 +3,12 @@
  *
  * Feature này sở hữu toàn bộ luồng đơn mua hộ: sale tạo đơn mua hộ hộ khách
  * (ConsignmentBuyOrder), xem danh sách yêu cầu mua hộ (PurchaseRequestList) rồi mở
- * chi tiết một đơn để lập báo giá và xác nhận tiến độ mua hàng
- * (PurchaseRequestDetail). Kèm theo là bốn component form/modal dùng trong các trang
- * đó và hai module api MOCK: nghiệp vụ yêu cầu mua hộ (purchaseRequestService) và
- * nhóm hàm GHI để xác nhận mua hộ / duyệt nhập kho (confirmPurchaseApi).
+ * chi tiết một đơn để lập báo giá (PurchaseRequestDetail), và quản lý ĐƠN MUA NHÀ
+ * CUNG CẤP của luồng chuẩn (SupplierOrdersPage).
+ *
+ * Hai màn của luồng cũ đã bị XOÁ: popup 5 nấc "Xác nhận mua hộ" (Sale tự bấm tiến độ
+ * không cần chứng cứ) và "Duyệt nhập kho mua hộ" (đánh dấu đã nhập kho trước khi kho
+ * cân đếm). Luồng chuẩn thay bằng đơn mua NCC có người duyệt và phiếu tiếp nhận thật.
  *
  * VÌ SAO có barrel: các feature khác (chat, dashboard, documents, history,
  * operations) và cả router đang trỏ thẳng vào đường dẫn sâu bên trong feature này.
@@ -29,7 +31,6 @@ export { default as ConsignmentBuyOrder } from "./pages/ConsignmentBuyOrder/Cons
    COMPONENTS
 ========================= */
 
-export { default as ConfirmPurchaseModal } from "./components/ConfirmPurchaseModal/ConfirmPurchaseModal";
 export { default as ConsignmentBuyOrderConfirm } from "./components/ConsignmentBuyOrderConfirm/ConsignmentBuyOrderConfirm";
 export { default as CreatePurchaseRequestQuotationModal } from "./components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal";
 
@@ -56,33 +57,10 @@ export {
    API — MOCK
 ========================= */
 
-/**
- * CỐ TÌNH KHÔNG dùng `export *` cho hai module api của feature này.
- *
- * Giao nhau giữa chúng có hai tên, mỗi tên một kiểu rắc rối:
- *
- *   1. confirmPurchaseApi — TRÙNG THẬT SỰ. Cả confirmPurchaseApi.js (dòng 106) và
- *      purchaseRequestService.js (dòng 1484) đều tự khai một hàm cùng tên, và đó là
- *      HAI CÀI ĐẶT KHÁC NHAU: bản trong confirmPurchaseApi.js gửi kèm kho nhận/kho
- *      đích (warehouseId, destinationWarehouseId, warehouseName) và trả về đơn thô;
- *      bản trong purchaseRequestService.js chỉ đổi status/ảnh/ghi chú rồi trả về đơn
- *      đã normalize kèm khoá `message`. Nếu barrel `export *` cả hai module, ESM coi
- *      tên này là nhập nhằng và biến nó thành undefined một cách ÂM THẦM — không lỗi
- *      build, chỉ vỡ lúc người dùng bấm "Xác nhận mua hộ".
- *
- *   2. approveStorePurchaseApi — purchaseRequestService.js chỉ re-export lại đúng hàm
- *      của confirmPurchaseApi.js (dòng 1533), nên về lý thuyết cùng một binding và
- *      không nhập nhằng. Vẫn liệt kê tường minh cho khỏi phụ thuộc vào chi tiết đó.
- *
- * Cách xử lý: tên trần confirmPurchaseApi thuộc về confirmPurchaseApi.js — đó là bản
- * mà ConfirmPurchaseModal đang thực sự gọi. Bản của purchaseRequestService.js ra dưới
- * alias confirmPurchaseProgressApi để không ai lỡ dùng lẫn.
+/*
+ * API — cố tình liệt kê tường minh, không `export *`: hai module api của feature này
+ * từng có tên trùng nhau và ESM sẽ âm thầm biến tên trùng thành undefined.
  */
-export {
-  confirmPurchaseApi,
-  approveStorePurchaseApi,
-} from "./api/confirmPurchaseApi";
-
 export {
   PURCHASE_REQUEST_STATUS,
   PURCHASE_SHIPPING_OPTION,
@@ -91,7 +69,6 @@ export {
   getPurchaseRequestsApi,
   getPurchaseRequestDetailApi,
   createPurchaseRequestQuotationApi,
-  confirmPurchaseApi as confirmPurchaseProgressApi,
 } from "./api/purchaseRequestService";
 
 /* =========================
@@ -103,7 +80,10 @@ export {
  * đặt tên theo module để chỗ nào muốn gọi kiểu
  * purchaseRequestService.getPurchaseRequestsApi() vẫn dùng được.
  *
- * confirmPurchaseApi.js không có mặt ở đây vì default của nó CHÍNH LÀ hàm
- * confirmPurchaseApi đã export ở trên, thêm nữa chỉ tạo hai tên cho một thứ.
  */
 export { default as purchaseRequestService } from "./api/purchaseRequestService";
+
+/* Luồng mua hộ chuẩn (API thật) — màn đơn mua nhà cung cấp và tầng gọi API của nó. */
+export { default as SupplierOrdersPage } from "./pages/SupplierOrdersPage/SupplierOrdersPage";
+export * from "./api/purchaseOrderService";
+export * from "./api/purchaseCatalogService";

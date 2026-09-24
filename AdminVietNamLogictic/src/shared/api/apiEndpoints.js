@@ -9,9 +9,20 @@ export const API_ENDPOINTS = Object.freeze({
     list: "/api/customers",
     detail: (customerId) =>
       `/api/customers/${encodeId(customerId)}`,
+    /*
+     * Sổ địa chỉ nhận hàng CỦA MỘT KHÁCH — nhân viên đọc được
+     * (DeliveryAddressController.GetByCustomerId, role Admin/Sale/WarehouseStaff/
+     * OperationsManager). Khác hẳn /api/delivery-addresses: endpoint kia trả sổ địa
+     * chỉ của CHÍNH tài khoản đang đăng nhập, gọi bằng token Sale thì ra địa chỉ
+     * của nhân viên chứ không phải của khách.
+     */
+    deliveryAddresses: (customerId) =>
+      `/api/customers/${encodeId(customerId)}/delivery-addresses`,
   }),
   consignments: Object.freeze({
     list: "/api/orders/consignments",
+    /* Sale tạo đơn ký gửi HỘ KHÁCH — OrderController.CreateConsignmentByStaff, role Sale. */
+    createByStaff: "/api/staff/consignments",
     routes: "/api/orders/consignments/routes",
     shippingOptions: "/api/orders/consignments/shipping-options",
     validateItems: "/api/orders/consignments/validate-items",
@@ -28,6 +39,8 @@ export const API_ENDPOINTS = Object.freeze({
   }),
   purchaseRequests: Object.freeze({
     list: "/api/purchase-requests",
+    /* Sale tạo yêu cầu thay khách — khác endpoint của khách tự tạo. */
+    staffCreate: "/api/staff/purchase-requests",
     detail: (purchaseRequestId) =>
       `/api/purchase-requests/${encodeId(purchaseRequestId)}`,
     quotation: (purchaseRequestId) =>
@@ -38,6 +51,32 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/purchase-requests/${encodeId(purchaseRequestId)}/approve-store`,
     history: (purchaseRequestId) =>
       `/api/purchase-requests/${encodeId(purchaseRequestId)}/history`,
+
+    /* Đơn mua nhà cung cấp của một yêu cầu (luồng mua hộ chuẩn). */
+    purchaseOrders: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/purchase-orders`,
+  }),
+
+  /**
+   * ĐƠN MUA NHÀ CUNG CẤP — xương sống của luồng mua hộ chuẩn.
+   * Sale lập (DRAFT) → gửi duyệt → Admin duyệt ngân sách → Sale đặt NCC → cập nhật tiến độ.
+   * Đặt NCC xong, backend tự sinh đơn kho `PUR-xxx-n` + phiếu tiếp nhận cho kho nguồn.
+   */
+  purchaseOrders: Object.freeze({
+    list: "/api/purchase-orders",
+    detail: (purchaseOrderId) => `/api/purchase-orders/${encodeId(purchaseOrderId)}`,
+    submit: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/submit`,
+    customerDecision: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/customer-decision`,
+    decide: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/decide`,
+    place: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/place`,
+    progress: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/progress`,
+    cancel: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/cancel`,
   }),
   deliveryAddresses: Object.freeze({
     list: "/api/delivery-addresses",

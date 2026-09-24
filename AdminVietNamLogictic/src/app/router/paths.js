@@ -54,6 +54,9 @@ export const ADMIN = {
   /* Duyệt giá ngoại lệ của báo giá ký gửi (Admin quyết, không phải chỉ xem). */
   priceApprovals: `${ADMIN_BASE}/price-approvals`,
 
+  /* Duyệt ngân sách đơn mua nhà cung cấp (luồng mua hộ chuẩn). */
+  purchaseOrders: `${ADMIN_BASE}/purchase-orders`,
+
   /* Giám sát vận hành (chỉ xem) */
   consignments: `${ADMIN_BASE}/consignments`,
   consignmentDetail: (orderId = ":orderId") => `${ADMIN_BASE}/consignments/${orderId}`,
@@ -88,13 +91,26 @@ export const SALE = {
   consignmentCreateQuotation: (orderId = ":orderId") =>
     `${SALE_BASE}/consignments/${orderId}/create-quotation`,
 
+  /* Một trang tạo đơn, hai tab: ?tab=consignment (mặc định) | buy-orders. */
+  createOrder: `${SALE_BASE}/create-order`,
+
+  /* Việc cần xử lý — 5 chặng nối tiếp nhau trong cùng một trang:
+     ?tab=releases (mặc định) | shipments | settlements | deliveries | incidents. */
+  queue: `${SALE_BASE}/queue`,
+
+  /* Tra cứu khi đang tư vấn: ?tab=pricing (mặc định) | restricted. */
+  lookup: `${SALE_BASE}/lookup`,
+
+  /* Khách hàng: ?tab=list (mặc định) | support (chăm sóc khách hàng). */
+  customers: `${SALE_BASE}/customers`,
+
+  /* ---- Đường dẫn cũ: giữ lại để chuyển hướng cho link trong app và bookmark ---- */
   createBuyOrder: `${SALE_BASE}/create-order/buy-orders`,
   createConsignmentOrder: `${SALE_BASE}/create-order/consignment`,
 
   settlements: `${SALE_BASE}/settlements`,
   releases: `${SALE_BASE}/releases`,
 
-  customers: `${SALE_BASE}/customers`,
   restrictedItems: `${SALE_BASE}/restricted-items`,
   servicePricings: `${SALE_BASE}/service-pricings`,
 
@@ -111,17 +127,20 @@ export const SALE = {
   purchaseRequestDetail: (purchaseRequestId = ":purchaseRequestId") =>
     `${SALE_BASE}/purchase-requests/${purchaseRequestId}`,
 
-  /* Theo dõi lô về VN: hàng đợi + dòng thời gian + ghi mốc hành trình. */
+  /* Cũ: lô về VN và yêu cầu giao hàng, nay là tab của SALE.queue. */
   shipments: `${SALE_BASE}/shipments`,
-  /* Yêu cầu giao hàng: bằng chứng giao, giao lại. */
   deliveries: `${SALE_BASE}/deliveries`,
   /* Theo dõi đơn + giữ hàng thay khách. */
   tracking: `${SALE_BASE}/tracking`,
   trackingDetail: (orderId = ":orderId") => `${SALE_BASE}/tracking/${orderId}`,
-  /* Sự cố hàng hoá (chỉ đọc). */
+  /* Sự cố hàng hoá (chỉ đọc) — tab của SALE.queue. */
   incidents: `${SALE_BASE}/incidents`,
 
+  /* Chăm sóc khách hàng — tab của SALE.customers. */
   customerService: `${SALE_BASE}/customer-service`,
+
+  /* Trỏ thẳng tới một tab trong nhóm, ví dụ SALE.tab(SALE.queue, "settlements"). */
+  tab: (basePath, tabKey) => (tabKey ? `${basePath}?tab=${tabKey}` : basePath),
 };
 
 /* ------------------------------------------------------------------ *
@@ -138,7 +157,6 @@ export const OPERATIONS = {
   shipments: `${OPS_BASE}/shipments`,
   receivingApprovals: `${OPS_BASE}/receiving-approvals`,
   parcels: `${OPS_BASE}/parcels`,
-  purchaseStore: `${OPS_BASE}/purchase-store`,
   inboundApprovals: `${OPS_BASE}/inbound-approvals`,
   deliveryApprovals: `${OPS_BASE}/delivery-approvals`,
   inspections: `${OPS_BASE}/inspections`,

@@ -294,6 +294,18 @@
     "realApi": true,
     "realApiNote": "Đọc báo giá của đơn + Admin duyệt giá ngoại lệ (PUT /api/quotations/{id}/price-approval)."
   },
+  "src/features/customer/api/customerLookupService.js": {
+    "named": [
+      "getCustomerDeliveryAddressesApi",
+      "normalizeLookupCustomer",
+      "requireCustomerId",
+      "searchCustomersApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 147,
+    "realApi": true,
+    "realApiNote": "Tra cứu khách hàng + sổ địa chỉ của khách cho màn Sale tạo đơn hộ (GET /api/customers, GET /api/customers/{id}/delivery-addresses)."
+  },
   "src/features/customer/api/customerService.js": {
     "named": [
       "createCustomerApi",
@@ -547,20 +559,10 @@
     "originalLines": 391,
     "mockCopyOf": "src/features/pricing/api/servicePricingService.js"
   },
-  "src/features/purchase/api/confirmPurchaseApi.js": {
-    "named": [
-      "approveStorePurchaseApi",
-      "confirmPurchaseApi"
-    ],
-    "hasDefault": true,
-    "originalLines": 129
-  },
   "src/features/purchase/api/purchaseRequestService.js": {
     "named": [
       "PURCHASE_REQUEST_STATUS",
       "PURCHASE_SHIPPING_OPTION",
-      "approveStorePurchaseApi",
-      "confirmPurchaseApi",
       "createPurchaseRequestApi",
       "createPurchaseRequestQuotationApi",
       "getPurchaseRequestDetailApi",
@@ -568,7 +570,8 @@
       "normalizeCreatePurchaseRequestPayload"
     ],
     "hasDefault": true,
-    "originalLines": 934
+    "originalLines": 934,
+    "realApi": true
   },
   "src/features/receiving/api/receivingNoteService.js": {
     "named": [
@@ -765,5 +768,18 @@
     ],
     "hasDefault": true,
     "originalLines": 125
+  },
+  "src/features/purchase/api/purchaseRequestService.mock.js": {
+    "named": [
+      "PURCHASE_REQUEST_STATUS",
+      "PURCHASE_SHIPPING_OPTION",
+      "createPurchaseRequestApi",
+      "createPurchaseRequestQuotationApi",
+      "getPurchaseRequestDetailApi",
+      "getPurchaseRequestsApi",
+      "normalizeCreatePurchaseRequestPayload"
+    ],
+    "hasDefault": true,
+    "originalLines": 934
   }
 }

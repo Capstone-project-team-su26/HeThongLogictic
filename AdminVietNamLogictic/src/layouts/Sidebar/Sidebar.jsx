@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import {
@@ -13,10 +14,8 @@ import {
   AlertOutlined,
   AppstoreOutlined,
   CalculatorOutlined,
-  CustomerServiceOutlined,
   DashboardOutlined,
   DatabaseOutlined,
-  DollarOutlined,
   DownOutlined,
   ExportOutlined,
   CheckSquareOutlined,
@@ -25,11 +24,12 @@ import {
   InboxOutlined,
   LogoutOutlined,
   MonitorOutlined,
-  CarOutlined,
   SendOutlined,
   FileSearchOutlined as InspectionOutlined,
   PlusCircleOutlined,
   RightOutlined,
+  SearchOutlined,
+  CloseCircleFilled,
   SafetyCertificateOutlined,
   SettingOutlined,
   ShoppingCartOutlined,
@@ -39,8 +39,16 @@ import {
 } from "@ant-design/icons";
 
 import logoVietnamLogistics from "@assets/anhlogocap2.jpeg";
+import {
+  SALE_BADGE_KEYS,
+  SALE_QUEUE_BADGE_KEYS,
+  sumSaleBadges,
+} from "@features/workspace/api/saleBadgeService";
+import { useSaleBadges } from "@features/workspace/context/saleBadgeStore";
 import UserProfileModal from "@shared/components/UserProfileModal/UserProfileModal";
 import { clearAuthSession } from "@shared/utils/authSession";
+
+import { filterMenus, normalizeSearchText } from "./Sidebar.helpers";
 
 import "./Sidebar.css";
 
@@ -96,6 +104,12 @@ const MENU_BY_ROLE = {
       label: "Duyệt giá ngoại lệ",
       icon: <SafetyCertificateOutlined />,
       path: "/admin/price-approvals",
+    },
+    {
+      key: "admin-purchase-orders",
+      label: "Duyệt đơn mua NCC",
+      icon: <ShoppingCartOutlined />,
+      path: "/admin/purchase-orders",
     },
     {
       key: "admin-oversight",
@@ -340,14 +354,14 @@ const MENU_BY_ROLE = {
       icon: <InspectionOutlined />,
       path: "/operations-manager/inspections",
     },
-    {
-      key: "operations-purchase-store",
-      label: "Duyệt nhập kho mua hộ",
-      icon: <ShoppingCartOutlined />,
-      path: "/operations-manager/purchase-store",
-    },
   ],
 
+  /*
+   * Sale chỉ còn 8 mục phẳng: mỗi mục là MỘT nhóm việc, các màn cùng mục đích nằm
+   * trong nhóm đó dưới dạng tab (xem features/workspace/constants/saleWorkspaces.jsx).
+   * Thứ tự đi đúng mạch sổ tay vận hành: tạo đơn -> theo loại đơn -> việc cần xử lý ->
+   * theo dõi -> khách hàng -> tra cứu.
+   */
   sale: [
     {
       key: "sale-dashboard",
@@ -356,84 +370,32 @@ const MENU_BY_ROLE = {
       path: "/sale",
       end: true,
     },
-
-    /*
-     * Giữ nguyên tên và icon người dùng đã đặt.
-     * Chỉ sửa key và đường dẫn cho đúng chức năng.
-     */
     {
-      key: "sale-list-and-fees",
-      label: "Danh sách và phí ",
+      key: "sale-create-order",
+      label: "Tạo đơn hộ khách",
       icon: <PlusCircleOutlined />,
-      children: [
-        {
-          key: "sale-restricted-items",
-          label: "Hàng cấm ",
-          icon: <ShoppingOutlined />,
-          path: "/sale/restricted-items",
-          end: true,
-        },
-        {
-          key: "sale-service-pricings",
-          label: "Phí dịch vụ",
-          icon: <InboxOutlined />,
-          path: "/sale/service-pricings",
-          end: true,
-        },
-      ],
-    },
-
-    {
-      key: "sale-create-request",
-      label: "Tạo yêu cầu",
-      icon: <PlusCircleOutlined />,
-      children: [
-        {
-          key: "sale-create-purchase",
-          label: "Mua hộ",
-          icon: <ShoppingOutlined />,
-          path: "/sale/create-order/buy-orders",
-          end: true,
-        },
-        {
-          key: "sale-create-consignment",
-          label: "Ký gửi",
-          icon: <InboxOutlined />,
-          path: "/sale/create-order/consignment",
-          end: true,
-        },
-      ],
-    },
-
-    {
-      key: "sale-customers",
-      label: "Quản lý khách hàng",
-      icon: <TeamOutlined />,
-      path: "/sale/customers",
+      path: "/sale/create-order",
     },
     {
       key: "sale-consignments",
-      label: "Quản lý ký gửi",
+      badgeKey: SALE_BADGE_KEYS.consignments,
+      label: "Đơn ký gửi",
       icon: <FileSearchOutlined />,
       path: "/sale/consignments",
     },
     {
       key: "sale-purchase-requests",
-      label: "Quản lý mua hộ",
+      badgeKey: SALE_BADGE_KEYS.purchases,
+      label: "Đơn mua hộ",
       icon: <ShoppingCartOutlined />,
       path: "/sale/purchase-requests",
     },
     {
-      key: "sale-releases",
-      label: "Đơn hàng cần xử lý",
+      key: "sale-queue",
+      badgeKeys: SALE_QUEUE_BADGE_KEYS,
+      label: "Việc cần xử lý",
       icon: <ExportOutlined />,
-      path: "/sale/releases",
-    },
-    {
-      key: "sale-shipments",
-      label: "Theo dõi lô về VN",
-      icon: <SendOutlined />,
-      path: "/sale/shipments",
+      path: "/sale/queue",
     },
     {
       key: "sale-tracking",
@@ -442,78 +404,16 @@ const MENU_BY_ROLE = {
       path: "/sale/tracking",
     },
     {
-      key: "sale-settlements",
-      label: "Hàng chờ tất toán",
-      icon: <DollarOutlined />,
-      path: "/sale/settlements",
+      key: "sale-customers",
+      label: "Khách hàng",
+      icon: <TeamOutlined />,
+      path: "/sale/customers",
     },
     {
-      key: "sale-deliveries",
-      label: "Yêu cầu giao hàng",
-      icon: <CarOutlined />,
-      path: "/sale/deliveries",
-    },
-    {
-      key: "sale-incidents",
-      label: "Sự cố hàng hoá",
-      icon: <AlertOutlined />,
-      path: "/sale/incidents",
-    },
-    // {
-    //   key: "sale-quotations",
-    //   label: "Quản lý báo giá",
-    //   icon: <CalculatorOutlined />,
-    //   path: "/sale/quotations",
-    // },
-
-    {
-      key: "sale-transaction-history",
-      label: "Lịch sử giao dịch ",
-      icon: <PlusCircleOutlined />,
-      children: [
-        {
-          key: "sale-history-purchase",
-          label: "Mua hộ",
-          icon: <ShoppingOutlined />,
-          path: "/sale/history/purchase-requests",
-          end: true,
-        },
-        {
-          key: "sale-history-consignment",
-          label: "Ký gửi",
-          icon: <InboxOutlined />,
-          path: "/sale/history/order",
-          end: true,
-        },
-      ],
-    },
-
-    {
-      key: "sale-documents",
-      label: "Quản lý giấy tờ",
-      icon: <FileTextOutlined />,
-      children: [
-        {
-          key: "sale-documents-purchase",
-          label: "Giấy tờ mua hộ",
-          icon: <ShoppingOutlined />,
-          path: "/sale/documents/purchase-requests",
-          end: true,
-        },
-        {
-          key: "sale-documents-consignment",
-          label: "Giấy tờ ký gửi",
-          icon: <InboxOutlined />,
-          path: "/sale/documents/consignments",
-          end: true,
-        },
-      ],
-    },
-    {
-      key: "sale-customer-service",
-      label: "Chăm sóc khách hàng",
-      icon: <CustomerServiceOutlined />,
-      path: "/sale/customer-service",
+      key: "sale-lookup",
+      label: "Tra cứu phí, hàng cấm",
+      icon: <CalculatorOutlined />,
+      path: "/sale/lookup",
     },
   ],
 };
@@ -637,12 +537,44 @@ const getAvatarText = (fullName) => {
 };
 
 /* =====================================================
+   BADGE
+===================================================== */
+
+/**
+ * Số việc đang chờ ở mục menu. Mục gom nhiều tab khai `badgeKeys` (cộng lại), mục một
+ * màn khai `badgeKey`. Không có việc nào thì không vẽ gì — tránh hàng loạt số 0.
+ */
+const renderBadge = (item, badges) => {
+  const count = item.badgeKeys
+    ? sumSaleBadges(badges, item.badgeKeys)
+    : Number(badges?.[item.badgeKey]) || 0;
+
+  if (!count) {
+    return null;
+  }
+
+  return (
+    <span
+      className="vcl-menu-item__badge"
+      title={`${count} việc đang chờ`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+};
+
+/* =====================================================
    COMPONENT
 ===================================================== */
 
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  /* Số việc đang chờ; rỗng với Admin / Operations Manager. */
+  const { badges } = useSaleBadges();
+
+  const [menuQuery, setMenuQuery] = useState("");
 
   const [profileOpen, setProfileOpen] =
     useState(false);
@@ -671,29 +603,6 @@ export default function Sidebar() {
         pathname.startsWith(
           "/admin/cash-flow"
         ),
-
-      "sale-list-and-fees":
-        pathname.startsWith(
-          "/sale/restricted-items"
-        ) ||
-        pathname.startsWith(
-          "/sale/service-pricings"
-        ),
-
-      "sale-create-request":
-        pathname.startsWith(
-          "/sale/create-order/"
-        ),
-
-      "sale-transaction-history":
-        pathname.startsWith(
-          "/sale/history/"
-        ),
-
-      "sale-documents":
-        pathname.startsWith(
-          "/sale/documents/"
-        ),
     };
   });
 
@@ -713,6 +622,15 @@ export default function Sidebar() {
 
   const menus =
     MENU_BY_ROLE[currentRole] || MENU_BY_ROLE.admin;
+
+  const normalizedQuery = normalizeSearchText(menuQuery);
+
+  const isSearching = normalizedQuery.length > 0;
+
+  const visibleMenus = useMemo(
+    () => filterMenus(menus, normalizedQuery),
+    [menus, normalizedQuery],
+  );
 
   const roleInfo =
     ROLE_INFO[currentRole] ||
@@ -777,10 +695,6 @@ export default function Sidebar() {
          */
         return {
           "admin-oversight": false,
-          "sale-list-and-fees": false,
-          "sale-create-request": false,
-          "sale-transaction-history": false,
-          "sale-documents": false,
           [groupKey]: true,
         };
       }
@@ -860,11 +774,41 @@ export default function Sidebar() {
             </span>
           </div>
 
+          <div className="vcl-sidebar__search">
+            <SearchOutlined className="vcl-sidebar__search-icon" />
+
+            <input
+              type="search"
+              value={menuQuery}
+              placeholder="Tìm nhanh trong menu..."
+              aria-label="Tìm nhanh mục trong menu"
+              className="vcl-sidebar__search-input"
+              onChange={(event) => setMenuQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setMenuQuery("");
+                }
+              }}
+            />
+
+            {menuQuery && (
+              <button
+                type="button"
+                title="Xoá từ khoá"
+                aria-label="Xoá từ khoá"
+                className="vcl-sidebar__search-clear"
+                onClick={() => setMenuQuery("")}
+              >
+                <CloseCircleFilled />
+              </button>
+            )}
+          </div>
+
           <nav
             className="vcl-sidebar__menu"
             aria-label="Điều hướng chính"
           >
-            {menus.map(
+            {visibleMenus.map(
               (item, index) => {
                 const hasChildren =
                   Array.isArray(
@@ -879,7 +823,9 @@ export default function Sidebar() {
                       item.children
                     );
 
+                  /* Đang tìm thì mở sẵn mọi nhóm còn lại — kết quả phải thấy ngay. */
                   const isGroupOpen =
+                    isSearching ||
                     Boolean(
                       openMenuGroups[
                       item.key
@@ -1023,10 +969,18 @@ export default function Sidebar() {
                       {item.label}
                     </span>
 
+                    {renderBadge(item, badges)}
+
                     <RightOutlined className="vcl-menu-item__arrow" />
                   </NavLink>
                 );
               }
+            )}
+
+            {isSearching && visibleMenus.length === 0 && (
+              <p className="vcl-sidebar__empty">
+                Không có mục nào khớp &ldquo;{menuQuery.trim()}&rdquo;.
+              </p>
             )}
           </nav>
         </section>

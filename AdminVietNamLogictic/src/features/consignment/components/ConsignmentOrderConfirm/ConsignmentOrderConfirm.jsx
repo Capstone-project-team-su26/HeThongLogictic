@@ -1129,6 +1129,19 @@ export default function ConsignmentOrderConfirm({
       form?.receiverAddress,
     );
 
+  /*
+   * Chủ đơn — Sale đang tạo hộ ai. Hiện ngay cạnh người nhận vì đây là hai người
+   * KHÁC nhau (khách A gửi hàng cho người nhận B) và là thứ dễ nhầm nhất ở màn này.
+   */
+  const customerSummary = [
+    form?.customer?.fullName,
+    form?.customer?.phone,
+    form?.customer?.email,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
   const inspectionRequested =
     Boolean(form?.inspectPackage) ||
     Boolean(
@@ -1247,6 +1260,20 @@ export default function ConsignmentOrderConfirm({
           </div>
 
           <div className="consignment-confirm-summary-grid">
+            <SummaryItem
+              label="Khách hàng của đơn"
+              value={
+                customerSummary ||
+                "Chưa chọn khách hàng"
+              }
+              tone={
+                customerSummary
+                  ? "success"
+                  : "neutral"
+              }
+              fullWidth
+            />
+
             <SummaryItem
               label="Tuyến hàng"
               value={routeLabel}

@@ -20,7 +20,6 @@ export { default as OperationsParcelsPage } from "./pages/OperationsParcelsPage/
 export { default as OperationsInboundApprovalsPage } from "./pages/OperationsInboundApprovalsPage/OperationsInboundApprovalsPage";
 export { default as OperationsDeliveryApprovalsPage } from "./pages/OperationsDeliveryApprovalsPage/OperationsDeliveryApprovalsPage";
 export { default as OperationsInspectionsPage } from "./pages/OperationsInspectionsPage/OperationsInspectionsPage";
-export { default as OperationsPurchaseStorePage } from "./pages/OperationsPurchaseStorePage/OperationsPurchaseStorePage";
 
 /* API — đều đã nối backend thật. */
 export * from "./api/warehouseReleaseService";

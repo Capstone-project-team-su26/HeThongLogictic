@@ -522,7 +522,7 @@ export default function SaleDashboard() {
                 type="primary"
                 size="large"
                 icon={<ShoppingOutlined />}
-                onClick={() => navigate("/sale/create-order/buy-orders")}
+                onClick={() => navigate("/sale/create-order?tab=buy-orders")}
                 className="hero-btn primary-glow"
               >
                 Tạo Đơn Mua Hộ Mới
@@ -531,7 +531,7 @@ export default function SaleDashboard() {
               <Button
                 size="large"
                 icon={<InboxOutlined />}
-                onClick={() => navigate("/sale/create-order/consignment")}
+                onClick={() => navigate("/sale/create-order")}
                 className="hero-btn secondary-btn"
               >
                 Tạo Đơn Ký Gửi Mới
@@ -540,7 +540,7 @@ export default function SaleDashboard() {
               <Button
                 size="large"
                 icon={<CalculatorOutlined />}
-                onClick={() => navigate("/sale/service-pricings")}
+                onClick={() => navigate("/sale/lookup")}
                 className="hero-btn outline-btn"
               >
                 Tra Cứu Bảng Giá & Tỷ Giá
@@ -862,7 +862,7 @@ export default function SaleDashboard() {
 
                 <div
                   className="shortcut-item"
-                  onClick={() => navigate("/sale/restricted-items")}
+                  onClick={() => navigate("/sale/lookup?tab=restricted")}
                 >
                   <SafetyCertificateOutlined className="sc-icon ban-sc" />
                   <div>
@@ -873,7 +873,7 @@ export default function SaleDashboard() {
 
                 <div
                   className="shortcut-item"
-                  onClick={() => navigate("/sale/service-pricings")}
+                  onClick={() => navigate("/sale/lookup")}
                 >
                   <DollarOutlined className="sc-icon fee-sc" />
                   <div>

@@ -17,6 +17,12 @@
  * trước khi thêm một "export *" nữa, vì tên trùng giữa hai "export *" sẽ bị
  * ESM biến thành undefined mà không báo lỗi — `npm run verify:barrels` nạp
  * thật từng barrel và bắt đúng loại lỗi âm thầm đó.
+ *
+ * ĐÃ CÓ module api thứ hai: api/customerLookupService.js (bản THẬT — tra khách và
+ * đọc sổ địa chỉ của khách cho màn Sale tạo đơn hộ). CỐ TÌNH KHÔNG re-export ở đây:
+ * nó có `requireCustomerId` trùng tên với một hàm nội bộ của customerService, nên
+ * thêm một `export *` nữa là đúng cái bẫy mô tả ở đoạn trên. Nơi dùng import thẳng
+ * "@features/customer/api/customerLookupService".
  */
 
 export { default as CustomerList } from "./pages/CustomerList/CustomerList";

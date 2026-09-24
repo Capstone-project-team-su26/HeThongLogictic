@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 import Header from "@layouts/Header/Header";
 import Sidebar from "@layouts/Sidebar/Sidebar";
+import SaleBadgeProvider from "@features/workspace/context/SaleBadgeProvider";
 
 import "./MainLayout.css";
 
@@ -12,19 +13,22 @@ export default function MainLayout() {
   const isSale = normalizedRole === "sale";
 
   return (
-    <div className={`app-layout${isSale ? " app-layout--without-header" : ""}`}>
-      {/* FIXED HEADER */}
-      {!isSale && <Header />}
+    /* Bọc cả sidebar lẫn nội dung: số việc chờ đếm MỘT lần, menu và thanh tab cùng đọc. */
+    <SaleBadgeProvider enabled={isSale}>
+      <div className={`app-layout${isSale ? " app-layout--without-header" : ""}`}>
+        {/* FIXED HEADER */}
+        {!isSale && <Header />}
 
-      <div className="app-layout__body">
-        {/* FIXED SIDEBAR */}
-        <Sidebar />
+        <div className="app-layout__body">
+          {/* FIXED SIDEBAR */}
+          <Sidebar />
 
-        {/* SCROLL CONTENT */}
-        <main className="app-layout__content">
-          <Outlet />
-        </main>
+          {/* SCROLL CONTENT */}
+          <main className="app-layout__content">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </SaleBadgeProvider>
   );
 }

@@ -25,11 +25,15 @@
  *    (hoặc salesNote) và báo giá chuyển `PENDING_PRICE_APPROVAL` chờ Admin duyệt
  *    — khách CHƯA thấy bản đó.
  *
- * NGOÀI PHẠM VI ĐỢT NÀY: createConsignmentApi / validateConsignmentItemsApi /
- * estimateQuotationApi / approveConsignmentApi. Màn "Sale tạo đơn hộ khách" vẫn
- * chạy dữ liệu mẫu qua ./consignmentService.mock.js, nên bốn hàm này ở bản THẬT
- * ném lỗi có nội dung rõ ràng thay vì im lặng gọi sai endpoint. Tên export và thứ
- * tự tham số giữ nguyên để hợp đồng api-contract.json không vỡ.
+ * ĐỢT SAU (màn "Sale tạo đơn hộ khách"), đã nối trong file này:
+ *   POST /api/staff/consignments                  → createConsignmentApi
+ *   POST /api/orders/consignments/validate-items  → validateConsignmentItemsApi
+ * Đơn Sale tạo hộ vào thẳng APPROVED, khác luồng khách tự tạo (PENDING_REVIEW).
+ *
+ * VẪN NGOÀI PHẠM VI: estimateQuotationApi / approveConsignmentApi — backend đã bỏ
+ * hai bước này, nên bản THẬT ném lỗi có nội dung rõ ràng thay vì im lặng gọi sai
+ * endpoint. Tên export và thứ tự tham số giữ nguyên để hợp đồng api-contract.json
+ * không vỡ.
  *
  * Mọi hàm chuẩn hoá thuần (normalize* / calculate* / convert*) giữ nguyên từng
  * dòng: chúng là nơi duy nhất chặn dữ liệu sai trước khi gửi đi.
@@ -224,6 +228,15 @@ export const normalizeCreateConsignmentPayload = (payload = {}) => {
   }
 
   return {
+    /*
+     * Khách được tạo đơn hộ. Chỉ có ý nghĩa với luồng Sale (POST /api/staff/consignments);
+     * luồng khách tự tạo không gửi khoá này và giá trị null bị buildStaffConsignmentBody
+     * loại khỏi body, nên phần payload cũ không đổi một byte.
+     */
+    customerId: normalizeUuid(payload?.customerId, "customerId"),
+    customerPhone: normalizeText(payload?.customerPhone) || null,
+    customerEmail: normalizeText(payload?.customerEmail) || null,
+
     route,
     shippingOption,
     receiverName: normalizeText(payload?.receiverName) || null,
@@ -1165,12 +1178,13 @@ export const sendQuotationApi =
 
 
 /* =========================
-   NGOÀI PHẠM VI ĐỢT NÀY
+   SALE TẠO ĐƠN HỘ KHÁCH
 
-   Bốn hàm dưới đây thuộc màn "Sale tạo đơn hộ khách" và bước báo giá tạm tính —
-   chưa nằm trong đợt nối API này. Màn đó đang trỏ vào ./consignmentService.mock.js
-   nên không hàm nào ở đây bị gọi lúc chạy; giữ export để hợp đồng API không vỡ,
-   và ném lỗi rõ ràng để lần sau không ai vô tình dùng nhầm.
+   POST /api/staff/consignments — OrderController.CreateConsignmentByStaff,
+   [Authorize(Roles = "Sale")], body = CreateConsignmentByStaffRequest.
+
+   Đơn Sale tạo hộ vào thẳng APPROVED (khách tự tạo là PENDING_REVIEW) —
+   OrderService.Create.cs: `const string initialStatus = "APPROVED";`.
 ========================= */
 
 const outOfScope = (name, hint) => {
@@ -1183,23 +1197,196 @@ const outOfScope = (name, hint) => {
   return error;
 };
 
-export const createConsignmentApi = async (payload = {}) => {
-  /* Vẫn chuẩn hoá trước để lỗi dữ liệu lộ ra ngay, đúng thứ tự của bản cũ. */
-  normalizeCreateConsignmentPayload(payload);
+/**
+ * Cắt payload đã chuẩn hoá xuống ĐÚNG các field CreateConsignmentByStaffRequest khai báo.
+ *
+ * KHÔNG GỬI (DTO không có, gửi lên chỉ bị bỏ qua nhưng làm người đọc tưởng đã tới nơi):
+ * pricingRuleIds, requiresInspection, requiresPacking, requiresWoodenCrate,
+ * requiresInsurance. Dịch vụ theo kiện của backend nằm ở `items[].services[].pricingRuleId`
+ * (ConsignmentItemRequest.Services) chứ không phải cấp đơn — xem ghi chú ở createConsignmentApi.
+ *
+ * Ba khoá tra khách là "hoặc": có customerId thì thôi phone/email, để backend khỏi
+ * phải đoán thứ tự ưu tiên (CustomerLookupHelper.ResolveForStaff xét id → phone → email).
+ */
+const buildStaffConsignmentBody = (requestBody) => {
+  const customerLookup = requestBody.customerId
+    ? { customerId: requestBody.customerId }
+    : dropEmptyParams({
+        customerPhone: requestBody.customerPhone,
+        customerEmail: requestBody.customerEmail,
+      });
 
-  throw outOfScope(
-    "createConsignmentApi",
-    "Sale tạo đơn hộ khách dùng POST /api/staff/consignments — sẽ nối ở đợt sau."
-  );
+  if (!Object.keys(customerLookup).length) {
+    /* Cùng câu chữ với CustomerLookupHelper.cs để Sale đọc ở đâu cũng một nghĩa. */
+    throw new Error(
+      "Vui lòng chọn khách hàng có sẵn hoặc nhập email/số điện thoại để tìm kiếm."
+    );
+  }
+
+  return {
+    ...customerLookup,
+
+    route: requestBody.route,
+    shippingOption: requestBody.shippingOption,
+
+    receiverName: requestBody.receiverName,
+    receiverPhone: requestBody.receiverPhone,
+    receiverAddress: requestBody.receiverAddress,
+
+    defaultDestinationHandling: requestBody.defaultDestinationHandling,
+    note: requestBody.note,
+
+    items: requestBody.items,
+  };
 };
 
-export const validateConsignmentItemsApi = async (items = []) => {
-  void items;
+/**
+ * Lỗi backend → một câu tiếng Việt hiện thẳng lên màn.
+ *
+ * 400 ArgumentException: hàng cấm, tuyến/phương án không khớp bảng giá, quá giới hạn
+ * cân nặng/giá trị, cấu hình thùng không tồn tại — message đã là tiếng Việt, giữ nguyên.
+ * 404 NotFoundException: không tra ra khách theo id/SĐT/email.
+ */
+const describeCreateConsignmentError = (error) => {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
 
-  throw outOfScope(
-    "validateConsignmentItemsApi",
-    "Kiểm hàng cấm dùng POST /api/orders/consignments/validate-items — sẽ nối ở đợt sau."
+  const serverMessage =
+    (typeof data === "string" && data.trim()) ||
+    data?.message ||
+    data?.title ||
+    "";
+
+  /* Lỗi [Required] của ASP.NET gom theo tên field trong `errors`. */
+  const validationMessage = data?.errors
+    ? Object.values(data.errors)
+        .flatMap((value) => (Array.isArray(value) ? value : [String(value)]))
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+        .join(" ")
+    : "";
+
+  if (status === 404) {
+    return (
+      serverMessage ||
+      "Không tìm thấy khách hàng này trong hệ thống. Vui lòng chọn lại khách hàng."
+    );
+  }
+
+  if (status === 400) {
+    return (
+      serverMessage ||
+      validationMessage ||
+      "Dữ liệu đơn ký gửi không hợp lệ. Vui lòng kiểm tra lại thông tin đã nhập."
+    );
+  }
+
+  if (status === 401 || status === 403) {
+    return (
+      serverMessage ||
+      "Tài khoản hiện tại không có quyền tạo đơn ký gửi hộ khách (cần vai trò Sale)."
+    );
+  }
+
+  return serverMessage || validationMessage || "";
+};
+
+/** Gắn câu tiếng Việt vào error rồi ném lại, giữ nguyên error.response cho chỗ gọi. */
+const throwWithVietnameseMessage = (error, fallbackMessage) => {
+  if (!error?.response) throw error;
+
+  const message = describeCreateConsignmentError(error) || fallbackMessage;
+
+  const wrapped = new Error(message, { cause: error });
+  wrapped.response = error.response;
+  wrapped.status = error.response.status;
+  wrapped.isAxiosError = error.isAxiosError;
+
+  throw wrapped;
+};
+
+export const createConsignmentApi = async (payload = {}) => {
+  /* Vẫn chuẩn hoá trước để lỗi dữ liệu lộ ra ngay, đúng thứ tự của bản cũ. */
+  const requestBody = normalizeCreateConsignmentPayload(payload);
+
+  try {
+    const response = await httpClient.post(
+      API_ENDPOINTS.consignments.createByStaff,
+      buildStaffConsignmentBody(requestBody),
+      { signal: payload?.signal }
+    );
+
+    /* { message, data: CreateConsignmentResponse } → chỉ trả phần data. */
+    return getResponseData(response);
+  } catch (error) {
+    throwWithVietnameseMessage(
+      error,
+      "Không thể tạo đơn ký gửi. Vui lòng thử lại."
+    );
+  }
+};
+
+/**
+ * POST /api/orders/consignments/validate-items → { message, data: { canCreate, results } }.
+ *
+ * Backend chỉ TRẢ VỀ kết quả chứ không ném lỗi khi có hàng cấm, nên chặn ở đây:
+ * canCreate = false thì ném luôn, để màn hình không đi tiếp tới bước tạo đơn rồi mới
+ * ăn 400 "Không thể tạo ký gửi. Các mặt hàng sau thuộc danh mục cấm: ...".
+ */
+export const validateConsignmentItemsApi = async (items = []) => {
+  const normalizedItems = Array.isArray(items)
+    ? items.map(normalizeConsignmentItem)
+    : [];
+
+  if (!normalizedItems.length) {
+    throw new Error("Vui lòng thêm ít nhất một kiện hàng để kiểm tra.");
+  }
+
+  let data;
+
+  try {
+    const response = await httpClient.post(
+      API_ENDPOINTS.consignments.validateItems,
+      { items: normalizedItems }
+    );
+
+    data = getResponseData(response) ?? {};
+  } catch (error) {
+    throwWithVietnameseMessage(
+      error,
+      "Không kiểm tra được danh mục hàng cấm. Vui lòng thử lại."
+    );
+  }
+
+  const results = Array.isArray(data?.results) ? data.results : [];
+
+  const bannedNames = Array.from(
+    new Set(
+      results
+        .filter((result) => normalizeText(result?.level).toUpperCase() === "BANNED")
+        .map((result) => normalizeText(result?.productName))
+        .filter(Boolean)
+    )
   );
+
+  /* canCreate mới là nguồn sự thật; danh sách tên chỉ để câu báo lỗi gọi đúng kiện. */
+  if (data?.canCreate === false || bannedNames.length) {
+    throw new Error(
+      bannedNames.length
+        ? `Không thể tạo đơn: các mặt hàng sau thuộc danh mục cấm — ${bannedNames.join(", ")}.`
+        : "Không thể tạo đơn: danh sách hàng hoá có mặt hàng thuộc danh mục cấm."
+    );
+  }
+
+  return {
+    canCreate: data?.canCreate !== false,
+    results,
+
+    /* Hàng hạn chế / cảnh báo: vẫn tạo được đơn, giữ lại để chỗ gọi muốn nhắc thì có sẵn. */
+    warnings: results.filter(
+      (result) => normalizeText(result?.level).toUpperCase() !== "BANNED"
+    ),
+  };
 };
 
 export const estimateQuotationApi = async (orderId, requestPayload) => {

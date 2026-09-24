@@ -12,6 +12,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Switch,
   Tag,
   Tooltip,
 } from "antd";
@@ -117,6 +118,21 @@ export default function CreatePurchaseRequestQuotationModal({
   const [itemPrices, setItemPrices] = useState({});
   const [purchaseFee, setPurchaseFee] = useState(0);
   const [shippingFee, setShippingFee] = useState(0);
+
+  /*
+   * Ba ô của luồng chuẩn. Ship nội địa nằm ở phần TRẢ TRƯỚC (khách trả ngay); đơn giá cước
+   * và cân ước tính chỉ để TẠM TÍNH chặng quốc tế — tiền thật thu ở Việt Nam theo cân đo.
+   */
+  /*
+   * Sale sửa phụ phí cho từng khách: { [pricingRuleId]: { amount?, disabled?, note? } }.
+   * Không đụng tới VAT và thuế nhập khẩu — hai khoản đó backend tự tính lại từ các con số
+   * bên trên, gửi kèm chỉ làm cộng hai lần.
+   */
+  const [feeOverrides, setFeeOverrides] = useState({});
+
+  const [domesticShippingFee, setDomesticShippingFee] = useState(0);
+  const [freightRatePerKg, setFreightRatePerKg] = useState(0);
+  const [estimatedWeight, setEstimatedWeight] = useState(0);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -243,6 +259,10 @@ export default function CreatePurchaseRequestQuotationModal({
     const defaultPurchaseFee = Number(matchedPurchaseFeeRule?.value) || 50000;
     setPurchaseFee(defaultPurchaseFee);
     setShippingFee(0);
+    setFeeOverrides({});
+    setDomesticShippingFee(0);
+    setFreightRatePerKg(0);
+    setEstimatedWeight(0);
     setNote("");
     setFormError("");
     setSubmitting(false);
@@ -456,12 +476,36 @@ export default function CreatePurchaseRequestQuotationModal({
         });
       }
 
+      /* Sale ghi đè: số tiền do hệ thống tính vẫn giữ lại để đối chiếu và khôi phục. */
+      const systemAmount = amount;
+      const override = feeOverrides[ruleId];
+      const canOverride = !(isImportTax || isVat);
+
+      if (canOverride && override) {
+        if (override.disabled) {
+          isSkipped = true;
+          skipReason = "Sale không áp dụng khoản này cho khách";
+          amount = 0;
+        } else if (Number.isFinite(Number(override.amount))) {
+          amount = Math.max(0, Math.round(Number(override.amount)));
+          isSkipped = false;
+          skipReason = "";
+        }
+      }
+
       list.push({
         rule,
         pricingRuleId: ruleId,
         ruleCode,
         ruleName: rule?.ruleName || "Phụ phí dịch vụ",
         amount,
+        systemAmount,
+        canOverride,
+        isOverridden:
+          canOverride &&
+          Boolean(override) &&
+          (override.disabled || Math.round(Number(override.amount) || 0) !== Math.round(systemAmount)),
+        overrideNote: override?.note || "",
         isSkipped,
         skipReason,
         isTaxOrVat: isImportTax || isVat,
@@ -482,6 +526,7 @@ export default function CreatePurchaseRequestQuotationModal({
     purchaseFee,
     shippingFee,
     packageCount,
+    feeOverrides,
   ]);
 
   const additionalFeeTotal = useMemo(
@@ -597,6 +642,20 @@ export default function CreatePurchaseRequestQuotationModal({
             shippingFee
           ),
 
+        /* Luồng chuẩn: ship nội địa vào phần trả trước, hai ô còn lại để tạm tính cước. */
+        domesticShippingFee:
+          roundMoney(
+            domesticShippingFee
+          ),
+
+        freightRatePerKg:
+          roundMoney(
+            freightRatePerKg
+          ),
+
+        estimatedWeight:
+          Number(estimatedWeight) || 0,
+
         note:
           normalizeText(note),
 
@@ -648,9 +707,10 @@ export default function CreatePurchaseRequestQuotationModal({
                 amount:
                   current.amount,
 
+                /* Ưu tiên lý do Sale ghi khi sửa mức phí; không có thì giữ mô tả quy tắc. */
                 note:
                   normalizeText(
-                    rule?.description
+                    current.overrideNote || rule?.description
                   ),
               };
             }),
@@ -1051,7 +1111,77 @@ export default function CreatePurchaseRequestQuotationModal({
               />
 
               <small>
-                Chi phí vận chuyển của yêu cầu.
+                Giữ cho tương thích bản cũ; luồng chuẩn dùng đơn giá cước bên dưới.
+              </small>
+            </div>
+
+            <div className="purchase-quotation-field">
+              <label>
+                <TruckOutlined />
+                Ship nội địa từ NCC
+              </label>
+
+              <InputNumber
+                value={domesticShippingFee}
+                min={0}
+                step={1000}
+                precision={0}
+                controls={false}
+                formatter={moneyFormatter}
+                parser={moneyParser}
+                onChange={(value) => setDomesticShippingFee(normalizeMoney(value))}
+                addonAfter="₫"
+                placeholder="Phí NCC giao tới kho nguồn"
+              />
+
+              <small>
+                Thuộc phần <b>TRẢ TRƯỚC</b> — khách trả ngay cùng tiền hàng và phí mua hộ.
+              </small>
+            </div>
+
+            <div className="purchase-quotation-field">
+              <label>
+                <TruckOutlined />
+                Đơn giá cước quốc tế
+              </label>
+
+              <InputNumber
+                value={freightRatePerKg}
+                min={0}
+                step={1000}
+                precision={0}
+                controls={false}
+                formatter={moneyFormatter}
+                parser={moneyParser}
+                onChange={(value) => setFreightRatePerKg(normalizeMoney(value))}
+                addonAfter="₫/kg"
+                placeholder="Bỏ trống: lấy theo bảng giá tuyến"
+              />
+
+              <small>
+                Chỉ để <b>tạm tính</b>. Cước thật tính lại theo cân đo ở kho Việt Nam.
+              </small>
+            </div>
+
+            <div className="purchase-quotation-field">
+              <label>
+                <TruckOutlined />
+                Cân ước tính
+              </label>
+
+              <InputNumber
+                value={estimatedWeight}
+                min={0}
+                step={0.5}
+                precision={2}
+                controls={false}
+                onChange={(value) => setEstimatedWeight(Number(value) || 0)}
+                addonAfter="kg"
+                placeholder="Bỏ trống: 0,2 kg/món, tối thiểu 1 kg"
+              />
+
+              <small>
+                Dùng để nhân với đơn giá cước ra số tạm tính cho khách xem trước.
               </small>
             </div>
           </div>
@@ -1186,6 +1316,91 @@ export default function CreatePurchaseRequestQuotationModal({
                             ? "0 ₫ (Bỏ qua)"
                             : formatCurrency(current.amount)}
                         </b>
+
+                        {/* Sale sửa mức phí cho riêng khách này. VAT và thuế nhập khẩu do
+                            hệ thống tự tính từ các con số bên trên nên không cho sửa tay. */}
+                        {current.canOverride ? (
+                          <div className="purchase-quotation-fee-edit">
+                            <InputNumber
+                              size="small"
+                              min={0}
+                              step={1000}
+                              precision={0}
+                              controls={false}
+                              disabled={Boolean(feeOverrides[current.pricingRuleId]?.disabled)}
+                              value={
+                                feeOverrides[current.pricingRuleId]?.amount ??
+                                current.systemAmount
+                              }
+                              formatter={moneyFormatter}
+                              parser={moneyParser}
+                              addonAfter="₫"
+                              onChange={(value) =>
+                                setFeeOverrides((previous) => ({
+                                  ...previous,
+                                  [current.pricingRuleId]: {
+                                    ...previous[current.pricingRuleId],
+                                    amount: normalizeMoney(value),
+                                  },
+                                }))
+                              }
+                            />
+
+                            <label className="purchase-quotation-fee-edit__toggle">
+                              <Switch
+                                size="small"
+                                checked={!feeOverrides[current.pricingRuleId]?.disabled}
+                                onChange={(checked) =>
+                                  setFeeOverrides((previous) => ({
+                                    ...previous,
+                                    [current.pricingRuleId]: {
+                                      ...previous[current.pricingRuleId],
+                                      disabled: !checked,
+                                    },
+                                  }))
+                                }
+                              />
+                              <span>Áp dụng cho khách</span>
+                            </label>
+
+                            {current.isOverridden && (
+                              <>
+                                <Input
+                                  size="small"
+                                  placeholder="Lý do sửa mức phí (gửi kèm báo giá)"
+                                  value={feeOverrides[current.pricingRuleId]?.note || ""}
+                                  onChange={(event) =>
+                                    setFeeOverrides((previous) => ({
+                                      ...previous,
+                                      [current.pricingRuleId]: {
+                                        ...previous[current.pricingRuleId],
+                                        note: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+
+                                <button
+                                  type="button"
+                                  className="purchase-quotation-fee-edit__reset"
+                                  onClick={() =>
+                                    setFeeOverrides((previous) => {
+                                      const next = { ...previous };
+                                      delete next[current.pricingRuleId];
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  Khôi phục mức hệ thống ({formatCurrency(current.systemAmount)})
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <small className="purchase-quotation-fee-edit__locked">
+                            Hệ thống tự tính, không sửa tay
+                          </small>
+                        )}
                       </div>
                     </article>
                   );

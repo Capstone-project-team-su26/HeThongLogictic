@@ -37,12 +37,15 @@ export const createEmptyPackage = () => ({
 });
 
 export const createEmptyFormErrors = () => ({
+  customerId: "",
   route: "",
   shippingOption: "",
   receiverName: "",
   receiverPhone: "",
   selectedDeliveryAddress: "",
   note: "",
+  /* Lỗi cấp ĐƠN (tổng cân nặng / tổng giá trị vượt trần), không thuộc ô nào. */
+  packages: "",
 });
 
 export const createEmptyAddressForm = () => ({
@@ -492,85 +495,243 @@ export const validatePositiveNumber = (value, label) => {
   return "";
 };
 
-export const validatePackage = (pkg) => {
-  const errors = {};
+/*
+ * GIỚI HẠN NGHIỆP VỤ — đúng bằng mặc định backend đang áp
+ * (VCL_BLL/Services/OrderService.Create.cs → ResolveConsignmentLimits / EnsureItemsWithinLimits).
+ *
+ * Trước đây màn Sale tạo hộ khách KHÔNG kiểm mấy giới hạn này: Sale gõ 12 sản phẩm, 8 kg,
+ * khai 20 triệu vẫn không thấy gì, điền hết form bấm gửi mới ăn lỗi 400 từ server rồi phải
+ * dò ngược xem kiện nào sai. Web khách đã kiểm từ lâu, nên hai màn nói hai kiểu.
+ */
+export const PACKAGE_LIMITS = Object.freeze({
+  maxQuantity: 5,
+  maxDeclaredValue: 6000000,
+  maxWeight: 3,
+  maxLength: 100,
+  maxWidth: 200,
+  maxHeight: 50,
+});
 
-  if (!pkg.productName.trim()) {
-    errors.productName = "Vui lòng nhập tên sản phẩm.";
-  }
+export const ORDER_LIMITS = Object.freeze({
+  maxTotalWeight: 5,
+  maxTotalValue: 10000000,
+});
 
-  if (!pkg.productType) {
-    errors.productType = "Vui lòng chọn loại hàng hóa.";
-  }
+const toText = (value) => String(value ?? "").trim();
 
-  const quantity = Number(pkg.quantity);
+const formatVndNumber = (value) => Number(value).toLocaleString("vi-VN");
 
-  if (pkg.quantity === "") {
-    errors.quantity = "Vui lòng nhập số lượng.";
-  } else if (!Number.isInteger(quantity) || quantity < 1) {
-    errors.quantity = "Số lượng phải là số nguyên từ 1 trở lên.";
-  }
+/*
+ * MỘT Ô = MỘT HÀM KIỂM. Màn hình gọi đúng những hàm này lúc Sale đang gõ / vừa rời ô, còn
+ * lúc bấm gửi thì validatePackage / validateConsignmentForm chạy lại cũng chính chúng —
+ * không bao giờ có chuyện "gõ thì im, bấm gửi mới báo" hay hai nơi nói hai câu khác nhau.
+ */
+export const PACKAGE_FIELD_VALIDATORS = Object.freeze({
+  productName: (pkg) =>
+    toText(pkg?.productName) ? "" : "Vui lòng nhập tên sản phẩm.",
 
-  const declaredValue = Number(pkg.declaredValue);
+  productType: (pkg) => (pkg?.productType ? "" : "Vui lòng chọn loại hàng hóa."),
 
-  if (pkg.declaredValue === "") {
-    errors.declaredValue = "Vui lòng nhập giá trị khai báo.";
-  } else if (!Number.isFinite(declaredValue) || declaredValue <= 0) {
-    errors.declaredValue = "Giá trị kiện hàng phải lớn hơn 0.";
-  }
+  quantity: (pkg) => {
+    if (toText(pkg?.quantity) === "") return "Vui lòng nhập số lượng.";
 
-  [
-    ["weight", "cân nặng"],
-    ["length", "chiều dài"],
-    ["width", "chiều rộng"],
-    ["height", "chiều cao"],
-  ].forEach(([field, label]) => {
-    const message = validatePositiveNumber(pkg[field], label);
+    const quantity = Number(pkg.quantity);
 
-    if (message) {
-      errors[field] = message;
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return "Số lượng phải là số nguyên từ 1 trở lên.";
     }
-  });
 
-  if (!pkg.images.length) {
-    errors.images = "Vui lòng tải ít nhất 1 ảnh sản phẩm.";
+    if (quantity > PACKAGE_LIMITS.maxQuantity) {
+      return `Số lượng tối đa ${PACKAGE_LIMITS.maxQuantity} sản phẩm trên 1 kiện hàng.`;
+    }
+
+    return "";
+  },
+
+  declaredValue: (pkg) => {
+    if (toText(pkg?.declaredValue) === "") return "Vui lòng nhập giá trị khai báo.";
+
+    const declaredValue = Number(pkg.declaredValue);
+
+    if (!Number.isFinite(declaredValue) || declaredValue <= 0) {
+      return "Giá trị kiện hàng phải lớn hơn 0.";
+    }
+
+    if (declaredValue > PACKAGE_LIMITS.maxDeclaredValue) {
+      return `Giá trị 1 kiện hàng không được vượt quá ${formatVndNumber(
+        PACKAGE_LIMITS.maxDeclaredValue,
+      )} đ.`;
+    }
+
+    return "";
+  },
+
+  weight: (pkg) => {
+    if (toText(pkg?.weight) === "") return "Vui lòng nhập cân nặng.";
+
+    const weight = Number(pkg.weight);
+
+    if (!Number.isFinite(weight) || weight <= 0) return "Cân nặng phải lớn hơn 0.";
+
+    if (weight > PACKAGE_LIMITS.maxWeight) {
+      return `Cân nặng tối đa ${PACKAGE_LIMITS.maxWeight} kg cho mỗi kiện hàng.`;
+    }
+
+    return "";
+  },
+
+  length: (pkg) => {
+    if (toText(pkg?.length) === "") return "Vui lòng nhập chiều dài.";
+
+    const length = Number(pkg.length);
+
+    if (!Number.isFinite(length) || length <= 0) return "Chiều dài phải lớn hơn 0.";
+
+    if (length > PACKAGE_LIMITS.maxLength) {
+      return `Chiều dài tối đa ${PACKAGE_LIMITS.maxLength} cm.`;
+    }
+
+    return "";
+  },
+
+  width: (pkg) => {
+    if (toText(pkg?.width) === "") return "Vui lòng nhập chiều rộng.";
+
+    const width = Number(pkg.width);
+
+    if (!Number.isFinite(width) || width <= 0) return "Chiều rộng phải lớn hơn 0.";
+
+    if (width > PACKAGE_LIMITS.maxWidth) {
+      return `Chiều rộng tối đa ${PACKAGE_LIMITS.maxWidth} cm.`;
+    }
+
+    return "";
+  },
+
+  height: (pkg) => {
+    if (toText(pkg?.height) === "") return "Vui lòng nhập chiều cao.";
+
+    const height = Number(pkg.height);
+
+    if (!Number.isFinite(height) || height <= 0) return "Chiều cao phải lớn hơn 0.";
+
+    if (height > PACKAGE_LIMITS.maxHeight) {
+      return `Chiều cao tối đa ${PACKAGE_LIMITS.maxHeight} cm.`;
+    }
+
+    return "";
+  },
+
+  images: (pkg) =>
+    pkg?.images?.length ? "" : "Vui lòng tải ít nhất 1 ảnh sản phẩm.",
+});
+
+/** Kiểm MỘT ô của kiện hàng — dùng khi Sale đang gõ hoặc vừa rời ô. */
+export const validatePackageField = (field, pkg) =>
+  PACKAGE_FIELD_VALIDATORS[field] ? PACKAGE_FIELD_VALIDATORS[field](pkg) : "";
+
+export const validatePackage = (pkg) =>
+  Object.fromEntries(
+    Object.entries(PACKAGE_FIELD_VALIDATORS)
+      .map(([field, validate]) => [field, validate(pkg)])
+      .filter(([, message]) => Boolean(message)),
+  );
+
+/** Số liệu cộng dồn của đơn — vừa để báo lỗi, vừa để vẽ thanh giới hạn. */
+export const getOrderTotals = (packages = []) => ({
+  packageCount: packages.length,
+
+  totalWeight: packages.reduce(
+    (total, pkg) => total + (Number(pkg?.weight) || 0),
+    0,
+  ),
+
+  totalValue: packages.reduce(
+    (total, pkg) => total + (Number(pkg?.declaredValue) || 0),
+    0,
+  ),
+});
+
+/** Lỗi vượt trần của cả đơn; rỗng là chưa chạm trần. */
+export const getOrderTotalsError = (packages = []) => {
+  const { totalWeight, totalValue } = getOrderTotals(packages);
+
+  if (totalValue > ORDER_LIMITS.maxTotalValue) {
+    return `Tổng giá trị hàng hóa của đơn hàng (${formatVndNumber(
+      totalValue,
+    )} đ) vượt quá giới hạn tối đa ${formatVndNumber(
+      ORDER_LIMITS.maxTotalValue,
+    )} đ.`;
   }
 
-  return errors;
+  if (totalWeight > ORDER_LIMITS.maxTotalWeight) {
+    return `Tổng cân nặng toàn bộ đơn hàng (${totalWeight.toFixed(
+      2,
+    )} kg) vượt quá giới hạn tối đa ${ORDER_LIMITS.maxTotalWeight} kg.`;
+  }
+
+  return "";
 };
+
+/** Các ô ở cột trái (khách hàng, tuyến, người nhận, địa chỉ, ghi chú). */
+export const FORM_FIELD_VALIDATORS = Object.freeze({
+  /*
+   * Ô ĐẦU TIÊN của form và là ô duy nhất không có mặc định hợp lý: thiếu nó thì
+   * POST /api/staff/consignments trả 400 "Vui lòng chọn khách hàng có sẵn hoặc nhập
+   * email/số điện thoại để tìm kiếm." (CustomerLookupHelper.cs). Chặn tại chỗ để Sale
+   * không điền xong cả form mới biết đơn đang treo không có chủ.
+   */
+  customerId: (form) =>
+    toText(form?.customerId) ? "" : "Vui lòng chọn khách hàng cần tạo đơn.",
+
+  route: (form) => (form?.route ? "" : "Vui lòng chọn tuyến hàng."),
+
+  shippingOption: (form) =>
+    form?.shippingOption ? "" : "Vui lòng chọn phương thức vận chuyển.",
+
+  receiverName: (form) => {
+    const name = toText(form?.receiverName);
+
+    if (!name) return "Vui lòng nhập tên người nhận.";
+    if (name.length < 2) return "Tên người nhận phải có ít nhất 2 ký tự.";
+
+    return "";
+  },
+
+  receiverPhone: (form) => {
+    const phone = toText(form?.receiverPhone);
+
+    if (!phone) return "Vui lòng nhập số điện thoại.";
+    if (!/^0\d{9}$/.test(phone)) {
+      return "Số điện thoại phải có 10 số và bắt đầu bằng số 0.";
+    }
+
+    return "";
+  },
+
+  selectedDeliveryAddress: (form) =>
+    toText(form?.selectedDeliveryAddress)
+      ? ""
+      : "Vui lòng thêm và chọn địa chỉ nhận hàng.",
+
+  note: (form) =>
+    toText(form?.note) ? "" : "Vui lòng nhập ghi chú cho đơn ký gửi.",
+});
+
+/** Kiểm MỘT ô của phần thông tin chung. */
+export const validateFormField = (field, form) =>
+  FORM_FIELD_VALIDATORS[field] ? FORM_FIELD_VALIDATORS[field](form) : "";
 
 export const validateConsignmentForm = ({ form, packages }) => {
   const formErrors = createEmptyFormErrors();
 
-  if (!form.route) {
-    formErrors.route = "Vui lòng chọn tuyến hàng.";
-  }
+  /* Cùng bộ hàm màn hình gọi lúc Sale đang gõ — xem FORM_FIELD_VALIDATORS. */
+  Object.keys(FORM_FIELD_VALIDATORS).forEach((field) => {
+    formErrors[field] = validateFormField(field, form);
+  });
 
-  if (!form.shippingOption) {
-    formErrors.shippingOption = "Vui lòng chọn phương thức vận chuyển.";
-  }
-
-  if (!form.receiverName.trim()) {
-    formErrors.receiverName = "Vui lòng nhập tên người nhận.";
-  } else if (form.receiverName.trim().length < 2) {
-    formErrors.receiverName = "Tên người nhận phải có ít nhất 2 ký tự.";
-  }
-
-  if (!form.receiverPhone.trim()) {
-    formErrors.receiverPhone = "Vui lòng nhập số điện thoại.";
-  } else if (!/^0\d{9}$/.test(form.receiverPhone.trim())) {
-    formErrors.receiverPhone =
-      "Số điện thoại phải có 10 số và bắt đầu bằng số 0.";
-  }
-
-  if (!form.selectedDeliveryAddress.trim()) {
-    formErrors.selectedDeliveryAddress =
-      "Vui lòng thêm và chọn địa chỉ nhận hàng.";
-  }
-
-  if (!form.note.trim()) {
-    formErrors.note = "Vui lòng nhập ghi chú cho đơn ký gửi.";
-  }
+  /* Trần của cả đơn: tổng cân nặng và tổng giá trị mọi kiện. */
+  formErrors.packages = getOrderTotalsError(packages);
 
   const missingWoodCratePackages =
     getMissingWoodCratePackages({

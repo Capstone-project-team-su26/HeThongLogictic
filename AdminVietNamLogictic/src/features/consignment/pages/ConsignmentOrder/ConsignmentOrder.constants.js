@@ -9,30 +9,38 @@ export const MAX_IMAGES_PER_PACKAGE = 5;
 
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+/*
+ * Bốn ô số nằm cùng một hàng nên rất hẹp: placeholder dài bị cắt giữa chừng. Giới hạn đưa
+ * lên `hint` cạnh nhãn để Sale luôn đọc được, placeholder chỉ còn ví dụ số.
+ */
 export const PACKAGE_NUMBER_FIELDS = [
   {
     field: "weight",
-    label: "CÂN NẶNG KIỆN HÀNG (KG)",
-    tooltip: "Nhập tổng cân nặng của kiện hàng theo đơn vị kilogram (kg).",
-    placeholder: "Nhập cân nặng...",
+    label: "CÂN NẶNG (KG)",
+    hint: "tối đa 3",
+    tooltip: "Nhập tổng cân nặng của kiện hàng (tối đa 3 kg/kiện).",
+    placeholder: "VD: 1.5",
   },
   {
     field: "length",
     label: "DÀI (CM)",
-    tooltip: "Nhập chiều dài của kiện hàng theo đơn vị centimet (cm).",
-    placeholder: "Nhập chiều dài...",
+    hint: "tối đa 100",
+    tooltip: "Nhập chiều dài của kiện hàng (tối đa 100 cm).",
+    placeholder: "VD: 40",
   },
   {
     field: "width",
     label: "RỘNG (CM)",
-    tooltip: "Nhập chiều rộng của kiện hàng theo đơn vị centimet (cm).",
-    placeholder: "Nhập chiều rộng...",
+    hint: "tối đa 200",
+    tooltip: "Nhập chiều rộng của kiện hàng (tối đa 200 cm).",
+    placeholder: "VD: 30",
   },
   {
     field: "height",
     label: "CAO (CM)",
-    tooltip: "Nhập chiều cao của kiện hàng theo đơn vị centimet (cm).",
-    placeholder: "Nhập chiều cao...",
+    hint: "tối đa 50",
+    tooltip: "Nhập chiều cao của kiện hàng (tối đa 50 cm).",
+    placeholder: "VD: 20",
   },
 ];
 
@@ -45,6 +53,14 @@ export const DESTINATION_HANDLING_OPTIONS = [
 ];
 
 export const INITIAL_FORM = {
+  /*
+   * Khách hàng được tạo đơn hộ. `customerId` là Customer.Id THẬT — POST
+   * /api/staff/consignments tra khách bằng đúng khoá này. `customer` chỉ giữ bản ghi
+   * đã chọn để vẽ thẻ "Đang tạo đơn cho ..."; không có mặt trong payload gửi đi.
+   */
+  customerId: "",
+  customer: null,
+
   route: "",
   shippingOption: "",
   receiverName: "",
