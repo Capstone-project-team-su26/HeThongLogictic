@@ -44,6 +44,12 @@ export const ADMIN = {
   additionalServiceFees: `${ADMIN_BASE}/additional-service-fees`,
   servicePricings: `${ADMIN_BASE}/service-pricings`,
   pricingRules: `${ADMIN_BASE}/pricing-rules`,
+  /*
+   * Tham số vận hành — các con số điều khiển cách tính tiền (tỷ lệ cọc, ngưỡng lệch giá,
+   * phí huỷ, hệ số quy đổi, VAT, phụ phí). Khác pricingRules ở chỗ: trang kia là bảng CRUD
+   * thô của danh mục, trang này nối API THẬT và ghi vào đúng bảng backend đọc.
+   */
+  systemParameters: `${ADMIN_BASE}/system-parameters`,
   exchangeRates: `${ADMIN_BASE}/exchange-rates`,
   restrictedItems: `${ADMIN_BASE}/restricted-items`,
   productTypes: `${ADMIN_BASE}/product-types`,

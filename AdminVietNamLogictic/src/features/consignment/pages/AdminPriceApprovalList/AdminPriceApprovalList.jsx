@@ -38,7 +38,16 @@ import {
   groupFeesByOrderItem,
 } from "@features/consignment/api/quotationService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+  ReviewMoney,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 import { ADMIN } from "@app/router/paths";
+/* Cùng feature nên đi đường nội bộ (barrel chỉ dành cho feature khác gọi vào). */
+import OrderReviewPanel from "@features/consignment/components/OrderReviewPanel/OrderReviewPanel";
+import useOrderReview from "@features/consignment/hooks/useOrderReview";
 
 import "./AdminPriceApprovalList.css";
 
@@ -53,6 +62,35 @@ const formatCurrency = (value) => {
     maximumFractionDigits: 0,
   }).format(number);
 };
+
+/** Mọi dòng phí của báo giá — phí theo kiện và phí cả đơn — để Admin thấy mình đang duyệt gì. */
+const FEE_COLUMNS = [
+  {
+    title: "Áp cho",
+    key: "scope",
+    width: 170,
+    render: (_value, fee) =>
+      fee.orderItemId ? fee.itemName || "Một kiện" : <Tag>Cả đơn</Tag>,
+  },
+  { title: "Khoản phí", dataIndex: "label", render: (value) => value || "—" },
+  {
+    title: "Cách tính",
+    key: "calc",
+    width: 190,
+    render: (_value, fee) =>
+      fee.unitPrice !== undefined && fee.unitPrice !== null
+        ? `${formatCurrency(fee.unitPrice)}${fee.quantity ? ` × ${fee.quantity}${fee.unitNoun ? ` ${fee.unitNoun}` : ""}` : ""}`
+        : fee.calculationType || "—",
+  },
+  {
+    title: "Thành tiền",
+    dataIndex: "amount",
+    width: 140,
+    align: "right",
+    render: (value) => <strong>{formatCurrency(value)}</strong>,
+  },
+  { title: "Ghi chú", dataIndex: "note", width: 200, render: (value) => value || "—" },
+];
 
 const formatDateTime = (value) => {
   if (!value) return "—";
@@ -149,6 +187,13 @@ export default function AdminPriceApprovalList() {
   };
 
   const rejecting = decision === PRICE_APPROVAL_DECISION.REJECTED;
+
+  /*
+   * Hộp duyệt trước đây chỉ có mã đơn, tổng tiền và lý do — Admin duyệt một con số mà không
+   * thấy nó gồm những khoản nào, cho hàng gì. Giờ hộp hiện đủ tách chi phí, từng dòng phí
+   * (theo kiện / cả đơn), cân tính cước, và hàng của đơn (nạp từ chi tiết đơn).
+   */
+  const orderReview = useOrderReview(decisionRow?.order?.orderId, { withPayments: false });
 
   const handleSubmitDecision = async () => {
     if (!decisionRow || submitting || submitLockRef.current) return;
@@ -376,17 +421,29 @@ export default function AdminPriceApprovalList() {
         />
       )}
 
+      {/*
+        Đang tải hàng của đơn thì khoá nút. Tải lỗi không chặn: phần quyết định (các khoản tiền
+        và lý do) đã có đủ từ báo giá, hàng của đơn chỉ là căn cứ tham khảo.
+      */}
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={Boolean(decisionRow)}
-        centered
-        width={560}
-        title={rejecting ? "Từ chối giá ngoại lệ" : "Duyệt giá ngoại lệ"}
-        okText={rejecting ? "Xác nhận từ chối" : "Xác nhận duyệt"}
+        title={`${rejecting ? "Từ chối giá ngoại lệ" : "Duyệt giá ngoại lệ"} · ${
+          decisionRow?.order?.consignmentCode || ""
+        }`}
+        okText={
+          orderReview.loading
+            ? "Đang tải thông tin…"
+            : rejecting
+              ? "Xác nhận từ chối"
+              : "Xác nhận duyệt"
+        }
         cancelText="Quay lại"
         okButtonProps={{
           danger: rejecting,
           loading: submitting,
-          disabled: submitting || (rejecting && note.trim().length < 3),
+          disabled:
+            submitting || orderReview.loading || (rejecting && note.trim().length < 3),
         }}
         cancelButtonProps={{ disabled: submitting }}
         onOk={handleSubmitDecision}
@@ -413,6 +470,70 @@ export default function AdminPriceApprovalList() {
           <p className="price-approval-modal__reason">
             {decisionRow?.quotation?.overrideReason || "Không ghi lý do"}
           </p>
+
+          {decisionRow ? (
+            <>
+              <ReviewFacts
+                items={[
+                  { label: "Khách hàng", value: decisionRow.order?.customerName },
+                  { label: "Tuyến", value: decisionRow.order?.route },
+                  {
+                    label: "Báo giá lập lúc",
+                    value: formatDateTime(decisionRow.quotation?.createdAt),
+                  },
+                  {
+                    label: "Hết hạn",
+                    value: formatDateTime(decisionRow.quotation?.expiredAt),
+                  },
+                  {
+                    label: "Cân tính cước",
+                    value: `${decisionRow.quotation?.chargeableWeight ?? "—"} kg (thực ${
+                      decisionRow.quotation?.totalWeight ?? "—"
+                    } kg · quy đổi ${decisionRow.quotation?.volumetricWeight ?? "—"} kg)`,
+                  },
+                  { label: "Loại báo giá", value: decisionRow.quotation?.quoteType },
+                  {
+                    label: "Ghi chú Sale",
+                    value: decisionRow.quotation?.salesNote,
+                    span: 2,
+                  },
+                ]}
+              />
+
+              <ReviewMoney
+                title="Tách chi phí báo giá"
+                lines={[
+                  { label: "Cước vận chuyển", value: decisionRow.quotation?.estimatedFreightCharge },
+                  { label: "Phí vận chuyển nội địa", value: decisionRow.quotation?.domesticShippingFee },
+                  { label: "Phí dịch vụ", value: decisionRow.quotation?.serviceFee },
+                  { label: "VAT", value: decisionRow.quotation?.vat },
+                  { label: "Thuế nhập khẩu", value: decisionRow.quotation?.importTax },
+                  { label: "Thuế & phí (gộp)", value: decisionRow.quotation?.taxAndDuty },
+                  {
+                    label: "Tổng báo giá khách sẽ thấy",
+                    value: decisionRow.quotation?.totalEstimatedCost,
+                    strong: true,
+                  },
+                ]}
+              />
+
+              <ReviewItemsTable
+                title="Các dòng phí của báo giá"
+                items={decisionRow.quotation?.additionalFees || []}
+                columns={FEE_COLUMNS}
+                rowKey={(fee, index) => fee?.id || `${fee?.orderItemId}-${fee?.code}-${index}`}
+                extra={`${(decisionRow.quotation?.additionalFees || []).length} dòng`}
+                emptyText="Báo giá không có dòng phí phụ."
+              />
+
+              <OrderReviewPanel
+                review={orderReview}
+                fallback={decisionRow.order}
+                showMoney={false}
+                errorHint="Bạn vẫn quyết định được; các khoản tiền phía trên lấy từ chính báo giá."
+              />
+            </>
+          ) : null}
 
           <label htmlFor="price-approval-note">
             {rejecting ? "Lý do từ chối" : "Ghi chú (tuỳ chọn)"}

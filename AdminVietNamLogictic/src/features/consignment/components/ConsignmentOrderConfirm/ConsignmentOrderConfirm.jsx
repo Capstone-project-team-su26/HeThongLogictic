@@ -4,6 +4,7 @@ import {
 } from "react";
 import {
   CheckCircleOutlined,
+  DollarOutlined,
   EnvironmentOutlined,
   InfoCircleOutlined,
   LeftOutlined,
@@ -48,6 +49,9 @@ import {
   translateSubmitMessage,
 } from "./ConsignmentOrderConfirm.helpers";
 
+import EstimateInvoice from "@features/consignment/components/EstimateInvoice/EstimateInvoice";
+/* Dùng lại đúng bộ nhãn của ô chọn trên form tạo đơn — hai nơi hiện giống hệt nhau. */
+import { DESTINATION_HANDLING_OPTIONS } from "@features/consignment/pages/ConsignmentOrder/ConsignmentOrder.constants";
 import "./ConsignmentOrderConfirm.css";
 
 function PriceInfoLabel({
@@ -184,22 +188,30 @@ function WoodCrateSummary({
       </div>
 
       <div className="consignment-confirm-wood-summary__pricing">
-        <div className="consignment-confirm-wood-price-card is-order-fee">
-          <PriceInfoLabel
-            label="Phí dịch vụ đóng thùng gỗ"
-            tooltip="Khoản phí cố định được tính một lần cho toàn bộ đơn ký gửi, không nhân với số lượng kiện."
-          />
+        {/*
+          Ô "phí dịch vụ toàn đơn" chỉ hiện khi hệ thống thật sự thu khoản đó. Hiện tại
+          backend tính tiền thùng gỗ HOÀN TOÀN theo cỡ thùng của từng kiện
+          (packageConfigurationId), nên ô này bằng 0 và bị ẩn — trước đây nó hiện 35.000đ
+          lấy từ bảng quy tắc, làm Sale báo với khách một con số cao hơn hoá đơn thật.
+        */}
+        {summary.orderServiceFee > 0 && (
+          <div className="consignment-confirm-wood-price-card is-order-fee">
+            <PriceInfoLabel
+              label="Phí dịch vụ đóng thùng gỗ"
+              tooltip="Khoản phí cố định được tính một lần cho toàn bộ đơn ký gửi, không nhân với số lượng kiện."
+            />
 
-          <strong>
-            {formatVnd(
-              summary.orderServiceFee,
-            )}
-          </strong>
+            <strong>
+              {formatVnd(
+                summary.orderServiceFee,
+              )}
+            </strong>
 
-          <small>
-            Tính 1 lần / toàn bộ đơn
-          </small>
-        </div>
+            <small>
+              Tính 1 lần / toàn bộ đơn
+            </small>
+          </div>
+        )}
 
         <div className="consignment-confirm-wood-price-card is-box-fee">
           <PriceInfoLabel
@@ -496,6 +508,10 @@ export default function ConsignmentOrderConfirm({
   masterDataError = "",
   isSubmitting,
   submitMessage,
+  /* Ước tính do BACKEND tính — xem chú thích ở khối "Chi phí dự kiến" bên dưới. */
+  estimate = null,
+  estimateError = "",
+  isEstimating = false,
   onBack,
   onConfirm,
 }) {
@@ -1320,6 +1336,22 @@ export default function ConsignmentOrderConfirm({
               }
             />
 
+            {/*
+              Nguyện vọng khi hàng về VN được gửi lên cùng đơn (defaultDestinationHandling)
+              nhưng trước đây không hiện ở bước xác nhận — Sale tick hộ khách mà không soát lại.
+            */}
+            <SummaryItem
+              label="Khi hàng về Việt Nam"
+              value={
+                DESTINATION_HANDLING_OPTIONS.find(
+                  (option) =>
+                    option.value ===
+                    form?.defaultDestinationHandling
+                )?.label ||
+                "Chưa chọn (mặc định giao ngay)"
+              }
+            />
+
             <SummaryItem
               label="Số dịch vụ bổ sung"
               value={`${selectedServices.length} dịch vụ`}
@@ -1463,6 +1495,41 @@ export default function ConsignmentOrderConfirm({
               </strong>
             </div>
           )}
+        </div>
+
+        {/*
+          CHI PHÍ DỰ KIẾN — số do BACKEND tính, không phải màn hình tự cộng.
+
+          Sale đọc con số này cho khách nghe, nên nó phải bằng đúng con số trên báo giá hệ
+          thống phát hành ngay sau khi bấm tạo đơn. Endpoint ước tính chạy đúng phép tính
+          của lúc tạo đơn thật, chỉ khác là không ghi gì xuống DB.
+        */}
+        <div className="consignment-confirm-section is-estimate-section">
+          <div className="consignment-confirm-section-title">
+            <span>
+              <DollarOutlined />
+            </span>
+
+            <div>
+              <h2>Bảng kê chi phí dự kiến</h2>
+              <p>Từng khoản một, hệ thống tính — không phải ước lượng của trình duyệt</p>
+            </div>
+          </div>
+
+          {isEstimating ? (
+            <div className="estimate-loading">
+              <LoadingOutlined spin /> Đang tính chi phí…
+            </div>
+          ) : estimateError ? (
+            <div className="estimate-error">
+              <InfoCircleOutlined />
+              <span>
+                {estimateError} Vẫn tạo đơn được — báo giá tạm tính sẽ hiện ngay sau khi tạo.
+              </span>
+            </div>
+          ) : estimate ? (
+            <EstimateInvoice estimate={estimate} />
+          ) : null}
         </div>
 
         <div className="consignment-confirm-section">

@@ -34,6 +34,14 @@ export { default as AdminPriceApprovalList } from "./pages/AdminPriceApprovalLis
 export { default as ConsignmentOrderConfirm } from "./components/ConsignmentOrderConfirm/ConsignmentOrderConfirm";
 export { default as ConfirmConsignmentQuotation } from "./components/ConfirmConsignmentQuotation/ConfirmConsignmentQuotation";
 
+/*
+ * Tóm tắt đầy đủ một đơn cho hộp xác nhận trước khi ghi (lập phiếu, giao hàng, báo kho...).
+ * Hook nạp dữ liệu thật, panel trình bày — tách hai mảnh để trang còn khoá được nút gửi
+ * trong lúc đang tải. Tên đã đối chiếu: không trùng export nào khác trong barrel này.
+ */
+export { default as OrderReviewPanel } from "./components/OrderReviewPanel/OrderReviewPanel";
+export { default as useOrderReview } from "./hooks/useOrderReview";
+
 /**
  * PackageOptionalServices có CẢ default (component) LẪN named
  * (EMPTY_PACKAGE_SERVICES — state rỗng để form reset về), nên đưa ra cả hai.

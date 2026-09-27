@@ -31,11 +31,28 @@ import {
   openReleaseNotePdf,
   WRO_STATUS_TABS,
 } from "@features/operations/api/warehouseReleaseService";
-import { AttachmentList } from "@features/attachments";
+import {
+  ATTACHMENT_ENTITY,
+  AttachmentList,
+  AttachmentUploadButton,
+  listAttachments,
+} from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import SubmitReview, {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import {
+  formatReviewKg,
+  REVIEW_MODAL_PROPS,
+} from "@shared/components/SubmitReview/submitReviewFormat";
+import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
 import "@features/operations/styles/OperationsPage.css";
 
 const { Text, Title } = Typography;
+
+/* Loại giấy tờ backend đòi trước khi cho duyệt phiếu xuất. */
+const PROOF_DOCUMENT_TYPE = "WRO_APPROVAL_PROOF";
 
 const formatDateTime = (value) => {
   if (!value) return "—";
@@ -52,6 +69,64 @@ const formatNumber = (value, digits = 2) => {
 
 /* Phiếu PDF xuất kho chỉ sinh khi phiếu đã được duyệt. */
 const HAS_RELEASE_NOTE = new Set(["APPROVED", "PICKING", "READY", "IN_SHIPMENT", "HANDED_OVER"]);
+
+/**
+ * Đủ thông tin một phiếu xuất kho trong hộp duyệt / từ chối: kho nguồn → kho đích, tuyến,
+ * người lập, số kiện, tổng cân, ghi chú và TỪNG KIỆN (mã, đơn / khách, hàng, cân, kích thước,
+ * vị trí, trạng thái). Tải lỗi thì hiện phần có trên dòng bảng và nói rõ — server vẫn tự xét
+ * lại điều kiện xuất lần cuối nên không chặn cứng.
+ */
+function WroDecisionReview({ target, review, parcelColumns }) {
+  const data = { ...target, ...(review.data || {}) };
+  const parcels = Array.isArray(data.parcels) ? data.parcels : [];
+  const orderCount = new Set(parcels.map((row) => row.consignmentCode).filter(Boolean)).size;
+  const customerCount = new Set(parcels.map((row) => row.customerName).filter(Boolean)).size;
+
+  return (
+    <SubmitReview
+      loading={review.loading}
+      loadingText="Đang tải đầy đủ phiếu xuất kho…"
+      error={review.error}
+      errorHint="Chưa xem được danh sách kiện — nên mở phiếu kiểm tra trước khi quyết định."
+    >
+      <ReviewFacts
+        items={[
+          { label: "Mã phiếu", value: <Text strong>{data.wroCode}</Text> },
+          { label: "Tuyến", value: data.shippingRouteCode },
+          { label: "Kho nguồn", value: data.originWarehouseName },
+          { label: "Kho đích", value: data.destinationWarehouseName },
+          {
+            label: "Kiện · cân",
+            value: `${data.pickedCount || 0}/${data.parcelCount || 0} kiện đã bốc · ${formatReviewKg(
+              data.totalWeight,
+            )}`,
+          },
+          {
+            label: "Đơn · khách",
+            value: parcels.length ? `${orderCount} đơn · ${customerCount} khách` : null,
+          },
+          {
+            label: "Người lập",
+            value: `${data.createdByName || "—"} · ${formatDateTime(data.createdAt)}`,
+          },
+          { label: "Gửi duyệt lúc", value: formatDateTime(data.submittedAt) },
+          { label: "Tách từ phiếu", value: data.splitFromCode, hidden: !data.splitFromCode },
+          { label: "Lô vận chuyển", value: data.shipmentCode, hidden: !data.shipmentCode },
+          { label: "Ghi chú phiếu", value: data.note, span: 2 },
+        ]}
+      />
+      <ReviewItemsTable
+        title="Kiện trong phiếu"
+        items={parcels}
+        columns={parcelColumns}
+        rowKey={(row, index) => row?.id || row?.parcelId || index}
+        extra={`${parcels.length} kiện`}
+        scrollX={1000}
+        emptyText={review.error ? "Chưa đọc được danh sách kiện." : "Phiếu chưa có kiện nào."}
+      />
+    </SubmitReview>
+  );
+}
 
 /**
  * Phiếu xuất kho — màn DUYỆT của quản lý kho (OperationsManager) và Admin.
@@ -76,8 +151,25 @@ export default function OperationsWroPage({ requireReason = false }) {
 
   const [decision, setDecision] = useState(null); // { row, value: "APPROVED" | "REJECTED" }
   const [reason, setReason] = useState("");
+  /*
+   * Ảnh hiện trạng lúc duyệt xuất. Backend CHẶN duyệt khi phiếu chưa có đính kèm
+   * WRO_APPROVAL_PROOF (WarehouseReleaseService.DecideAsync), nên phải tải được ảnh đã có
+   * và cho tải ảnh mới ngay trong hộp duyệt — nếu không người duyệt bấm Duyệt rồi ăn 400
+   * mà không biết phải làm gì. Từ chối thì không cần ảnh.
+   */
+  const [approvalProofs, setApprovalProofs] = useState([]);
+  const [proofsLoading, setProofsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [pdfBusy, setPdfBusy] = useState("");
+
+  /*
+   * Hộp duyệt / từ chối trước đây chỉ có một câu hệ quả + ảnh hiện trạng: người duyệt không
+   * thấy phiếu xuất những kiện nào, của khách nào, nặng bao nhiêu (nhất là khi bấm thẳng từ
+   * dòng bảng). Giờ hộp nạp lại chi tiết phiếu (GET phiếu) để hiện đủ rồi mới cho bấm.
+   */
+  const decisionReview = useSubmitReviewData(decision?.row?.id, () =>
+    getWarehouseReleaseDetail(decision.row.id),
+  );
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -115,9 +207,33 @@ export default function OperationsWroPage({ requireReason = false }) {
     }
   }, []);
 
-  const openDecision = useCallback((row, value) => {
+  const openDecision = useCallback(async (row, value) => {
     setDecision({ row, value });
     setReason("");
+    setApprovalProofs([]);
+
+    if (value !== "APPROVED") return;
+
+    setProofsLoading(true);
+    try {
+      const items = await listAttachments({
+        entityType: ATTACHMENT_ENTITY.WRO,
+        entityId: row.id,
+      });
+      setApprovalProofs(
+        items.filter(
+          (item) => String(item?.documentType).toUpperCase() === PROOF_DOCUMENT_TYPE,
+        ),
+      );
+    } catch (error) {
+      /* Không chặn hộp duyệt: người duyệt vẫn tải ảnh mới lên được. */
+      AuthNotify.warning(
+        "Chưa đọc được ảnh đã tải",
+        getWroApiError(error, "Hãy tải lại ảnh hiện trạng để chắc chắn."),
+      );
+    } finally {
+      setProofsLoading(false);
+    }
   }, []);
 
   const handleDecide = useCallback(async () => {
@@ -137,6 +253,7 @@ export default function OperationsWroPage({ requireReason = false }) {
       );
       setDecision(null);
       setDetail(null);
+      setApprovalProofs([]);
       await fetchRows();
     } catch (error) {
       AuthNotify.error("Không ghi được quyết định", getWroApiError(error, "Vui lòng thử lại."));
@@ -503,6 +620,7 @@ export default function OperationsWroPage({ requireReason = false }) {
       </Drawer>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={!!decision}
         title={`${decision?.value === "APPROVED" ? "Duyệt" : "Từ chối"} phiếu ${decision?.row?.wroCode || ""}`}
         okText={decision?.value === "APPROVED" ? "Duyệt phiếu" : "Từ chối phiếu"}
@@ -511,7 +629,9 @@ export default function OperationsWroPage({ requireReason = false }) {
           danger: decision?.value === "REJECTED",
           loading: submitting,
           disabled:
-            (decision?.value === "REJECTED" || requireReason) && !reason.trim(),
+            decisionReview.loading ||
+            ((decision?.value === "REJECTED" || requireReason) && !reason.trim()) ||
+            (decision?.value === "APPROVED" && (proofsLoading || !approvalProofs.length)),
         }}
         onOk={handleDecide}
         onCancel={() => setDecision(null)}
@@ -526,6 +646,46 @@ export default function OperationsWroPage({ requireReason = false }) {
               : "Hàng đang khoá cho phiếu được nhả về tồn khả dụng; người lập nhận thông báo kèm lý do."
           }
         />
+        {decision ? (
+          <WroDecisionReview
+            target={decision.row}
+            review={decisionReview}
+            parcelColumns={parcelColumns}
+          />
+        ) : null}
+        {decision?.value === "APPROVED" ? (
+          <div className="wro-approval-proof">
+            <div className="wro-approval-proof__head">
+              <Text strong>Ảnh hiện trạng lúc duyệt</Text>
+              <Tag color={approvalProofs.length ? "green" : "red"}>
+                {approvalProofs.length ? `Đã có ${approvalProofs.length} ảnh` : "Bắt buộc"}
+              </Tag>
+            </div>
+
+            <Text type="secondary" className="wro-approval-proof__hint">
+              Chụp hoặc chọn ảnh hàng trong khu xuất trước khi duyệt. Chưa có ảnh thì server
+              không cho duyệt phiếu.
+            </Text>
+
+            {proofsLoading ? (
+              <Text type="secondary">Đang đọc ảnh đã tải…</Text>
+            ) : approvalProofs.length ? (
+              <AttachmentList items={approvalProofs} showThumbnails />
+            ) : null}
+
+            <AttachmentUploadButton
+              entityType={ATTACHMENT_ENTITY.WRO}
+              entityId={decision?.row?.id}
+              documentType={PROOF_DOCUMENT_TYPE}
+              label="Tải ảnh hiện trạng"
+              onUploaded={(attachment) =>
+                setApprovalProofs((current) => [...current, attachment])
+              }
+              buttonProps={{ type: approvalProofs.length ? "default" : "primary" }}
+            />
+          </div>
+        ) : null}
+
         <Input.TextArea
           rows={3}
           value={reason}

@@ -23,6 +23,7 @@ import { listAwaitingSettlement } from "@features/settlement/api/settlementServi
 import { getTrackingQueue } from "@features/shipment/api/internationalShipmentService";
 import { listDeliveryRequests } from "@features/operations/api/destinationApprovalService";
 import { listIncidents } from "@features/incident/api/parcelIncidentService";
+import { getConversationsApi } from "@features/chat/api/conversationApi";
 
 /** Khoá badge — dùng chung cho menu (Sidebar) và tab (SaleWorkspacePage). */
 export const SALE_BADGE_KEYS = Object.freeze({
@@ -33,6 +34,7 @@ export const SALE_BADGE_KEYS = Object.freeze({
   settlements: "settlements",
   deliveries: "deliveries",
   incidents: "incidents",
+  support: "support",
 });
 
 /** Badge của mục "Việc cần xử lý" là tổng 5 tab bên trong. */
@@ -150,6 +152,19 @@ const SOURCES = [
     async () =>
       countOfPage(
         await listIncidents({ status: "OPEN", pageNumber: 1, pageSize: 1 })
+      ),
+  ],
+  [
+    SALE_BADGE_KEYS.support,
+    /*
+     * Chat CSKH: số hội thoại còn tin KHÁCH chưa đọc (unreadCount do backend tính theo
+     * người xem). Hộp thư của Sale = hội thoại chưa ai nhận + hội thoại của mình, nên
+     * khách vừa mở hội thoại mới cũng được đếm. Mở hội thoại là đánh dấu đã đọc → rơi khỏi badge.
+     */
+    async () =>
+      countWhere(
+        await getConversationsApi(),
+        (conversation) => Number(conversation?.unreadCount) > 0
       ),
   ],
 ];

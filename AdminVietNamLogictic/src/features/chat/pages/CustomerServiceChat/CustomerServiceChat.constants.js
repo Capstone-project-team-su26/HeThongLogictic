@@ -2,7 +2,7 @@
 // Tách khỏi component vì đây là phần không bao giờ thay đổi theo state — để chung
 // khiến phải cuộn qua hàng trăm dòng bảng tra mới tới được logic thật.
 
-import { getConsignmentsApi } from "@features/consignment/api/consignmentService.mock";
+import { getConsignmentsApi } from "@features/consignment/api/consignmentService";
 import { getPurchaseRequestsApi } from "@features/purchase/api/purchaseRequestService";
 
 export const RELATED_TYPE_OPTIONS = [
@@ -45,6 +45,9 @@ export const STATUS_LABELS = {
   ACTIVE: "Đang hoạt động",
   INACTIVE: "Ngừng hoạt động",
   QUOTATION_SENT: "Đã gửi báo giá",
+  /* Trạng thái phòng chat của backend (ConversationService). */
+  OPEN: "Đang mở",
+  CLOSED: "Đã đóng",
 };
 
 export const RELATED_TYPE_LOADERS = {
@@ -62,17 +65,23 @@ export const INITIAL_MESSAGE_FORM = {
   content: "",
 };
 
+/*
+ * Ảnh chat upload THẬT qua POST /api/uploads/images (UploadsController): JPG/PNG/WEBP,
+ * mỗi ảnh ≤ 5MB. Mỗi tin nhắn backend chỉ lưu MỘT attachmentUrl (≤ 500 ký tự).
+ */
 export const MAX_IMAGE_COUNT = 1;
-export const MAX_IMAGE_SIZE_MB = 6;
+export const MAX_IMAGE_SIZE_MB = 5;
 export const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 export const ACCEPTED_CHAT_IMAGE_TYPES = new Set([
   "image/jpeg",
-  "image/jpg",
   "image/png",
   "image/webp",
 ]);
 
+/* Không dùng SignalR (/hubs/chat) — app chưa có @microsoft/signalr, nên poll như web khách:
+   khung chat đang mở 2,5 giây, hộp thư bên trái (hội thoại mới, số tin chưa đọc) 10 giây. */
 export const MESSAGE_POLL_INTERVAL_MS = 2500;
+export const CONVERSATION_LIST_POLL_INTERVAL_MS = 10_000;
 
 export const MESSAGE_GROUP_GAP_MS = 5 * 60 * 1000;

@@ -3632,3 +3632,55 @@
     transform: none;
   }
 }
+/* =========================================================
+   CHI PHÍ DỰ KIẾN — số do backend tính
+
+   Dùng lại lưới .consignment-confirm-total-grid của khối tổng quan để hai khối cùng một
+   nhịp; chỉ ô tổng và hai trạng thái chờ/lỗi là có kiểu riêng.
+   ========================================================= */
+
+.consignment-confirm-total-card.is-estimate-total {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.consignment-confirm-total-card.is-estimate-total strong {
+  color: #15803d;
+}
+
+.estimate-loading,
+.estimate-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  padding: 12px 14px;
+  border-radius: 10px;
+
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.estimate-loading {
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e3eaf4;
+}
+
+.estimate-error {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+/* Câu nhắc "tạm tính" nằm ngay dưới tổng, để không ai đọc nhầm đây là số cuối. */
+.estimate-note {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.estimate-note b {
+  color: #b45309;
+}

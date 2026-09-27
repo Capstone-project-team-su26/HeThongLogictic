@@ -17,6 +17,7 @@ import {
 import {
   HistoryOutlined,
   ReloadOutlined,
+  TeamOutlined,
   UserSwitchOutlined,
 } from "@ant-design/icons";
 
@@ -25,6 +26,7 @@ import {
   assignWarehouseManager,
   getWarehouseManager,
   getWarehouseManagerCandidates,
+  getWarehouseStaff,
 } from "@features/warehouse/api/warehouseManagerService";
 import { getAdminApiError } from "@features/admin/api/adminService";
 import "@features/admin/styles/AdminPage.css";
@@ -43,22 +45,32 @@ const WAREHOUSE_TYPE_LABELS = {
   DOMESTIC: "Kho nội địa",
 };
 
+/* 403 body rỗng / 404 body rỗng (server chưa có route) → câu tiếng Việt thay vì câu axios. */
+const getStaffError = (error) => {
+  const status = error?.response?.status;
+  if (!error?.response?.data?.message && status === 403) return "Không có quyền xem nhân viên kho.";
+  if (!error?.response?.data?.message && status === 404) return "Máy chủ chưa hỗ trợ xem nhân viên kho.";
+  return getAdminApiError(error, "Không tải được nhân viên kho.");
+};
+
 /**
- * Kho thật + quản lý hiện tại của từng kho. Không ném lỗi: trả { rows, error } để nơi gọi
- * chỉ việc áp vào state.
+ * Kho thật + quản lý hiện tại + nhân viên kho được gán của từng kho. Không ném lỗi: trả
+ * { rows, error } để nơi gọi chỉ việc áp vào state.
  */
 const fetchWarehouseRows = async () => {
   try {
     const warehouses = await getWarehousesApi({});
-    /* Mỗi kho một lời gọi manager — số kho ít (vài chục), chạy song song. */
-    const managers = await Promise.allSettled(
-      warehouses.map((warehouse) => getWarehouseManager(warehouse.id)),
-    );
+    /* Mỗi kho một lời gọi manager + một lời gọi staff — số kho ít (vài chục), chạy song song. */
+    const [managers, staffs] = await Promise.all([
+      Promise.allSettled(warehouses.map((warehouse) => getWarehouseManager(warehouse.id))),
+      Promise.allSettled(warehouses.map((warehouse) => getWarehouseStaff(warehouse.id))),
+    ]);
 
     return {
       error: "",
       rows: warehouses.map((warehouse, index) => {
         const result = managers[index];
+        const staffResult = staffs[index];
         return {
           ...warehouse,
           manager: result.status === "fulfilled" ? result.value : null,
@@ -66,6 +78,8 @@ const fetchWarehouseRows = async () => {
             result.status === "rejected"
               ? getAdminApiError(result.reason, "Không tải được quản lý kho.")
               : "",
+          staff: staffResult.status === "fulfilled" ? staffResult.value.staff : null,
+          staffError: staffResult.status === "rejected" ? getStaffError(staffResult.reason) : "",
         };
       }),
     };
@@ -92,6 +106,7 @@ export default function AdminWarehouseManagersPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [staffTarget, setStaffTarget] = useState(null);
 
   /* Áp kết quả tải qua .then: effect không gọi setState đồng bộ (react-hooks/set-state-in-effect). */
   const applyResult = useCallback((result) => {
@@ -194,9 +209,35 @@ export default function AdminWarehouseManagersPage() {
       },
     },
     {
+      title: "Nhân viên kho được gán",
+      key: "staff",
+      width: 260,
+      render: (_, row) => {
+        if (row.staffError) return <Text type="danger">{row.staffError}</Text>;
+        const staff = row.staff || [];
+        if (!staff.length) {
+          return (
+            <Text type="secondary">
+              Chưa gán nhân viên nào — nhân viên kho cùng vùng vẫn thao tác được
+            </Text>
+          );
+        }
+        const names = staff.map((member) => member.fullName || member.email).filter(Boolean);
+        return (
+          <Space direction="vertical" size={0}>
+            <Text strong>{staff.length} nhân viên</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {names.slice(0, 3).join(", ")}
+              {names.length > 3 ? ` và ${names.length - 3} người khác` : ""}
+            </Text>
+          </Space>
+        );
+      },
+    },
+    {
       title: "Thao tác",
       key: "actions",
-      width: 230,
+      width: 330,
       render: (_, row) => (
         <Space>
           <Button
@@ -215,9 +256,48 @@ export default function AdminWarehouseManagersPage() {
           >
             Lịch sử
           </Button>
+          <Button
+            size="small"
+            icon={<TeamOutlined />}
+            disabled={Boolean(row.staffError)}
+            onClick={() => setStaffTarget(row)}
+          >
+            Nhân viên
+          </Button>
         </Space>
       ),
     },
+  ];
+
+  const staffColumns = [
+    {
+      title: "Nhân viên",
+      key: "fullName",
+      render: (_, member) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{member.fullName || "—"}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {member.email || "—"}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: "Vai trò",
+      dataIndex: "role",
+      width: 150,
+      render: (value, member) => (
+        <Space size={4} wrap>
+          <Tag color="blue">{value || "—"}</Tag>
+          {member.status && String(member.status).toUpperCase() !== "ACTIVE" ? (
+            <Tag color="warning">{member.status}</Tag>
+          ) : null}
+        </Space>
+      ),
+    },
+    { title: "Lúc gán", dataIndex: "assignedAt", width: 160, render: formatDateTime },
+    { title: "Người gán", dataIndex: "assignedByName", width: 150, render: (value) => value || "—" },
+    { title: "Ghi chú", dataIndex: "note", render: (value) => value || "—" },
   ];
 
   const assignedCount = rows.filter((row) => row.manager?.managerId).length;
@@ -230,7 +310,8 @@ export default function AdminWarehouseManagersPage() {
           <h1>Quản lý kho</h1>
           <p>
             Người quản lý của kho duyệt phiếu nhập kho, biên bản kiểm đếm lệch và phiếu xuất kho.
-            Kho chưa gán quản lý thì OperationsManager / Admin duyệt.
+            Kho chưa gán quản lý thì OperationsManager / Admin duyệt. Nhân viên kho được gán vào
+            từng kho ở màn Quản lý người dùng (nút "Gán kho").
           </p>
         </div>
         <div className="admin-page__hero-count">
@@ -268,7 +349,7 @@ export default function AdminWarehouseManagersPage() {
         columns={columns}
         dataSource={rows}
         pagination={false}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1250 }}
         locale={{ emptyText: <Empty description="Chưa có kho nào." /> }}
       />
 
@@ -314,6 +395,34 @@ export default function AdminWarehouseManagersPage() {
           />
         </div>
       </Modal>
+
+      <Drawer
+        open={Boolean(staffTarget)}
+        width={760}
+        title={`Nhân viên kho · ${staffTarget?.name || ""}`}
+        onClose={() => setStaffTarget(null)}
+      >
+        <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
+          {[staffTarget?.code, staffTarget?.region].filter(Boolean).join(" · ")} — chỉ xem. Gán /
+          bỏ gán ở màn Quản lý người dùng.
+        </Text>
+        <Table
+          size="small"
+          rowKey="userId"
+          pagination={false}
+          columns={staffColumns}
+          dataSource={staffTarget?.staff || []}
+          scroll={{ x: 700 }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Chưa gán nhân viên nào — nhân viên kho cùng vùng vẫn thao tác được."
+              />
+            ),
+          }}
+        />
+      </Drawer>
 
       <Drawer
         open={Boolean(historyTarget)}

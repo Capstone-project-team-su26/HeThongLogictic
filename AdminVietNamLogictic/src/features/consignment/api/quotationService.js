@@ -107,11 +107,31 @@ const normalizeQuotationId = (quotationId) => {
  * Backend trả cả bộ khoá mới (feeId/code/label/amount/enabled) lẫn bộ cũ
  * (feeName/feeType/calculationType/value), nên chuẩn hoá về một bộ duy nhất.
  */
+/*
+ * ID QUY TẮC PHÍ của dòng (PRICING_RULES.id), null nếu dòng không sinh từ quy tắc.
+ *
+ * Backend trả `feeId = pricingRuleId ?? id` (QuotationService.Helpers.cs, MapToFeeResponseDto):
+ * dòng không có quy tắc (phí thùng PACKING_FEE, cước chính, thuế) thì `feeId` chính là ID
+ * DÒNG PHÍ (QUOTATION_FEES.id). Gửi ID đó lên POST .../quotation/send là 400 "Không tìm
+ * thấy quy định phí với ID". Vì vậy chỉ tin `pricingRuleId`; `feeId` chỉ dùng khi backend
+ * cũ không trả `pricingRuleId` VÀ nó khác `id` của dòng.
+ */
+const resolveFeeRuleId = (fee = {}) => {
+  const lineId = normalizeText(fee?.id).toLowerCase();
+  const ruleId = normalizeText(fee?.pricingRuleId);
+
+  if (ruleId) return ruleId;
+
+  const feeId = normalizeText(fee?.feeId);
+
+  return feeId && feeId.toLowerCase() !== lineId ? feeId : null;
+};
+
 export const normalizeQuotationFee = (fee = {}) => ({
   ...fee,
   id: normalizeText(fee?.id),
-  feeId: normalizeText(fee?.feeId || fee?.pricingRuleId) || null,
-  pricingRuleId: normalizeText(fee?.pricingRuleId || fee?.feeId) || null,
+  feeId: resolveFeeRuleId(fee),
+  pricingRuleId: resolveFeeRuleId(fee),
   orderItemId: normalizeText(fee?.orderItemId) || null,
   itemName: normalizeText(fee?.itemName),
   code: normalizeUpperText(fee?.code),

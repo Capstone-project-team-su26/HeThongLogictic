@@ -137,11 +137,42 @@ export const getCustomerDeliveryAddressesApi = async (
   return getArrayItems(getResponseData(response));
 };
 
+/**
+ * Nhân viên THÊM địa chỉ nhận hàng vào sổ của khách.
+ *
+ * POST /api/customers/{customerId}/delivery-addresses — role Admin/Sale/OperationsManager.
+ * Khác POST /api/delivery-addresses: endpoint kia [Authorize(Roles = "Customer")], gọi
+ * bằng token Sale chỉ ăn 403, nên trước đây Sale tạo đơn hộ khách mà khách chưa có địa
+ * chỉ nào thì địa chỉ gõ tay chỉ dùng được cho đúng đơn đó rồi mất.
+ *
+ * Gửi lại đúng chuỗi địa chỉ đã có thì backend trả lại dòng cũ, không nhân đôi sổ.
+ */
+export const createCustomerDeliveryAddressApi = async (
+  customerId,
+  { address, signal } = {},
+) => {
+  const id = requireCustomerId(customerId);
+  const value = String(address ?? "").trim();
+
+  if (!value) {
+    throw new Error("Địa chỉ nhận hàng không được để trống.");
+  }
+
+  const response = await httpClient.post(
+    API_ENDPOINTS.customers.createDeliveryAddress(id),
+    { address: value },
+    { signal },
+  );
+
+  return getResponseData(response);
+};
+
 const customerLookupService = {
   requireCustomerId,
   normalizeLookupCustomer,
   searchCustomersApi,
   getCustomerDeliveryAddressesApi,
+  createCustomerDeliveryAddressApi,
 };
 
 export default customerLookupService;

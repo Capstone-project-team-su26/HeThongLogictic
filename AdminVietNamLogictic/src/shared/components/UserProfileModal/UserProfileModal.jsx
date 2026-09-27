@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, Button, Col, Form, Input, Modal, Row, Spin, Tag } from "antd";
 import {
   CalendarOutlined,
@@ -18,6 +18,7 @@ import {
 } from "@features/auth/api/authService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import VietnamAddressSelector from "@shared/components/VietnamAddressSelector/VietnamAddressSelector";
+import { getAddressSelectionError } from "@shared/api/vietnamAddressService";
 import "./UserProfileModal.css";
 
 const normalizeText = (value) => String(value ?? "").trim();
@@ -197,6 +198,8 @@ function ProfileInfoItem({ icon, label, value, wide = false, mono = false }) {
 export default function UserProfileModal({ open, onClose, onUpdated }) {
   const [form] = Form.useForm();
   const [profile, setProfile] = useState(() => getStoredUser());
+  /* meta của ô địa chỉ GoShip — chưa chọn đủ 3 cấp thì Form chặn lưu. */
+  const addressMetaRef = useRef(null);
   const [fetching, setFetching] = useState(false);
   const [updating, setUpdating] = useState(false);
 
@@ -288,7 +291,14 @@ export default function UserProfileModal({ open, onClose, onUpdated }) {
         "Thông tin cá nhân đã được cập nhật."
       );
     } catch (error) {
-      if (error?.errorFields) return;
+      if (error?.errorFields) {
+        /* Ô address bị ẩn nên lỗi của nó không tự hiện dưới ô — báo bằng toast. */
+        const addressError = error.errorFields.find((field) => field?.name?.[0] === "address");
+        if (addressError?.errors?.[0]) {
+          AuthNotify.warning("Địa chỉ chưa đầy đủ", addressError.errors[0]);
+        }
+        return;
+      }
       AuthNotify.error(
         "Cập nhật thất bại",
         getErrorMessage(error, "Không thể cập nhật thông tin cá nhân.")
@@ -421,7 +431,19 @@ export default function UserProfileModal({ open, onClose, onUpdated }) {
                     </Form.Item>
                   </Col>
                   <Col xs={24}>
-                    <Form.Item name="address" hidden rules={[{ max: 255 }]}>
+                    <Form.Item
+                      name="address"
+                      hidden
+                      rules={[
+                        { max: 255 },
+                        {
+                          validator: () => {
+                            const message = getAddressSelectionError(addressMetaRef.current);
+                            return message ? Promise.reject(new Error(message)) : Promise.resolve();
+                          },
+                        },
+                      ]}
+                    >
                       <Input />
                     </Form.Item>
                     <Form.Item label="Địa chỉ Việt Nam">
@@ -429,7 +451,8 @@ export default function UserProfileModal({ open, onClose, onUpdated }) {
                         key={profile?.address || "empty-address"}
                         initialAddress={profile?.address || ""}
                         disabled={updating}
-                        onAddressChange={(address) => {
+                        onAddressChange={(address, meta) => {
+                          addressMetaRef.current = meta;
                           form.setFieldsValue({
                             address,
                             country: address

@@ -10,7 +10,8 @@
  * - thay adapter của axios instance bằng adapter GIẢ, trả response mẫu bám đúng
  *   code backend VCL_API (controller + DTO), kể cả các mã lỗi 400/401/403;
  * - mỗi hành vi là một kịch bản PASS/FAIL riêng;
- * - cộng một phép kiểm TĨNH: màn ngoài đợt này phải import bản `*.mock.js`.
+ * - cộng phép kiểm TĨNH: không file nào (ngoài src/mocks và *.mock.js) còn import bản mock,
+ *   và các màn vừa gỡ mock import đúng bản thật.
  *
  *   node tools/verify-api.mjs     (hoặc npm run verify:api)
  *
@@ -114,15 +115,35 @@ try {
     warehouse: await load("/src/features/warehouse/api/warehouseService.js"),
     servicePricing: await load("/src/features/pricing/api/servicePricingService.js"),
     pricingRule: await load("/src/features/pricing/api/pricingRuleService.js"),
+    systemParameter: await load("/src/features/pricing/api/systemParameterService.js"),
     packageConfig: await load("/src/features/pricing/api/packageConfigurationService.js"),
     orderStatus: await load("/src/features/consignment/constants/orderStatus.js"),
     receivingNotes: await load("/src/features/receiving/api/receivingNoteService.js"),
     actionQueue: await load("/src/features/settlement/api/actionQueueService.js"),
     finance: await load("/src/features/admin/api/adminFinanceService.js"),
     warehouseManager: await load("/src/features/warehouse/api/warehouseManagerService.js"),
+    warehouseAdmin: await load("/src/features/warehouse/api/warehouseAdminService.js"),
+    catalogAdmin: await load("/src/features/catalog/api/catalogAdminService.js"),
+    adminSvc: await load("/src/features/admin/api/adminService.js"),
+    adminUser: await load("/src/features/admin/api/adminUserService.js"),
     receipt: await load("/src/features/consignment/api/consignmentReceiptService.js"),
     customerLookup: await load("/src/features/customer/api/customerLookupService.js"),
     receiptUrl: await load("/src/shared/utils/receiptUrl.js"),
+    dashboard: await load("/src/features/dashboard/api/dashboardService.js"),
+    purchaseOrder: await load("/src/features/purchase/api/purchaseOrderService.js"),
+    /* Chat CSKH nhân viên (26/09/2026): hội thoại + upload ảnh THẬT, badge chưa đọc. */
+    conversation: await load("/src/features/chat/api/conversationApi.js"),
+    chatUpload: await load("/src/features/chat/api/chatImageUploadApi.js"),
+    chatHelpers: await load("/src/features/chat/pages/CustomerServiceChat/CustomerServiceChat.helpers.js"),
+    saleBadges: await load("/src/features/workspace/api/saleBadgeService.js"),
+    /* Gỡ mock còn lại (27/09/2026): upload shared, tỷ giá, hàng cấm, AI Sales, khách hàng, địa chỉ GoShip. */
+    uploadShared: await load("/src/shared/api/uploadImage.js"),
+    exchangeRate: await load("/src/features/pricing/api/exchangeRateService.js"),
+    restricted: await load("/src/features/catalog/api/restrictedItemService.js"),
+    saleAi: await load("/src/features/chat/api/saleAiService.js"),
+    customerSvc: await load("/src/features/customer/api/customerService.js"),
+    address: await load("/src/shared/api/vietnamAddressService.js"),
+    purchaseRequest: await load("/src/features/purchase/api/purchaseRequestService.js"),
   };
 } catch (error) {
   loadError = error;
@@ -446,7 +467,8 @@ const DRAFT_QUOTATION = {
       feeType: "PACKING_FEE",
       code: "",
       pricingRuleId: null,
-      feeId: null,
+      /* Đúng như backend thật: feeId = pricingRuleId ?? id → dòng không quy tắc trả ID DÒNG PHÍ. */
+      feeId: "fee-2",
       orderItemId: ITEM_ID,
       itemName: "Bình gốm",
       feeName: "Phí thùng gỗ",
@@ -486,18 +508,40 @@ if (loadError) {
     warehouse,
     servicePricing,
     pricingRule,
+    systemParameter,
     packageConfig,
     receivingNotes,
     actionQueue,
     finance,
     warehouseManager,
+    warehouseAdmin,
+    catalogAdmin,
+    adminSvc,
+    adminUser,
     receipt,
     receiptUrl,
     customerLookup,
+    dashboard,
+    purchaseOrder,
+    conversation,
+    chatUpload,
+    chatHelpers,
+    saleBadges,
+    uploadShared,
+    exchangeRate,
+    restricted,
+    saleAi,
+    customerSvc,
+    address,
+    purchaseRequest,
   } = mods;
 
   const httpClient = httpMod.default;
   httpClient.defaults.adapter = fakeAdapter;
+  /* Instance upload riêng (timeout dài) — shared và chat dùng CHUNG một instance; cũng phải
+     đi qua adapter giả. */
+  uploadShared.uploadAxios.defaults.adapter = fakeAdapter;
+  chatUpload.chatUploadAxios.defaults.adapter = fakeAdapter;
 
   /* ---------- Hạ tầng httpClient ---------- */
 
@@ -1083,6 +1127,17 @@ if (loadError) {
         expectEqual("tên kiện", groups[0].itemName, "Bình gốm"),
         expectEqual("tổng phí của kiện", groups[0].total, 35000),
         expectEqual("phí thùng gỗ không có feeId (không sửa được)", groups[0].fees[1].feeId, null),
+        expectEqual("phí thùng: feeId = id dòng phí thì KHÔNG coi là quy tắc", groups[0].fees[1].pricingRuleId, null),
+        expectEqual(
+          "dịch vụ theo kiện: feeId là PRICING_RULES.id, không phải id dòng phí",
+          [groups[0].fees[0].feeId, groups[0].fees[0].pricingRuleId],
+          [INSPECTION_RULE_ID, INSPECTION_RULE_ID],
+        ),
+        expectEqual(
+          "backend cũ thiếu pricingRuleId nhưng feeId khác id → vẫn giữ feeId",
+          quotation.normalizeQuotationFee({ id: "line-9", feeId: INSPECTION_RULE_ID }).pricingRuleId,
+          INSPECTION_RULE_ID,
+        ),
         expectEqual("phí cả đơn", [orderFees.length, orderFees[0].amount], [1, 45000]),
       );
     },
@@ -1704,6 +1759,97 @@ if (loadError) {
     );
   });
 
+  /*
+   * Tham số vận hành nằm ở HAI bảng và backend đọc mỗi mã từ đúng một bảng. Kiểm thử này
+   * giữ đúng điều đó: ghi nhầm bảng thì số trên màn hình đổi mà hệ thống vẫn chạy như cũ,
+   * và không có lỗi nào nổi lên để ai đó phát hiện.
+   */
+  await check("Tham số vận hành: đọc cả hai bảng, ghi vào ĐÚNG bảng của từng mã", async () => {
+    const FEE_ID = "cccc1111-2222-4333-8444-555566667777";
+    const RULE_ID = "dddd1111-2222-4333-8444-555566667777";
+
+    resetState({ token: "tok", pathname: "/admin/system-parameters" });
+    routes = [
+      {
+        method: "GET",
+        url: "/api/additional-service-fees",
+        reply: () =>
+          ok([
+            {
+              id: FEE_ID,
+              feeName: "Tỷ lệ cọc đơn ký gửi",
+              feeCode: "DEPOSIT_RATE",
+              calculationType: "PERCENTAGE",
+              value: 50,
+              unit: "%",
+              isActive: true,
+            },
+          ]),
+      },
+      {
+        method: "GET",
+        url: "/api/pricing-rules",
+        reply: () =>
+          ok([
+            {
+              id: RULE_ID,
+              ruleName: "Hệ số quy đổi thể tích",
+              ruleCode: "VOLUMETRIC_DIVISOR",
+              ruleType: "VOLUMETRIC_DIVISOR",
+              calculationType: "FIXED",
+              value: 5000,
+              status: "ACTIVE",
+            },
+          ]),
+      },
+      { method: "PUT", url: `/api/additional-service-fees/${FEE_ID}`, reply: () => ok({ id: FEE_ID }) },
+      { method: "PUT", url: `/api/pricing-rules/${RULE_ID}`, reply: () => ok({ id: RULE_ID }) },
+      { method: "POST", url: "/api/additional-service-fees", reply: () => ok({ id: "moi" }, 201) },
+    ];
+
+    const records = await systemParameter.getSystemParametersApi();
+
+    const depositDef = { code: "DEPOSIT_RATE", source: systemParameter.SOURCE_FEE, label: "Tỷ lệ cọc", calculationType: "PERCENTAGE", unit: "%" };
+    const divisorDef = { code: "VOLUMETRIC_DIVISOR", source: systemParameter.SOURCE_RULE, label: "Hệ số quy đổi" };
+    const cancelDef = { code: "PURCHASE_CANCEL_FEE_RATE", source: systemParameter.SOURCE_FEE, label: "Phí huỷ", calculationType: "PERCENTAGE", unit: "%" };
+
+    const deposit = systemParameter.findParameterRecord(records, depositDef);
+    const divisor = systemParameter.findParameterRecord(records, divisorDef);
+    const cancel = systemParameter.findParameterRecord(records, cancelDef);
+
+    requests = [];
+    await systemParameter.saveSystemParameterApi({ definition: depositDef, record: deposit, value: 40 });
+    const depositReq = onlyRequest();
+
+    requests = [];
+    await systemParameter.saveSystemParameterApi({ definition: divisorDef, record: divisor, value: 6000 });
+    const divisorReq = onlyRequest();
+
+    /* Mã chưa có dòng nào: lần lưu đầu phải TẠO, không phải sửa. */
+    requests = [];
+    await systemParameter.saveSystemParameterApi({ definition: cancelDef, record: cancel, value: 10 });
+    const createReq = onlyRequest();
+
+    let refusedNegative = false;
+    try {
+      await systemParameter.saveSystemParameterApi({ definition: depositDef, record: deposit, value: -1 });
+    } catch {
+      refusedNegative = true;
+    }
+
+    return all(
+      expectEqual("đọc đủ hai nguồn", records.length, 2),
+      expectEqual("mã ở bảng phí không lẫn sang bảng quy tắc", [deposit?.source, divisor?.source], ["fee", "rule"]),
+      expectEqual("mã chưa cấu hình trả null", cancel, null),
+      expectEqual("sửa DEPOSIT_RATE → PUT bảng phí", [depositReq?.method, depositReq?.url], ["PUT", `/api/additional-service-fees/${FEE_ID}`]),
+      expectEqual("giữ nguyên mã và cách tính khi ghi", [depositReq?.body?.feeCode, depositReq?.body?.calculationType, depositReq?.body?.value], ["DEPOSIT_RATE", "PERCENTAGE", 40]),
+      expectEqual("sửa VOLUMETRIC_DIVISOR → PUT bảng quy tắc", [divisorReq?.method, divisorReq?.url], ["PUT", `/api/pricing-rules/${RULE_ID}`]),
+      expectEqual("PUT quy tắc gửi đủ trường bắt buộc", [divisorReq?.body?.ruleCode, divisorReq?.body?.ruleType, divisorReq?.body?.status, divisorReq?.body?.value], ["VOLUMETRIC_DIVISOR", "VOLUMETRIC_DIVISOR", "ACTIVE", 6000]),
+      expectEqual("mã chưa có dòng → POST tạo mới", [createReq?.method, createReq?.url, createReq?.body?.feeCode], ["POST", "/api/additional-service-fees", "PURCHASE_CANCEL_FEE_RATE"]),
+      expectEqual("giá trị âm bị chặn tại chỗ", refusedNegative, true),
+    );
+  });
+
   await check("package-configurations: MẢNG TRẦN, lọc ACTIVE", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -1820,6 +1966,27 @@ if (loadError) {
     );
   });
 
+  await check("Phiếu nhập kho: bước DISCREPANCY_ACK (lệch cân đã tự chốt) vào tab \"Cần quyết định\", chỉ cho chấp nhận; số đếm đầu trang tính trên mọi phiếu", async () => {
+    resetState({ token: "tok" });
+    const rows = [
+      { id: "a1", status: "APPROVED", awaitingApproval: true, approvalStage: "DISCREPANCY_ACK", hasDiscrepancy: true },
+      { id: "a2", status: "RECEIVED", awaitingApproval: true, approvalStage: "DISCREPANCY", hasDiscrepancy: true },
+      { id: "a3", status: "PENDING_APPROVAL", awaitingApproval: true, approvalStage: "RECEIVE", hasDiscrepancy: false },
+      { id: "a4", status: "APPROVED", awaitingApproval: false, approvalStage: null, hasDiscrepancy: true },
+    ];
+    routes = [{ method: "GET", url: "/api/warehouse-receiving-notes", reply: () => ok({ message: "ok", data: { items: rows, totalCount: 4, pageNumber: 1, pageSize: 200, totalPages: 1 } }) }];
+    const awaiting = await receivingNotes.listReceivingNotes({ status: receivingNotes.AWAITING_TAB_KEY });
+    const summary = await receivingNotes.getReceivingSummary({ search: " WRN " });
+    return all(
+      expectEqual("tab cần quyết định có phiếu lệch cân", awaiting.items.map((r) => r.id), ["a1", "a2", "a3"]),
+      expectEqual("summary không gửi status", requests[1]?.params, { search: "WRN", pageNumber: 1, pageSize: 200 }),
+      expectEqual("số đếm", summary, { awaiting: 3, discrepancyAwaiting: 2, discrepancy: 3 }),
+      expectEqual("nhãn giai đoạn lệch cân", receivingNotes.getApprovalStageMeta("discrepancy_ack")?.label, "Quyết định lệch cân"),
+      expectEqual("bước lệch", ["DISCREPANCY", "DISCREPANCY_ACK", "RECEIVE"].map(receivingNotes.isDiscrepancyStage), [true, true, false]),
+      expectEqual("được từ chối", ["DISCREPANCY", "DISCREPANCY_ACK", "RECEIVE"].map(receivingNotes.canRejectAtStage), [true, false, true]),
+    );
+  });
+
   await check("Phiếu nhập kho: duyệt PUT /status { APPROVED, reason }; không lý do thì không gửi reason; từ chối thiếu lý do chặn tại chỗ", async () => {
     resetState({ token: "tok" });
     routes = [{ method: "PUT", url: `/api/warehouse-receiving-notes/${NOTE_ID}/status`, reply: (req) => ok({ message: "ok", data: { id: NOTE_ID, status: req.body.status === "APPROVED" ? "ACTIVE" : "REJECTED" } }) }];
@@ -1882,6 +2049,116 @@ if (loadError) {
     );
   });
 
+  /*
+   * HOÀN TIỀN MUA HỘ (backend mới — chỉ có trên env test). Response mẫu chép từ
+   * tests/purchase_refund_flow.py kịch bản A của VCL_API (đặt 5 áo × 200.000, NCC chỉ có 3).
+   */
+  const PR_ID = "aaaaaaaa-1111-4222-8333-444444444444";
+  const PO_ID = "bbbbbbbb-1111-4222-8333-444444444444";
+  const PR_ITEM_ID = "cccccccc-1111-4222-8333-444444444444";
+  const REFUND_ID = "dddddddd-1111-4222-8333-444444444444";
+  const DIFF_REFUND_ID = "eeeeeeee-1111-4222-8333-444444444444";
+  const UNFULFILLED_REFUND = {
+    refundId: REFUND_ID, purchaseRequestId: PR_ID, purchaseOrderId: null, refundType: "REFUND_UNFULFILLED",
+    refundTypeText: "Hoàn phần không mua được / NCC giao thiếu", amount: 421600, status: "PENDING", statusText: "Chờ hoàn tiền",
+    goodsAmount: 400000, priceDifferenceAmount: 0, serviceFeeAmount: 20000, vatAmount: 1600, importTaxAdjustment: 0, cancelFeeAmount: 0,
+    isLegacy: false,
+    lines: [{ lineId: "l1", purchaseRequestItemId: PR_ITEM_ID, productName: "Ao thun", reasonCode: "UNFULFILLED", reasonText: "Không mua được",
+      quantity: 2, unitPrice: 200000, goodsAmount: 400000, priceDifferenceAmount: 0, serviceFeeAmount: 20000, vatAmount: 1600,
+      importTaxAdjustment: 0, importTaxInRefund: false, cancelFeeAmount: 0, amount: 421600,
+      formula: "tiền hàng 2 × 200.000đ = 400.000đ + phí mua hộ 20.000đ (50.000đ × 400.000đ / 1.000.000đ) + VAT 8% phí 1.600đ = 421.600đ" }],
+  };
+  const SUMMARY = { purchaseRequestId: PR_ID, purchaseCode: "PR-1", totalCollected: 1086400, totalRefunded: 0, totalPendingRefund: 451600, refundableRemaining: 634800, refunds: [UNFULFILLED_REFUND, { refundId: DIFF_REFUND_ID, refundType: "REFUND_PRICE_DIFF", amount: 30000, status: "PENDING", lines: [] }] };
+
+  await check("Hoàn mua hộ: GET /purchase-requests/{id}/refunds bóc data, giữ số backend, mã lạ hiện nguyên mã", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "GET", url: `/api/purchase-requests/${PR_ID}/refunds`, reply: () => ok({ message: "OK", data: { ...SUMMARY, refunds: [...SUMMARY.refunds, { refundId: "x", refundType: "REFUND_NEW_KIND", amount: "5000", status: "WEIRD", lines: [{ reasonCode: "NEW_REASON", amount: 5000 }] }] } }) }];
+    const summary = await purchaseOrder.getPurchaseRequestRefunds(PR_ID);
+    const [first, , odd] = summary.refunds;
+    return all(
+      expectEqual("sổ", [summary.totalCollected, summary.totalRefunded, summary.totalPendingRefund, summary.refundableRemaining], [1086400, 0, 451600, 634800]),
+      expectEqual("khoản", [first.amount, first.typeLabel, first.statusMeta.label, first.lines[0].reasonLabel, first.lines[0].formula.slice(0, 9)], [421600, "Không mua được / NCC giao thiếu", "Chờ chuyển tiền", "Không mua được (NCC hết hàng / mua ít hơn khách đặt)", "tiền hàng"]),
+      expectEqual("mã lạ", [odd.typeLabel, odd.statusMeta.label, odd.lines[0].reasonLabel, odd.amount], ["REFUND_NEW_KIND", "WEIRD", "NEW_REASON", 5000]),
+    );
+  });
+
+  await check("Hoàn mua hộ: close-unfulfilled chỉ gửi danh sách khi có; thiếu lý do chặn tại chỗ; trả { refund, summary, requestStatus }", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "POST", url: `/api/purchase-requests/${PR_ID}/close-unfulfilled`, reply: () => ok({ message: "ok", data: { refund: UNFULFILLED_REFUND, summary: SUMMARY, requestStatus: "PURCHASING" } }) }];
+    const all1 = await purchaseOrder.closeUnfulfilledPurchase(PR_ID, { reason: " NCC chỉ còn 3 áo " });
+    const some = await purchaseOrder.closeUnfulfilledPurchase(PR_ID, {
+      reason: "NCC giao thiếu 1 áo",
+      purchaseRequestItemIds: [PR_ITEM_ID, ""],
+      supplierShortages: [{ purchaseOrderId: PO_ID, purchaseRequestItemId: PR_ITEM_ID, quantity: "1" }, { purchaseOrderId: PO_ID, purchaseRequestItemId: PR_ITEM_ID, quantity: 0 }],
+    });
+    const before = requests.length;
+    const noReason = await rejection(purchaseOrder.closeUnfulfilledPurchase(PR_ID, { reason: " " }));
+    return all(
+      expectEqual("body tất cả", requests[0]?.body, { reason: "NCC chỉ còn 3 áo" }),
+      expectEqual("body chọn + giao thiếu", requests[1]?.body, { reason: "NCC giao thiếu 1 áo", purchaseRequestItemIds: [PR_ITEM_ID], supplierShortages: [{ purchaseOrderId: PO_ID, purchaseRequestItemId: PR_ITEM_ID, quantity: 1 }] }),
+      expectEqual("kết quả", [all1.refund.amount, all1.refund.lines.length, all1.summary.totalPendingRefund, some.requestStatus], [421600, 1, 451600, "PURCHASING"]),
+      expectEqual("thiếu lý do không gọi mạng", [noReason.resolved, requests.length], [false, before]),
+    );
+  });
+
+  await check("Hoàn mua hộ: đã chuyển tiền — yêu cầu gửi refundId trên URL + { transactionCode, amount }; đơn mua gửi { transactionCode, refundId, amount }; thiếu mã GD chặn tại chỗ", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "POST", url: `/api/purchase-requests/${PR_ID}/refunds/${REFUND_ID}/complete`, reply: () => ok({ message: "ok", data: { ...SUMMARY, totalRefunded: 421600, totalPendingRefund: 30000 } }) },
+      { method: "POST", url: `/api/purchase-orders/${PO_ID}/refund/complete`, reply: () => ok({ message: "ok", data: { purchaseOrderId: PO_ID, status: "ORDERED", refundAmount: 30000, refundStatus: "REFUNDED", totalRefundAmount: 230800, warehouseInvoiceStatus: "pending", refunds: [{ refundId: DIFF_REFUND_ID, refundType: "REFUND_PRICE_DIFF", amount: 30000, status: "REFUNDED" }] } }) },
+      { method: "POST", url: `/api/purchase-orders/${PO_ID}/cancel`, reply: (req) => ok({ message: "ok", data: { purchaseOrderId: PO_ID, status: "CANCELLED", cancelFeeAmount: req.body.cause === "CUSTOMER" ? 72000 : 0 } }) },
+    ];
+    const summary = await purchaseOrder.completePurchaseRequestRefund(PR_ID, REFUND_ID, { transactionCode: " RF-A ", amount: 421600 });
+    const order = await purchaseOrder.completePurchaseRefund(PO_ID, { transactionCode: "RF-A2", refundId: DIFF_REFUND_ID, amount: 30000 });
+    await purchaseOrder.cancelPurchaseOrder(PO_ID, { reason: "Khách đổi ý" });
+    await purchaseOrder.cancelPurchaseOrder(PO_ID, { reason: "NCC huỷ", cause: "supplier" });
+    const before = requests.length;
+    const noCode = await rejection(purchaseOrder.completePurchaseRequestRefund(PR_ID, REFUND_ID, { transactionCode: "" }));
+    const badCause = await rejection(purchaseOrder.cancelPurchaseOrder(PO_ID, { reason: "x", cause: "SALE" }));
+    return all(
+      expectEqual("body yêu cầu", requests[0]?.body, { transactionCode: "RF-A", amount: 421600 }),
+      expectEqual("sổ sau khi đóng", [summary.totalRefunded, summary.totalPendingRefund], [421600, 30000]),
+      expectEqual("body đơn mua", requests[1]?.body, { transactionCode: "RF-A2", refundId: DIFF_REFUND_ID, amount: 30000 }),
+      expectEqual("đơn chuẩn hoá refunds", [order.refunds[0].statusMeta.label, order.totalRefundAmount, order.warehouseInvoiceStatus, purchaseOrder.hasPendingRefund(order)], ["Đã chuyển trả khách", 230800, "PENDING", false]),
+      expectEqual("huỷ gửi cause", [requests[2]?.body, requests[3]?.body], [{ reason: "Khách đổi ý", cause: "CUSTOMER" }, { reason: "NCC huỷ", cause: "SUPPLIER" }]),
+      expectEqual("chặn tại chỗ", [noCode.resolved, badCause.resolved, requests.length], [false, false, before]),
+    );
+  });
+
+  await check("Tổng quan: ba endpoint /api/staff|operations|admin/dashboard bóc { data }, giữ số backend, thiếu trường → 0/[]; 403 ném lỗi", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/staff/dashboard", reply: () => ok({ message: "ok", data: {
+        totalOrders: 3, consignmentTotal: 2, purchaseTotal: 1,
+        exchangeRates: [{ currencyCode: "cny", currencyName: "Nhân dân tệ", rateToVnd: 3600 }],
+        routes: [{ countryCode: "KR", countryName: "Hàn Quốc", consignmentCount: 2, purchaseCount: 1, total: 3, percent: 100 }],
+        statusGroups: [{ key: "PENDING", label: "Chờ duyệt", count: 3, percent: 100, consignmentCount: 2, purchaseCount: 1, statuses: [{ key: "CONSIGNMENT:PENDING_REVIEW", label: "Ký gửi · Chờ duyệt", count: 2, percent: 67 }] }],
+        last7Days: [{ date: "2026-09-26", consignmentCount: 2, purchaseCount: 1, total: 3 }],
+        workQueue: { consignmentsToReview: 2 },
+        recentConsignments: [{ orderId: ORDER_ID, consignmentCode: "KG-1", status: "PENDING_REVIEW", statusText: "Chờ duyệt" }],
+      } }) },
+      { method: "GET", url: "/api/operations/dashboard", reply: () => ok({ message: "ok", data: {
+        stockTotals: { storedParcels: 5, occupancyPercent: 12.5 },
+        flow7Days: [{ date: "2026-09-26", originInbound: 4, exported: 2, arrivedVn: 1, dispatchedDelivery: 0 }],
+        processingTimes: [{ key: "WRO", label: "Phiếu xuất kho", averageMinutes: null, sampleCount: 0 }, { key: "DELIVERY", averageMinutes: 2.5, sampleCount: 3 }],
+      } }) },
+      { method: "GET", url: "/api/admin/dashboard", reply: () => fail(403, { message: "Forbidden" }) },
+    ];
+    const sale = await dashboard.getSaleDashboardApi();
+    const ops = await dashboard.getOperationsDashboardApi();
+    const { resolved, error } = await rejection(dashboard.getAdminDashboardApi());
+    return all(
+      expectEqual("url", requests.map((r) => [r.method, r.url]), [["GET", "/api/staff/dashboard"], ["GET", "/api/operations/dashboard"], ["GET", "/api/admin/dashboard"]]),
+      expectEqual("số Sale giữ nguyên", [sale.totalOrders, sale.routes[0].percent, sale.statusGroups[0].statuses[0].count, sale.last7Days[0].total], [3, 100, 2, 3]),
+      expectEqual("tỷ giá chuẩn hoá mã", [sale.exchangeRates[0].currencyCode, sale.exchangeRates[0].rateToVnd], ["CNY", 3600]),
+      expectEqual("thiếu trường → 0", [sale.workQueue.consignmentsToReview, sale.workQueue.purchasesToQuote, sale.recentPurchaseRequests.length], [2, 0, 0]),
+      expectEqual("mã đơn ký gửi → orderCode", [sale.recentConsignments[0].orderId, sale.recentConsignments[0].orderCode], [ORDER_ID, "KG-1"]),
+      expectEqual("vận hành", [ops.stockTotals.storedParcels, ops.stockTotals.occupancyPercent, ops.flow7Days[0].originInbound, ops.warehouses.length], [5, 12.5, 4, 0]),
+      expectEqual("chưa có mẫu → averageMinutes null", [ops.processingTimes[0].averageMinutes, ops.processingTimes[1].averageMinutes], [null, 2.5]),
+      expectEqual("403 ném lỗi", [resolved, error?.response?.status ?? error?.status], [false, 403]),
+    );
+  });
+
   await check("Quản lý kho: GET manager bóc data; PUT { managerId|null, reason } bắt lý do; ứng viên chỉ OperationsManager đang hoạt động", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -1908,6 +2185,538 @@ if (loadError) {
     );
   });
 
+  /* ---------- Gán nhân viên kho vào kho (adminUserService + warehouseManagerService) ---------- */
+
+  const STAFF_USER_ID = "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  const WAREHOUSE_ID_2 = "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
+
+  await check("Người dùng: GET /api/User giữ nguyên field + assignedWarehouses (thiếu → []); nhận diện vai trò kho", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/User", reply: () => ok([
+        { id: STAFF_USER_ID, fullName: "Kho A", role: "Warehouse Staff VN", region: "CN", status: "Active", assignedWarehouses: [{ warehouseId: WAREHOUSE_ID, warehouseCode: "GZ-01", warehouseName: "Kho Quảng Châu", region: "CN" }] },
+        { id: "u2", fullName: "Sale B", role: "Sale", status: "Active" },
+      ]) },
+    ];
+    const users = await adminSvc.getAdminUsers();
+    const roles = ["Warehouse", "Warehouse Staff", "WarehouseStaff", "WarehouseTQ", "WarehouseVN", "Warehouse Staff Cam", "warehouse_staff"];
+    const notRoles = ["WarehouseManager", "Warehouse Manager", "Sale", "OperationsManager", "", null];
+    return all(
+      expectEqual("url", requests.map((r) => [r.method, r.url]), [["GET", "/api/User"]]),
+      expectEqual("giữ field", [users[0].id, users[0].fullName, users[0].region, users[0].status], [STAFF_USER_ID, "Kho A", "CN", "Active"]),
+      expectEqual("kho phụ trách", users[0].assignedWarehouses.map((w) => [w.warehouseId, w.warehouseName, w.region]), [[WAREHOUSE_ID, "Kho Quảng Châu", "CN"]]),
+      expectEqual("thiếu assignedWarehouses → []", users[1].assignedWarehouses, []),
+      expectEqual("vai trò kho", roles.map(adminUser.isWarehouseRole), roles.map(() => true)),
+      expectEqual("không phải vai trò kho", notRoles.map(adminUser.isWarehouseRole), notRoles.map(() => false)),
+    );
+  });
+
+  await check("Người dùng: adminService re-export ĐÚNG 6 hàm thật của adminUserService; POST/PUT role/lock/unlock gửi đúng body; 409 giữ message", async () => {
+    resetState({ token: "tok" });
+    const names = ["getAdminUsers", "getAdminUserDetail", "createAdminUser", "updateAdminUserRole", "lockAdminUser", "unlockAdminUser"];
+    routes = [
+      { method: "GET", url: `/api/User/${STAFF_USER_ID}`, reply: () => ok({ id: STAFF_USER_ID, fullName: "Kho A", role: "WarehouseStaff", region: "CN" }) },
+      { method: "POST", url: "/api/User", reply: () => ok({ id: "new-user-id" }, 201) },
+      { method: "PUT", url: `/api/User/${STAFF_USER_ID}/role`, reply: () => ok({ message: "Đã cập nhật vai trò." }) },
+      { method: "PUT", url: `/api/User/${STAFF_USER_ID}/lock`, reply: () => ok({ message: "Đã khoá." }) },
+      { method: "PUT", url: `/api/User/${STAFF_USER_ID}/unlock`, reply: () => ok({ message: "Đã mở khoá." }) },
+    ];
+    const detail = await adminSvc.getAdminUserDetail(STAFF_USER_ID);
+    const created = await adminSvc.createAdminUser({ fullName: "Kho B", email: "b@vcl.vn", password: "secret1", phone: "0900000000", role: "WarehouseStaff", region: "" });
+    await adminSvc.updateAdminUserRole(STAFF_USER_ID, { role: "WarehouseStaff", region: null });
+    await adminSvc.lockAdminUser(STAFF_USER_ID);
+    await adminSvc.unlockAdminUser(STAFF_USER_ID);
+    const okRequests = requests.slice();
+    routes = [{ method: "POST", url: "/api/User", reply: () => fail(409, { message: "Email đã tồn tại." }) }];
+    const dup = await rejection(adminSvc.createAdminUser({ fullName: "X", email: "b@vcl.vn", password: "secret1", phone: "0900000001", role: "Sale", region: null }));
+    routes = [{ method: "PUT", url: `/api/User/${STAFF_USER_ID}/role`, reply: () => fail(400, { message: "Tài khoản đang được gán kho, bỏ gán trước khi đổi vùng." }) }];
+    const assigned = await rejection(adminSvc.updateAdminUserRole(STAFF_USER_ID, { role: "WarehouseStaff", region: "VN" }));
+    const before = requests.length;
+    const noId = await rejection(adminSvc.lockAdminUser(""));
+    return all(
+      expectEqual("cùng tham chiếu", names.filter((name) => adminSvc[name] !== adminUser[name]), []),
+      expectEqual("url", okRequests.map((r) => [r.method, r.url]), [
+        ["GET", `/api/User/${STAFF_USER_ID}`],
+        ["POST", "/api/User"],
+        ["PUT", `/api/User/${STAFF_USER_ID}/role`],
+        ["PUT", `/api/User/${STAFF_USER_ID}/lock`],
+        ["PUT", `/api/User/${STAFF_USER_ID}/unlock`],
+      ]),
+      expectEqual("chi tiết", [detail.id, detail.region, detail.assignedWarehouses], [STAFF_USER_ID, "CN", []]),
+      expectEqual("body tạo", okRequests[1].body, { fullName: "Kho B", email: "b@vcl.vn", password: "secret1", phone: "0900000000", role: "WarehouseStaff", region: "" }),
+      expectEqual("201 { id }", created, { id: "new-user-id" }),
+      expectEqual("body đổi vai trò", okRequests[2].body, { role: "WarehouseStaff", region: null }),
+      expectEqual("409 giữ message", [dup.resolved, adminSvc.getAdminApiError(dup.error, "x")], [false, "Email đã tồn tại."]),
+      expectEqual("400 đổi vùng giữ message", [assigned.resolved, adminSvc.getAdminApiError(assigned.error, "x")], [false, "Tài khoản đang được gán kho, bỏ gán trước khi đổi vùng."]),
+      expectEqual("thiếu id không gọi mạng", [noId.resolved, requests.length], [false, before]),
+    );
+  });
+
+  await check("Gán kho: GET /api/users/{id}/warehouses bóc data; PUT thay toàn bộ { warehouseIds, note|null }; [] = bỏ gán; lỗi giữ nguyên message, 403 rỗng → câu tiếng Việt", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: `/api/users/${STAFF_USER_ID}/warehouses`, reply: () => ok({ data: {
+        userId: STAFF_USER_ID, fullName: "Kho A", email: "a@vcl.vn", role: "WarehouseStaff", region: null, isWarehouseRole: true,
+        warehouses: [{ warehouseId: WAREHOUSE_ID, warehouseCode: "GZ-01", warehouseName: "Kho Quảng Châu", region: "CN", isActive: true, note: "Trực ca sáng", assignedAt: "2026-09-20T02:00:00Z", assignedById: "admin-1", assignedByName: "Admin" }],
+      } }) },
+      { method: "PUT", url: `/api/users/${STAFF_USER_ID}/warehouses`, reply: (req) => ok({ message: "Đã cập nhật kho phụ trách.", data: {
+        userId: STAFF_USER_ID, role: "WarehouseStaff", region: "CN", isWarehouseRole: true,
+        warehouses: req.body.warehouseIds.map((id) => ({ warehouseId: id, region: "CN", isActive: true })),
+        regionChanged: true, previousRegion: null,
+      } }) },
+      { method: "GET", url: "/api/warehouses", reply: () => ok({ items: [
+        { id: WAREHOUSE_ID, name: "Kho Quảng Châu", code: "GZ-01", region: "CN", isActive: true, warehouseType: "ORIGIN" },
+        { id: WAREHOUSE_ID_2, name: "Kho cũ", code: "OLD", regionCode: "CN", isActive: false },
+      ] }) },
+    ];
+    const detail = await adminUser.getUserWarehousesApi(STAFF_USER_ID);
+    const saved = await adminUser.assignUserWarehousesApi(STAFF_USER_ID, { warehouseIds: [WAREHOUSE_ID, ` ${WAREHOUSE_ID} `, "", WAREHOUSE_ID_2], note: "   " });
+    await adminUser.assignUserWarehousesApi(STAFF_USER_ID, { warehouseIds: [], note: " Nghỉ việc " });
+    const catalog = await adminUser.getAssignableWarehousesApi();
+    const okRequests = requests.slice();
+
+    routes = [{ method: "PUT", url: `/api/users/${STAFF_USER_ID}/warehouses`, reply: () => fail(400, { message: "Các kho phải cùng một vùng." }) }];
+    const bad = await rejection(adminUser.assignUserWarehousesApi(STAFF_USER_ID, { warehouseIds: [WAREHOUSE_ID] }));
+    routes = [{ method: "PUT", url: `/api/users/${STAFF_USER_ID}/warehouses`, reply: () => fail(403, "") }];
+    const forbidden = await rejection(adminUser.assignUserWarehousesApi(STAFF_USER_ID, { warehouseIds: [WAREHOUSE_ID] }));
+    const before = requests.length;
+    const noId = await rejection(adminUser.assignUserWarehousesApi(" ", { warehouseIds: [] }));
+
+    return all(
+      expectEqual("url", okRequests.map((r) => [r.method, r.url]), [
+        ["GET", `/api/users/${STAFF_USER_ID}/warehouses`],
+        ["PUT", `/api/users/${STAFF_USER_ID}/warehouses`],
+        ["PUT", `/api/users/${STAFF_USER_ID}/warehouses`],
+        ["GET", "/api/warehouses"],
+      ]),
+      expectEqual("chi tiết", [detail.isWarehouseRole, detail.region, detail.warehouses[0].assignedByName, detail.warehouses[0].note], [true, null, "Admin", "Trực ca sáng"]),
+      expectEqual("body gán: bỏ trùng/rỗng, note trắng → null", okRequests[1].body, { warehouseIds: [WAREHOUSE_ID, WAREHOUSE_ID_2], note: null }),
+      expectEqual("body bỏ gán", okRequests[2].body, { warehouseIds: [], note: "Nghỉ việc" }),
+      expectEqual("kết quả lưu", [saved.message, saved.data.regionChanged, saved.data.previousRegion, saved.data.region, saved.data.warehouses.length], ["Đã cập nhật kho phụ trách.", true, null, "CN", 2]),
+      expectEqual("danh mục kho", catalog.map((w) => [w.id, w.region, w.isActive]), [[WAREHOUSE_ID, "CN", true], [WAREHOUSE_ID_2, "CN", false]]),
+      expectEqual("400 giữ message", [bad.resolved, adminUser.getAdminUserApiError(bad.error)], [false, "Các kho phải cùng một vùng."]),
+      expectEqual("403 rỗng", [forbidden.resolved, adminUser.getAdminUserApiError(forbidden.error)], [false, "Tài khoản của bạn không có quyền thực hiện thao tác này."]),
+      expectEqual("403 không đăng xuất", fakeLocation.replaced, []),
+      expectEqual("thiếu id không gọi mạng", [noId.resolved, requests.length], [false, before]),
+    );
+  });
+
+  await check("Nhân viên kho của kho: GET /api/warehouses/{id}/staff bóc data.staff (chỉ đọc)", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/staff`, reply: () => ok({ data: {
+        warehouseId: WAREHOUSE_ID, warehouseCode: "GZ-01", warehouseName: "Kho Quảng Châu", region: "CN",
+        staff: [{ userId: STAFF_USER_ID, fullName: "Kho A", email: "a@vcl.vn", role: "WarehouseStaff", region: "CN", status: "Active", assignedAt: "2026-09-20T02:00:00Z", assignedByName: "Admin", note: null }],
+      } }) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID_2}/staff`, reply: () => ok({ data: { warehouseId: WAREHOUSE_ID_2, staff: [] } }) },
+    ];
+    const one = await warehouseManager.getWarehouseStaff(WAREHOUSE_ID);
+    const empty = await warehouseManager.getWarehouseStaff(WAREHOUSE_ID_2);
+    return all(
+      expectEqual("url", requests.map((r) => [r.method, r.url]), [["GET", `/api/warehouses/${WAREHOUSE_ID}/staff`], ["GET", `/api/warehouses/${WAREHOUSE_ID_2}/staff`]]),
+      expectEqual("kho", [one.warehouseCode, one.region], ["GZ-01", "CN"]),
+      expectEqual("nhân viên", one.staff.map((m) => [m.userId, m.assignedByName, m.note]), [[STAFF_USER_ID, "Admin", null]]),
+      expectEqual("rỗng", empty.staff, []),
+    );
+  });
+
+  /* ---------- Sơ đồ kho Admin (warehouseAdminService, adminService re-export) ---------- */
+
+  const WH_ZONE_ID = "a1a1a1a1-0000-4000-8000-000000000001";
+  const WH_SHELF_ID = "b2b2b2b2-0000-4000-8000-000000000002";
+  const WH_BIN_ID = "c3c3c3c3-0000-4000-8000-000000000003";
+  const WH_LAYOUT_ID = "d4d4d4d4-0000-4000-8000-000000000004";
+  const WH_LOCATION_ROW = {
+    locationId: WH_BIN_ID, binCode: "B01", shelfId: WH_SHELF_ID, shelfCode: "S01", zoneId: WH_ZONE_ID,
+    zoneName: "Khu lưu kho A", zoneType: "storage", warehouseId: WAREHOUSE_ID, warehouseName: "Kho Quảng Châu (Trung Quốc)",
+    maxVolume: 500000, maxWeight: 100, isActive: true, note: "",
+  };
+
+  await check("Sơ đồ kho Admin: adminService re-export ĐÚNG hàm thật của warehouseAdminService, file adminService không import httpClient", () => {
+    const names = [
+      "getWarehouses", "createWarehouse", "updateWarehouse", "deleteWarehouse",
+      "getWarehouseLocations", "getActiveWarehouseLocations", "createWarehouseLocation", "updateWarehouseLocation", "deleteWarehouseLocation",
+      "getWarehouseLayout", "getWarehouseLayoutZones", "getWarehouseLayoutStatus",
+      "createWarehouseLayoutItem", "updateWarehouseLayoutItem", "deleteWarehouseLayoutItem",
+      "getInventories", "getWarehouseInventories",
+    ];
+    const source = fs.readFileSync(path.join(ROOT, "src/features/admin/api/adminService.js"), "utf8");
+    return all(
+      expectEqual("hàm khác tham chiếu", names.filter((name) => adminSvc[name] !== warehouseAdmin[name]), []),
+      expectTrue("adminService không dính httpClient", !/\bhttpClient\b|from\s*"axios"/.test(source.replace(/\/\*[\s\S]*?\*\//g, ""))),
+    );
+  });
+
+  await check("Sơ đồ kho Admin: GET /api/warehouses bóc { items } + lọc loại kho tại chỗ; ô kệ { items } → id = locationId, zoneType viết hoa", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/warehouses", reply: () => ok({ items: [
+        { id: WAREHOUSE_ID, name: "Kho Quảng Châu (Trung Quốc)", code: "KHO_QUANG_CHAU", address: "Quảng Châu", region: "CN", warehouseType: "ORIGIN", isActive: true },
+        { id: "w2", name: "Kho Hà Nội", code: "KHO_HN", region: "VN", warehouseType: "DESTINATION", isActive: true },
+      ] }) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/locations`, reply: () => ok({ items: [WH_LOCATION_ROW] }) },
+    ];
+    const origin = await adminSvc.getWarehouses({ warehouseType: "origin", isActive: true });
+    const locations = await adminSvc.getWarehouseLocations(WAREHOUSE_ID);
+    const { resolved } = await rejection(adminSvc.getWarehouseLocations(""));
+    return all(
+      expectEqual("kho ORIGIN", origin.map((w) => [w.id, w.name, w.code, w.region]), [[WAREHOUSE_ID, "Kho Quảng Châu (Trung Quốc)", "KHO_QUANG_CHAU", "CN"]]),
+      expectEqual("params kho", requests[0]?.params, { isActive: true }),
+      expectEqual("ô kệ", [locations[0].id, locations[0].binId, locations[0].zoneType, locations[0].acceptsStorage, locations[0].shelfCode], [WH_BIN_ID, WH_BIN_ID, "STORAGE", true, "S01"]),
+      expectEqual("thiếu mã kho không gọi mạng", [resolved, requests.length], [false, 2]),
+    );
+  });
+
+  await check("Sơ đồ kho Admin: thêm ô kệ — khu MỚI gửi zoneType, khu cũ không gửi; loại khu lạ chặn tại chỗ; PUT/DELETE /api/warehouse-locations/{id}", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "POST", url: `/api/warehouses/${WAREHOUSE_ID}/locations`, reply: (req) => ok({ ...WH_LOCATION_ROW, zoneName: req.body.zoneName, binCode: req.body.binCode }, 201) },
+      { method: "PUT", url: `/api/warehouse-locations/${WH_BIN_ID}`, reply: (req) => ok({ ...WH_LOCATION_ROW, isActive: req.body.isActive }) },
+      { method: "DELETE", url: `/api/warehouse-locations/${WH_BIN_ID}`, reply: () => ok({ message: "Xóa vị trí kho thành công." }) },
+    ];
+    const created = await adminSvc.createWarehouseLocation(WAREHOUSE_ID, { zoneName: " Khu mới ", zoneType: "storage", shelfCode: "S09", binCode: "B99", maxVolume: 300000, maxWeight: 50, isActive: true, note: " x " });
+    await adminSvc.createWarehouseLocation(WAREHOUSE_ID, { zoneName: "Khu lưu kho A", shelfCode: "S01", binCode: "B02", maxVolume: 300000, maxWeight: 50, note: "y" });
+    const updated = await adminSvc.updateWarehouseLocation(WH_BIN_ID, { zoneName: "Khu lưu kho A", shelfCode: "S01", binCode: "B01", maxVolume: 300000, maxWeight: 50, isActive: false, note: "z" });
+    const removed = await adminSvc.deleteWarehouseLocation(WH_BIN_ID);
+    const before = requests.length;
+    const { resolved } = await rejection(adminSvc.createWarehouseLocation(WAREHOUSE_ID, { zoneName: "K", zoneType: "KHO_LA", shelfCode: "S", binCode: "B" }));
+    return all(
+      expectEqual("body khu mới", requests[0]?.body, { zoneName: "Khu mới", zoneType: "STORAGE", shelfCode: "S09", binCode: "B99", maxVolume: 300000, maxWeight: 50, isActive: true, note: "x" }),
+      expectTrue("khu cũ không gửi zoneType", requests[1]?.body && !("zoneType" in requests[1].body)),
+      expectEqual("kết quả", [created.id, created.binCode, updated.isActive, removed.success, removed.message], [WH_BIN_ID, "B99", false, true, "Xóa vị trí kho thành công."]),
+      expectEqual("loại khu lạ không gọi mạng", [resolved, requests.length], [false, before]),
+    );
+  });
+
+  await check("Sơ đồ kho Admin: layout / layout/zones / layout/status bóc { data }, đổi rowIndex→gridRow, displayLabel→label; status tổng hợp theo ô gắn bin", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/layout`, reply: () => ok({ message: "ok", data: [
+        { id: WH_LAYOUT_ID, warehouseId: WAREHOUSE_ID, zoneId: WH_ZONE_ID, shelfId: WH_SHELF_ID, binId: WH_BIN_ID, rowIndex: 0, columnIndex: 2, displayLabel: "B01", layoutType: "BIN", status: "INACTIVE", zoneName: "Khu lưu kho A", shelfCode: "S01", binCode: "B01" },
+      ] }) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/layout/zones`, reply: () => ok({ message: "ok", data: [
+        { zoneId: WH_ZONE_ID, zoneCode: "", zoneName: "Khu lưu kho A", zoneType: "STORAGE", status: "ACTIVE", shelves: [{ shelfId: WH_SHELF_ID, shelfCode: "S01", bins: [{ binId: WH_BIN_ID, binCode: "B01", status: "ACTIVE", maxVolume: 500000, maxWeight: 100 }, { binId: "x", binCode: "B02", status: "INACTIVE", maxVolume: 1000, maxWeight: 1 }] }] },
+        { zoneId: "z2", zoneCode: "RCV", zoneName: "Khu nhận", zoneType: "RECEIVING", status: "ACTIVE", shelves: [] },
+      ] }) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/layout/status`, reply: () => ok({ message: "ok", data: [
+        { layoutId: WH_LAYOUT_ID, binId: WH_BIN_ID, status: "FULL", currentItemCount: 3, currentWeight: 99, utilizationRate: 1.2 },
+        { layoutId: "l2", binId: "b2", status: "AVAILABLE", currentItemCount: 0, currentWeight: 0, utilizationRate: 0 },
+        { layoutId: "l3", binId: null, status: "AVAILABLE", currentItemCount: 0 },
+      ] }) },
+    ];
+    const [layout] = await adminSvc.getWarehouseLayout(WAREHOUSE_ID);
+    const zones = await adminSvc.getWarehouseLayoutZones(WAREHOUSE_ID);
+    const status = await adminSvc.getWarehouseLayoutStatus(WAREHOUSE_ID);
+    return all(
+      expectEqual("ô sơ đồ", [layout.id, layout.label, layout.gridRow, layout.gridColumn, layout.zoneCode, layout.isActive], [WH_LAYOUT_ID, "B01", 0, 2, "Khu lưu kho A", false]),
+      expectEqual("cây khu", [zones.totalZones, zones.totalShelves, zones.totalBins, zones.zones[0].zoneCode, zones.zones[0].activeBins, zones.zones[1].shelfCount], [2, 1, 2, "Khu lưu kho A", 1, 0]),
+      expectEqual("trạng thái", [status.items.length, status.binLayoutItems, status.fullBins, status.occupiedBins, status.occupancyRate, status.totalItemCount], [3, 2, 1, 1, 50, 3]),
+    );
+  });
+
+  await check("Sơ đồ kho Admin: thêm ô sơ đồ — mã khu → zoneId, nhãn trùng mã ô → BIN; khu không có thì báo lỗi, KHÔNG POST; sửa giữ liên kết cũ; xoá DELETE", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/zones`, reply: () => ok({ message: "ok", data: [{ zoneId: WH_ZONE_ID, zoneCode: "", zoneName: "Khu lưu kho A", zoneType: "STORAGE" }] }) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/locations`, reply: () => ok({ items: [WH_LOCATION_ROW] }) },
+      { method: "POST", url: `/api/warehouses/${WAREHOUSE_ID}/layout`, reply: (req) => ok({ message: "ok", data: { id: WH_LAYOUT_ID, ...req.body } }, 201) },
+      { method: "GET", url: `/api/warehouses/${WAREHOUSE_ID}/layout`, reply: () => ok({ message: "ok", data: [
+        { id: WH_LAYOUT_ID, zoneId: WH_ZONE_ID, shelfId: WH_SHELF_ID, binId: WH_BIN_ID, rowIndex: 1, columnIndex: 1, displayLabel: "B01", layoutType: "BIN", status: "ACTIVE", width: 2, height: 1, colorCode: "#fff", zoneName: "Khu lưu kho A", binCode: "B01" },
+      ] }) },
+      { method: "PUT", url: `/api/warehouses/${WAREHOUSE_ID}/layout/${WH_LAYOUT_ID}`, reply: (req) => ok({ message: "ok", data: { id: WH_LAYOUT_ID, ...req.body } }) },
+      { method: "DELETE", url: `/api/warehouses/${WAREHOUSE_ID}/layout/${WH_LAYOUT_ID}`, reply: () => ok({ message: "Xóa vị trí sơ đồ kho thành công." }) },
+    ];
+    const created = await adminSvc.createWarehouseLayoutItem(WAREHOUSE_ID, { zoneCode: "khu lưu kho a", label: "b01", gridRow: 0, gridColumn: 3, isActive: true });
+    const postBody = requests.find((r) => r.method === "POST")?.body;
+    const before = requests.length;
+    const missing = await rejection(adminSvc.createWarehouseLayoutItem(WAREHOUSE_ID, { zoneCode: "Khu Z", label: "X", gridRow: 1, gridColumn: 1 }));
+    const postsAfterMissing = requests.slice(before).filter((r) => r.method === "POST").length;
+    await adminSvc.updateWarehouseLayoutItem(WAREHOUSE_ID, WH_LAYOUT_ID, { zoneCode: "Khu lưu kho A", label: "B01", gridRow: 4, gridColumn: 5, isActive: false });
+    const putBody = requests.find((r) => r.method === "PUT")?.body;
+    const removed = await adminSvc.deleteWarehouseLayoutItem(WAREHOUSE_ID, WH_LAYOUT_ID);
+    return all(
+      expectEqual("body POST", postBody, { zoneId: WH_ZONE_ID, shelfId: WH_SHELF_ID, binId: WH_BIN_ID, rowIndex: 0, columnIndex: 3, displayLabel: "b01", layoutType: "BIN", status: "ACTIVE", width: null, height: null, colorCode: null }),
+      expectEqual("kết quả tạo", [created.label, created.gridColumn], ["b01", 3]),
+      expectEqual("khu không có", [missing.resolved, postsAfterMissing, /Khu Z/.test(missing.error?.message || "")], [false, 0, true]),
+      expectEqual("body PUT", putBody, { zoneId: WH_ZONE_ID, shelfId: WH_SHELF_ID, binId: WH_BIN_ID, rowIndex: 4, columnIndex: 5, displayLabel: "B01", layoutType: "BIN", status: "INACTIVE", width: 2, height: 1, colorCode: "#fff" }),
+      expectEqual("xoá", [removed.success, removed.message], [true, "Xóa vị trí sơ đồ kho thành công."]),
+    );
+  });
+
+  await check("Sơ đồ kho Admin: GET /api/inventories?warehouseId= bóc { items }, bỏ RELEASED khi không lọc status; lỗi 403 ném nguyên dạng axios", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/inventories", reply: (req) => (req.params?.warehouseId === "forbidden" ? fail(403, { message: "Không có quyền." }) : ok({ message: "ok", items: [
+        { inventoryId: "i1", binId: WH_BIN_ID, binCode: "B01", status: "AVAILABLE", quantity: 1, packageCode: "PCL-1", actualVolume: 1000 },
+        { inventoryId: "i2", binId: WH_BIN_ID, binCode: "B01", status: "released", quantity: 1, packageCode: "PCL-2" },
+      ] })) },
+    ];
+    const rows = await adminSvc.getInventories({ warehouseId: WAREHOUSE_ID });
+    const withReleased = await adminSvc.getWarehouseInventories(WAREHOUSE_ID, { includeReleased: true });
+    const { resolved, error } = await rejection(adminSvc.getInventories({ warehouseId: "forbidden" }));
+    return all(
+      expectEqual("params", requests[0]?.params, { warehouseId: WAREHOUSE_ID }),
+      expectEqual("bỏ RELEASED", rows.map((r) => [r.id, r.binId, r.status]), [["i1", WH_BIN_ID, "AVAILABLE"]]),
+      expectEqual("includeReleased", withReleased.length, 2),
+      expectEqual("403", [resolved, error?.response?.status, error?.response?.data?.message], [false, 403, "Không có quyền."]),
+    );
+  });
+
+  /* ---------- Danh mục nền Admin (catalogAdminService, adminService re-export) ---------- */
+
+  const CAT_ID = "e5e5e5e5-0000-4000-8000-000000000005";
+  const CAT_CARRIER_ID = "f6f6f6f6-0000-4000-8000-000000000006";
+  const CATALOG_NAMES = [
+    "ShippingMethod", "PackageConfiguration", "AdditionalServiceFee", "ServicePricing", "PricingRule",
+    "RestrictedItem", "ProductType", "UnitOfMeasure", "Supplier", "ShippingRoute", "ExchangeRate",
+  ].flatMap((name) => [`create${name}`, `update${name}`, `delete${name}`, `get${name}Detail`]).concat([
+    "getShippingMethods", "getPackageConfigurations", "getAdditionalServiceFees", "getServicePricings", "getPricingRules",
+    "getRestrictedItems", "getProductTypes", "getUnitsOfMeasure", "getSuppliers", "getShippingRoutes", "getExchangeRates",
+  ]);
+
+  await check("Danh mục Admin: adminService re-export ĐÚNG 55 hàm thật của catalogAdminService, adminService không còn mock/httpClient", () => {
+    const source = fs.readFileSync(path.join(ROOT, "src/features/admin/api/adminService.js"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    return all(
+      expectEqual("số hàm", CATALOG_NAMES.length, 55),
+      expectEqual("hàm khác tham chiếu", CATALOG_NAMES.filter((name) => typeof catalogAdmin[name] !== "function" || adminSvc[name] !== catalogAdmin[name]), []),
+      expectTrue("adminService không dính httpClient", !/\bhttpClient\b|from\s*"axios"/.test(source)),
+      expectTrue("adminService không còn đọc dữ liệu mẫu", !/@\/mocks\//.test(source)),
+    );
+  });
+
+  await check("Danh mục Admin: phương thức vận chuyển — GET { data } → mảng; POST/PUT body đúng DTO; PUT chỉ { message } → không bịa bản ghi; DELETE 500 → hiện nguyên `error`", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/shipping-methods", reply: () => ok({ message: "ok", data: [{ id: CAT_ID, methodName: "Đường bộ", methodCode: "ROAD", estimatedTransitTime: "5-7 ngày", isActive: false, createdAt: "2026-09-01T00:00:00Z" }] }) },
+      { method: "POST", url: "/api/shipping-methods", reply: (req) => ok({ message: "Tạo phương thức vận chuyển thành công.", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/shipping-methods/${CAT_ID}`, reply: () => ok({ message: "Cập nhật phương thức vận chuyển thành công." }) },
+      { method: "DELETE", url: `/api/shipping-methods/${CAT_ID}`, reply: () => fail(500, { error: "An error occurred while saving the entity changes.", status: 500 }) },
+    ];
+    const list = await adminSvc.getShippingMethods();
+    const created = await adminSvc.createShippingMethod({ methodName: " Đường biển ", methodCode: "SEA", description: "", estimatedTransitTime: "20 ngày", applicableCondition: null, internalNote: " n ", isActive: true });
+    const updated = await adminSvc.updateShippingMethod(CAT_ID, { methodName: "Đường bộ", methodCode: "ROAD", isActive: false });
+    const removed = await rejection(adminSvc.deleteShippingMethod(CAT_ID));
+    return all(
+      expectEqual("danh sách", list.map((m) => [m.id, m.methodCode, m.isActive]), [[CAT_ID, "ROAD", false]]),
+      expectEqual("body POST", requests[1]?.body, { methodName: "Đường biển", methodCode: "SEA", description: null, estimatedTransitTime: "20 ngày", applicableCondition: null, isActive: true, internalNote: "n" }),
+      expectEqual("tạo", [created.id, created.methodCode], ["new", "SEA"]),
+      expectEqual("body PUT", requests[2]?.body, { methodName: "Đường bộ", methodCode: "ROAD", description: null, estimatedTransitTime: null, applicableCondition: null, isActive: false, internalNote: null }),
+      expectEqual("kết quả PUT", updated, { id: CAT_ID, success: true, message: "Cập nhật phương thức vận chuyển thành công." }),
+      expectEqual("xoá đang dùng", [removed.resolved, adminSvc.getAdminApiError(removed.error, "x")], [false, "An error occurred while saving the entity changes."]),
+    );
+  });
+
+  await check("Danh mục Admin: cấu hình đóng gói — GET mảng trần; POST số + status; thiếu kích thước chặn tại chỗ; PUT { data } → chuẩn hoá; DELETE = ngừng sử dụng", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/package-configurations", reply: () => ok([{ id: CAT_ID, configCode: "BOX_S", configName: "Thùng S", length: 30, width: 20, height: 20, maxWeight: 5, packageFee: 15000, status: "ACTIVE" }]) },
+      { method: "POST", url: "/api/package-configurations", reply: (req) => ok({ message: "Tạo cấu hình thùng thành công.", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/package-configurations/${CAT_ID}`, reply: (req) => ok({ message: "ok", data: { id: CAT_ID, ...req.body } }) },
+      { method: "DELETE", url: `/api/package-configurations/${CAT_ID}`, reply: () => ok({ message: "Đã ngưng sử dụng cấu hình thùng." }) },
+    ];
+    const list = await adminSvc.getPackageConfigurations();
+    await adminSvc.createPackageConfiguration({ configCode: "BOX_M", configName: "Thùng M", length: "40", width: 30, height: 30, maxWeight: 10, packageFee: 0, status: "ACTIVE" });
+    const before = requests.length;
+    const missing = await rejection(adminSvc.createPackageConfiguration({ configCode: "X", configName: "X", length: null, width: 1, height: 1, maxWeight: 1, packageFee: 1 }));
+    const afterMissing = requests.length;
+    const updated = await adminSvc.updatePackageConfiguration(CAT_ID, { configCode: "BOX_S", configName: "Thùng S", length: 30, width: 20, height: 20, maxWeight: 5, packageFee: 16000, status: "INACTIVE" });
+    const removed = await adminSvc.deletePackageConfiguration(CAT_ID);
+    return all(
+      expectEqual("danh sách", list.map((c) => [c.id, c.configCode, c.packageFee, c.status]), [[CAT_ID, "BOX_S", 15000, "ACTIVE"]]),
+      expectEqual("body POST", requests[1]?.body, { configCode: "BOX_M", configName: "Thùng M", length: 40, width: 30, height: 30, maxWeight: 10, packageFee: 0, status: "ACTIVE" }),
+      expectEqual("thiếu kích thước không gọi mạng", [missing.resolved, afterMissing], [false, before]),
+      expectEqual("PUT", [requests.at(-2)?.method, updated.packageFee, updated.status], ["PUT", 16000, "INACTIVE"]),
+      expectEqual("xoá", removed.message, "Đã ngưng sử dụng cấu hình thùng."),
+    );
+  });
+
+  await check("Danh mục Admin: phí dịch vụ bổ sung — bảng RIÊNG /api/additional-service-fees (không ghi vào pricing-rules); activeOnly gửi backend, bộ lọc khác lọc tại chỗ", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/additional-service-fees", reply: () => ok({ message: "ok", data: [
+        { id: CAT_ID, feeCode: "DEPOSIT_RATE", feeName: "Tỷ lệ cọc", calculationType: "PERCENTAGE", value: 30, unit: "%", isActive: true },
+        { id: "f2", feeCode: "INSURANCE", feeName: "Bảo hiểm", calculationType: "FIXED", value: 10000, isActive: true },
+      ] }) },
+      { method: "POST", url: "/api/additional-service-fees", reply: (req) => ok({ message: "ok", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/additional-service-fees/${CAT_ID}`, reply: () => ok({ message: "Cập nhật cấu hình phí dịch vụ bổ sung thành công." }) },
+    ];
+    const pct = await adminSvc.getAdditionalServiceFees({ isActive: true, calculationType: "percentage" });
+    await adminSvc.createAdditionalServiceFee({ feeName: "Phí kiểm đếm", feeCode: "COUNT_FEE", calculationType: "fixed", value: 5000, unit: "", description: "", isActive: true });
+    const updated = await adminSvc.updateAdditionalServiceFee(CAT_ID, { feeName: "Tỷ lệ cọc", feeCode: "DEPOSIT_RATE", calculationType: "PERCENTAGE", value: 40, unit: "%", isActive: true });
+    return all(
+      expectEqual("params", requests[0]?.params, { activeOnly: true }),
+      expectEqual("lọc tại chỗ", pct.map((f) => [f.id, f.value]), [[CAT_ID, 30]]),
+      expectEqual("body POST", requests[1]?.body, { feeName: "Phí kiểm đếm", feeCode: "COUNT_FEE", calculationType: "FIXED", value: 5000, unit: null, isActive: true, description: null }),
+      expectEqual("PUT đúng bảng", [requests[2]?.method, requests[2]?.url, requests[2]?.body?.value, updated.success], ["PUT", `/api/additional-service-fees/${CAT_ID}`, 40, true]),
+      expectTrue("không đụng pricing-rules", !requests.some((r) => r.url.includes("pricing-rules"))),
+    );
+  });
+
+  await check("Danh mục Admin: bảng giá dịch vụ — GET dùng servicePricingService thật; POST carrierId rỗng → null, currency viết hoa; PUT /api/service-pricings/{id}", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/service-pricings", reply: () => ok([{ id: SERVICE_PRICING_ID, carrierId: null, serviceType: "EXPRESS", originCountry: "CN", destinationCountry: "VN", unitType: "KG", price: 45000, currency: "VND", effectiveDate: "2026-09-01T00:00:00Z", boxPricingRules: [] }]) },
+      { method: "POST", url: "/api/service-pricings", reply: (req) => ok({ id: "new", ...req.body, boxPricingRules: [] }, 201) },
+      { method: "PUT", url: `/api/service-pricings/${SERVICE_PRICING_ID}`, reply: () => ok({ message: "Cập nhật bảng giá dịch vụ thành công." }) },
+    ];
+    const list = await adminSvc.getServicePricings();
+    await adminSvc.createServicePricing({ carrierId: "", serviceType: "STANDARD", originCountry: "CN", destinationCountry: "VN", unitType: "KG", price: 30000, currency: "vnd", effectiveDate: "2026-10-01T00:00:00.000Z" });
+    await adminSvc.updateServicePricing(SERVICE_PRICING_ID, { carrierId: CAT_CARRIER_ID, serviceType: "EXPRESS", originCountry: "CN", destinationCountry: "VN", unitType: "KG", price: 46000, currency: "VND", effectiveDate: null });
+    return all(
+      expectEqual("danh sách", list.map((p) => [p.id, p.serviceType, p.price]), [[SERVICE_PRICING_ID, "EXPRESS", 45000]]),
+      expectEqual("body POST", requests[1]?.body, { carrierId: null, serviceType: "STANDARD", originCountry: "CN", destinationCountry: "VN", unitType: "KG", price: 30000, currency: "VND", effectiveDate: "2026-10-01T00:00:00.000Z" }),
+      expectEqual("body PUT", [requests[2]?.url, requests[2]?.body?.carrierId, requests[2]?.body?.effectiveDate], [`/api/service-pricings/${SERVICE_PRICING_ID}`, CAT_CARRIER_ID, null]),
+    );
+  });
+
+  await check("Danh mục Admin: quy tắc tính giá — POST/PUT /api/pricing-rules body đủ DTO; thiếu giá trị chặn tại chỗ; lỗi 400 ValidationProblemDetails hiện câu tiếng Việt trong `errors`", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/pricing-rules", reply: () => ok([{ id: INSPECTION_RULE_ID, ruleCode: "INSPECTION", ruleName: "Kiểm hàng", ruleType: "INSPECTION", calculationType: "FIXED", value: 20000, status: "ACTIVE" }]) },
+      { method: "POST", url: "/api/pricing-rules", reply: (req) => (req.body.ruleCode === "BAD" ? fail(400, { title: "One or more validation errors occurred.", status: 400, errors: { RuleName: ["Tên rule phụ phí không được quá 255 ký tự."] } }) : ok({ id: "new", ...req.body }, 201)) },
+      { method: "PUT", url: `/api/pricing-rules/${INSPECTION_RULE_ID}`, reply: () => ok({ message: "Cập nhật cấu hình giá thành công." }) },
+    ];
+    const list = await adminSvc.getPricingRules();
+    const created = await adminSvc.createPricingRule({ servicePricingId: "", ruleName: "Đóng gỗ", ruleCode: "WOOD_CRATE", ruleType: "WOODEN_BOX", conditionType: "", conditionValue: null, calculationType: "per_kg", value: 3000, minAmount: null, maxAmount: 500000, isRequired: false, status: "ACTIVE", description: "" });
+    const before = requests.length;
+    const missing = await rejection(adminSvc.createPricingRule({ ruleName: "x", ruleCode: "X", ruleType: "OTHER", calculationType: "FIXED", value: null }));
+    const afterMissing = requests.length;
+    const bad = await rejection(adminSvc.createPricingRule({ ruleName: "x", ruleCode: "BAD", ruleType: "OTHER", calculationType: "FIXED", value: 1 }));
+    await adminSvc.updatePricingRule(INSPECTION_RULE_ID, { servicePricingId: SERVICE_PRICING_ID, ruleName: "Kiểm hàng", ruleCode: "INSPECTION", ruleType: "INSPECTION", calculationType: "FIXED", value: 25000, isRequired: true, status: "INACTIVE" });
+    return all(
+      expectEqual("danh sách", list.map((r) => [r.id, r.ruleCode, r.value]), [[INSPECTION_RULE_ID, "INSPECTION", 20000]]),
+      expectEqual("body POST", requests[1]?.body, { servicePricingId: null, ruleName: "Đóng gỗ", ruleCode: "WOOD_CRATE", ruleType: "WOODEN_BOX", conditionType: null, conditionValue: null, calculationType: "PER_KG", value: 3000, minAmount: null, maxAmount: 500000, isRequired: false, status: "ACTIVE", description: null }),
+      expectEqual("tạo", [created.id, created.ruleCode], ["new", "WOOD_CRATE"]),
+      expectEqual("thiếu giá trị không gọi mạng", [missing.resolved, afterMissing], [false, before]),
+      expectEqual("lỗi 400", adminSvc.getAdminApiError(bad.error, "x"), "Tên rule phụ phí không được quá 255 ký tự."),
+      expectEqual("body PUT", [requests.at(-1)?.method, requests.at(-1)?.body?.servicePricingId, requests.at(-1)?.body?.status, requests.at(-1)?.body?.isRequired], ["PUT", SERVICE_PRICING_ID, "INACTIVE", true]),
+    );
+  });
+
+  await check("Danh mục Admin: hàng cấm — GET/POST/PUT /api/restricted-items; mức kiểm soát lạ chặn tại chỗ", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/restricted-items", reply: () => ok([{ id: CAT_ID, itemName: "Pin lithium", country: "VN", restrictionType: "restricted", note: null, isActive: true }]) },
+      { method: "POST", url: "/api/restricted-items", reply: (req) => ok({ id: "new", ...req.body }, 201) },
+      { method: "PUT", url: `/api/restricted-items/${CAT_ID}`, reply: () => ok({ message: "Cập nhật mặt hàng thành công." }) },
+    ];
+    const list = await adminSvc.getRestrictedItems();
+    await adminSvc.createRestrictedItem({ itemName: " Dao ", country: "", restrictionType: "banned", note: "", isActive: true });
+    const before = requests.length;
+    const badType = await rejection(adminSvc.createRestrictedItem({ itemName: "x", restrictionType: "CAM" }));
+    const afterBadType = requests.length;
+    const updated = await adminSvc.updateRestrictedItem(CAT_ID, { itemName: "Pin lithium", country: "VN", restrictionType: "WARNING", note: "n", isActive: false });
+    return all(
+      expectEqual("danh sách", list.map((i) => [i.id, i.restrictionType, i.note]), [[CAT_ID, "RESTRICTED", ""]]),
+      expectEqual("body POST", requests[1]?.body, { itemName: "Dao", country: null, restrictionType: "BANNED", note: null, isActive: true }),
+      expectEqual("loại lạ không gọi mạng", [badType.resolved, afterBadType], [false, before]),
+      expectEqual("PUT", [requests.at(-1)?.body, updated.message], [{ itemName: "Pin lithium", country: "VN", restrictionType: "WARNING", note: "n", isActive: false }, "Cập nhật mặt hàng thành công."]),
+    );
+  });
+
+  await check("Danh mục Admin: loại hàng — GET /api/product-types/all; POST /api/product-types; PUT/DELETE /{id}; lỗi 400 khi xoá hiện nguyên câu backend", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/product-types/all", reply: () => ok({ message: "ok", data: [{ id: CAT_ID, name: "Điện tử", importTaxRate: 10, isActive: false }] }) },
+      { method: "POST", url: "/api/product-types", reply: (req) => ok({ message: "Thêm loại hàng thành công.", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/product-types/${CAT_ID}`, reply: () => ok({ message: "Cập nhật loại hàng thành công." }) },
+      { method: "DELETE", url: `/api/product-types/${CAT_ID}`, reply: () => fail(400, { message: "Loại hàng đã được ngừng sử dụng trước đó." }) },
+    ];
+    const list = await adminSvc.getProductTypes();
+    const created = await adminSvc.createProductType({ name: "Mỹ phẩm", importTaxRate: null, isActive: true });
+    await adminSvc.updateProductType(CAT_ID, { name: "Điện tử", importTaxRate: "12.5", isActive: true });
+    const removed = await rejection(adminSvc.deleteProductType(CAT_ID));
+    return all(
+      expectEqual("danh sách", list.map((p) => [p.id, p.name, p.importTaxRate, p.isActive]), [[CAT_ID, "Điện tử", 10, false]]),
+      expectEqual("body POST", [requests[1]?.url, requests[1]?.body], ["/api/product-types", { name: "Mỹ phẩm", importTaxRate: null, isActive: true }]),
+      expectEqual("tạo", created.id, "new"),
+      expectEqual("body PUT", requests[2]?.body, { name: "Điện tử", importTaxRate: 12.5, isActive: true }),
+      expectEqual("xoá", [removed.resolved, adminSvc.getAdminApiError(removed.error, "x")], [false, "Loại hàng đã được ngừng sử dụng trước đó."]),
+    );
+  });
+
+  await check("Danh mục Admin: đơn vị tính — GET /api/units-of-measure/all; mô tả trống gửi \"\" (không null), thứ tự trống KHÔNG gửi", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/units-of-measure/all", reply: () => ok({ message: "ok", data: [{ id: CAT_ID, unitCode: "PCS", unitName: "Cái", description: "", displayOrder: 1, isActive: true }] }) },
+      { method: "POST", url: "/api/units-of-measure", reply: (req) => ok({ message: "ok", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/units-of-measure/${CAT_ID}`, reply: () => ok({ message: "Cập nhật đơn vị tính thành công." }) },
+    ];
+    const list = await adminSvc.getUnitsOfMeasure();
+    await adminSvc.createUnitOfMeasure({ unitCode: "BOX", unitName: "Hộp", description: null, displayOrder: null, isActive: true });
+    await adminSvc.updateUnitOfMeasure(CAT_ID, { unitCode: "PCS", unitName: "Cái", description: " d ", displayOrder: 3, isActive: false });
+    return all(
+      expectEqual("danh sách", list.map((u) => [u.id, u.unitCode, u.displayOrder]), [[CAT_ID, "PCS", 1]]),
+      expectEqual("body POST", requests[1]?.body, { unitCode: "BOX", unitName: "Hộp", description: "", isActive: true }),
+      expectEqual("body PUT", requests[2]?.body, { unitCode: "PCS", unitName: "Cái", description: "d", displayOrder: 3, isActive: false }),
+    );
+  });
+
+  await check("Danh mục Admin: nhà cung cấp — GET { data }; POST chuỗi rỗng thay null, email sai chặn tại chỗ; PUT /api/suppliers/{id}", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/suppliers", reply: () => ok({ message: "ok", data: [{ id: CAT_ID, supplierCode: "NCC01", supplierName: "Trung chuyển A", supplierType: "transit", country: "CN", isActive: true }] }) },
+      { method: "POST", url: "/api/suppliers", reply: (req) => ok({ message: "ok", data: { id: "new", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/suppliers/${CAT_ID}`, reply: () => ok({ message: "Cập nhật nhà cung cấp thành công." }) },
+    ];
+    const list = await adminSvc.getSuppliers();
+    await adminSvc.createSupplier({ supplierCode: "NCC02", supplierName: "Lấy hàng B", supplierType: "pickup", country: null, contactPerson: null, phone: null, email: "b@ncc.vn", address: null, note: null, isActive: true });
+    const before = requests.length;
+    const badEmail = await rejection(adminSvc.createSupplier({ supplierCode: "X", supplierName: "X", supplierType: "GOODS", email: "" }));
+    const afterBadEmail = requests.length;
+    await adminSvc.updateSupplier(CAT_ID, { supplierCode: "NCC01", supplierName: "Trung chuyển A", supplierType: "TRANSIT", country: "CN", email: "a@ncc.cn", isActive: false });
+    return all(
+      expectEqual("danh sách", list.map((s) => [s.id, s.supplierType]), [[CAT_ID, "TRANSIT"]]),
+      expectEqual("body POST", requests[1]?.body, { supplierCode: "NCC02", supplierName: "Lấy hàng B", supplierType: "PICKUP", country: "", contactPerson: "", phone: "", email: "b@ncc.vn", address: "", note: "", isActive: true }),
+      expectEqual("email sai không gọi mạng", [badEmail.resolved, afterBadEmail], [false, before]),
+      expectEqual("PUT", [requests.at(-1)?.url, requests.at(-1)?.body?.isActive], [`/api/suppliers/${CAT_ID}`, false]),
+    );
+  });
+
+  await check("Danh mục Admin: tuyến vận chuyển qua adminService → transportCatalogService (GET không kèm params, POST đủ hai kho)", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/shipping-routes", reply: () => ok({ message: "ok", data: [{ id: CAT_ID, routeCode: "CN-VN", routeName: "Quảng Châu → Hà Nội", originWarehouseId: WAREHOUSE_ID, destinationWarehouseId: "w2" }] }) },
+      { method: "POST", url: "/api/shipping-routes", reply: (req) => ok({ message: "ok", data: { id: "new", ...req.body } }, 201) },
+      { method: "DELETE", url: `/api/shipping-routes/${CAT_ID}`, reply: () => ok({ message: "Xóa tuyến vận chuyển thành công." }) },
+    ];
+    const list = await adminSvc.getShippingRoutes({ signal: new AbortController().signal });
+    await adminSvc.createShippingRoute({ routeCode: "CN-VN2", routeName: "Tuyến 2", originCountry: "CN", destinationCountry: "VN", transportMode: "road", originWarehouseId: WAREHOUSE_ID, destinationWarehouseId: "w2", isActive: true });
+    const removed = await adminSvc.deleteShippingRoute(CAT_ID);
+    return all(
+      expectEqual("danh sách", list.map((r) => [r.id, r.routeCode]), [[CAT_ID, "CN-VN"]]),
+      expectEqual("GET không params (signal không lọt vào query)", requests[0]?.params, {}),
+      expectEqual("body POST", [requests[1]?.body?.transportMode, requests[1]?.body?.originWarehouseId], ["ROAD", WAREHOUSE_ID]),
+      expectEqual("xoá", [removed.id, removed.message], [CAT_ID, "Xóa tuyến vận chuyển thành công."]),
+    );
+  });
+
+  await check("Danh mục Admin: tỷ giá — GET mặc định lấy cả tỷ giá tắt; POST có mã, PUT KHÔNG gửi mã; trùng mã 400 hiện nguyên câu; DELETE 204", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/exchange-rates", reply: (req) => ok([{ id: CAT_ID, currencyCode: "cny", currencyName: "Nhân dân tệ", rateToVnd: 3500, isActive: true }, ...(req.params?.activeOnly ? [] : [{ id: "r2", currencyCode: "THB", rateToVnd: 700, isActive: false }])]) },
+      { method: "POST", url: "/api/exchange-rates", reply: (req) => (req.body.currencyCode === "CNY" ? fail(400, { message: "Đã có cấu hình tỷ giá cho CNY. Vui lòng sửa bản ghi hiện có." }) : ok({ id: "new", ...req.body }, 201)) },
+      { method: "PUT", url: `/api/exchange-rates/${CAT_ID}`, reply: (req) => ok({ id: CAT_ID, currencyCode: "CNY", ...req.body }) },
+      { method: "DELETE", url: `/api/exchange-rates/${CAT_ID}`, reply: () => ok(null, 204) },
+    ];
+    const all_ = await adminSvc.getExchangeRates();
+    const active = await adminSvc.getExchangeRates({ activeOnly: true });
+    const created = await adminSvc.createExchangeRate({ currencyCode: " thb ", currencyName: "", rateToVnd: "700", isActive: true, note: "" });
+    const dup = await rejection(adminSvc.createExchangeRate({ currencyCode: "CNY", rateToVnd: 3600 }));
+    const updated = await adminSvc.updateExchangeRate(CAT_ID, { currencyCode: "USD", currencyName: "Nhân dân tệ", rateToVnd: 3550, isActive: true, note: "cập nhật" });
+    const removed = await adminSvc.deleteExchangeRate(CAT_ID);
+    return all(
+      expectEqual("params", [requests[0]?.params, requests[1]?.params], [{}, { activeOnly: true }]),
+      expectEqual("danh sách", [all_.length, active.length, all_[0].currencyCode, all_[1].isActive], [2, 1, "CNY", false]),
+      expectEqual("body POST", requests[2]?.body, { currencyCode: "THB", currencyName: null, rateToVnd: 700, isActive: true, note: null }),
+      expectEqual("tạo", [created.id, created.currencyCode], ["new", "THB"]),
+      expectEqual("trùng mã", adminSvc.getAdminApiError(dup.error, "x"), "Đã có cấu hình tỷ giá cho CNY. Vui lòng sửa bản ghi hiện có."),
+      expectEqual("body PUT không có mã", requests.find((r) => r.method === "PUT")?.body, { currencyName: "Nhân dân tệ", rateToVnd: 3550, isActive: true, note: "cập nhật" }),
+      expectEqual("PUT trả bản ghi", [updated.currencyCode, updated.rateToVnd], ["CNY", 3550]),
+      expectEqual("xoá 204", [removed.success, removed.message], [true, "Đã xoá tỷ giá."]),
+    );
+  });
+
   await check("PDF phiếu: GET /receipt responseType blob → Blob PDF; lỗi blob JSON → hiện message backend; link công khai đổi host", async () => {
     resetState({ token: "tok" });
     routes = [{ method: "GET", url: `/api/orders/consignments/${ORDER_ID}/receipt`, reply: (req, config) => (config.responseType === "blob" ? ok(new Blob(["%PDF-1.4"], { type: "application/pdf" })) : fail(400, { message: "thiếu blob" })) }];
@@ -1922,69 +2731,605 @@ if (loadError) {
       expectEqual("tải về", receiptUrl.toPublicReceiptUrl(legacy, { download: true }), "https://vcl.henrytech.cloud/api/public/receipts/abc?download=true"),
     );
   });
+
+  /* ---------- Chat CSKH nhân viên: /api/conversations THẬT + upload ảnh thật ---------- */
+
+  /*
+   * Lỗi đã sửa (26/09/2026): conversationApi.js của admin-ui là MOCK → Sale không thấy tin
+   * khách gửi từ web khách, trả lời cũng không tới khách. Response mẫu bám đúng
+   * ConversationController / ConversationService / ConversationDtos của VCL_API.
+   */
+  const CHAT_ID = "c0a80101-7a1b-4c2d-8e3f-4a5b6c7d8e9f";
+  const CHAT_ID_2 = "c0a80102-7a1b-4c2d-8e3f-4a5b6c7d8e9f";
+  const CHAT_CUSTOMER_USER = "a1b2c3d4-0000-4000-8000-000000000001";
+  const CHAT_SALE_USER = LOGIN_RESPONSE.userId;
+  const chatFile = (name, type, size = 3) => new File([new Uint8Array(size)], name, { type });
+  const chatDto = (extra = {}) => ({
+    id: CHAT_ID,
+    customerId: "b1b2c3d4-0000-4000-8000-000000000002",
+    customerName: "Nguyễn Văn A",
+    customerCode: "KH0001",
+    salesId: null,
+    salesName: null,
+    relatedType: "CONSIGNMENT",
+    relatedId: ORDER_ID,
+    relatedCode: ORDER_ROW.consignmentCode,
+    status: "OPEN",
+    createdAt: "2026-09-26T01:00:00",
+    updatedAt: "2026-09-26T01:05:00",
+    unreadCount: 0,
+    messages: [],
+    ...extra,
+  });
+
+  await check("Chat CSKH (Sale): GET /api/conversations mảng trần → hộp thư có khách, mã đơn THẬT, số tin chưa đọc, tóm tắt; không có khoá messages/data", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      {
+        method: "GET",
+        url: "/api/conversations",
+        reply: () => ok([
+          chatDto({ unreadCount: 2 }),
+          chatDto({ id: CHAT_ID_2, relatedType: null, relatedId: null, relatedCode: null, salesId: CHAT_SALE_USER, salesName: "Nguyễn Văn Sale", unreadCount: 0 }),
+        ]),
+      },
+    ];
+    const list = await conversation.getConversationsApi();
+    const [linked, general] = list;
+    const groups = chatHelpers.buildConversationGroups(list);
+    return all(
+      expectEqual("request", `${requests[0]?.method} ${requests[0]?.url} ${requests[0]?.authorization}`, "GET /api/conversations Bearer tok"),
+      expectEqual("tiêu đề = tên khách", [chatHelpers.getConversationTitle(linked), chatHelpers.getConversationTitle(general)], ["Nguyễn Văn A", "Nguyễn Văn A"]),
+      expectEqual("liên kết đơn in đủ mã thật", chatHelpers.getConversationSubtitle(linked), "Yêu cầu ký gửi · VCL-20260917161921-540135"),
+      expectEqual("hội thoại chung", chatHelpers.getConversationSubtitle(general), "Yêu cầu hỗ trợ chung"),
+      expectEqual("chưa đọc", [chatHelpers.getUnreadCount(linked), groups[0]?.unreadCount], [2, 2]),
+      expectEqual("tóm tắt", [linked.lastMessage, general.lastMessage], ["2 tin nhắn mới từ khách hàng", "Đang trao đổi với khách hàng"]),
+      expectEqual("nhân viên", [linked.staffName, general.staffName], [null, "Nguyễn Văn Sale"]),
+      expectEqual("không có khoá messages/data", ["messages" in linked, "data" in linked], [false, false])
+    );
+  });
+
+  await check("Chat CSKH (Sale): chi tiết — tin khách mang tên khách, tin Sale là của mình, tin chỉ có ảnh ẩn câu thay thế; relatedCode null KHÔNG hiện GUID; id sai → 404 không gọi mạng", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      {
+        method: "GET",
+        url: `/api/conversations/${CHAT_ID}`,
+        reply: () => ok(chatDto({
+          salesId: CHAT_SALE_USER,
+          salesName: "Nguyễn Văn Sale",
+          messages: [
+            { id: "m1", conversationId: CHAT_ID, senderId: CHAT_CUSTOMER_USER, senderRole: "Customer", content: "Đơn của tôi tới đâu rồi?", attachmentUrl: null, isRead: true, createdAt: "2026-09-26T01:00:00" },
+            { id: "m2", conversationId: CHAT_ID, senderId: CHAT_CUSTOMER_USER, senderRole: "Customer", content: "Đã gửi một hình ảnh", attachmentUrl: "https://res.cloudinary.test/vcl/a.jpg", isRead: true, createdAt: "2026-09-26T01:01:00" },
+            { id: "m3", conversationId: CHAT_ID, senderId: CHAT_SALE_USER, senderRole: "Sale", content: "Hàng đang ở kho VN.", attachmentUrl: null, isRead: false, createdAt: "2026-09-26T01:05:00" },
+          ],
+        })),
+      },
+      { method: "GET", url: `/api/conversations/${CHAT_ID_2}`, reply: () => ok(chatDto({ id: CHAT_ID_2, relatedCode: null })) },
+    ];
+    const detail = await conversation.getConversationDetailApi(CHAT_ID);
+    const orphan = await conversation.getConversationDetailApi(CHAT_ID_2);
+    const beforeBad = requests.length;
+    const bad = await rejection(conversation.getConversationDetailApi("mock-0001"));
+    const [first, image, sale] = detail.messages;
+    return all(
+      expectEqual("không bọc data/conversation", ["data" in detail, "conversation" in detail], [false, false]),
+      expectEqual("tin khách", [chatHelpers.getMessageSenderName(first), chatHelpers.isMessageMine(first, CHAT_SALE_USER, "Sale")], ["Nguyễn Văn A", false]),
+      expectEqual("tin chỉ có ảnh", [image.content, chatHelpers.getMessageAttachment(image)], ["", "https://res.cloudinary.test/vcl/a.jpg"]),
+      expectEqual("tin Sale", [sale.senderName, chatHelpers.isMessageMine(sale, CHAT_SALE_USER, "Sale")], ["Nguyễn Văn Sale", true]),
+      expectEqual("tóm tắt = tin cuối", detail.lastMessage, "Hàng đang ở kho VN."),
+      expectEqual("AI nhận mã đơn thật", chatHelpers.buildAiContextFromConversation(detail)?.orderCode, ORDER_ROW.consignmentCode),
+      expectEqual("mất mã đơn → không in GUID", [chatHelpers.getConversationSubtitle(orphan), chatHelpers.buildAiContextFromConversation(orphan)?.orderCode], ["Yêu cầu ký gửi", ""]),
+      expectEqual("id sai → 404, không gọi mạng", [bad.resolved, bad.error?.response?.status, requests.length - beforeBad], [false, 404, 0])
+    );
+  });
+
+  await check("Chat CSKH LUỒNG THẬT: khách gửi → Sale thấy hội thoại + badge chưa đọc → mở (PUT read) → trả lời chữ + ảnh thật (POST /api/uploads/images) → backend tự gán Sale → khách thấy tin của Sale", async () => {
+    resetState({ token: "tok" });
+    /* "Server" giả giữ trạng thái giống ConversationService. */
+    const server = { salesId: null, messages: [
+      { id: "k1", conversationId: CHAT_ID, senderId: CHAT_CUSTOMER_USER, senderRole: "Customer", content: "Cho tôi hỏi đơn VCL-20260917161921-540135", attachmentUrl: null, isRead: false, createdAt: "2026-09-26T01:00:00" },
+    ] };
+    const unreadForSale = () => server.messages.filter((m) => m.senderRole === "Customer" && !m.isRead).length;
+    const snapshot = (withMessages) => chatDto({
+      salesId: server.salesId,
+      salesName: server.salesId ? "Nguyễn Văn Sale" : null,
+      unreadCount: unreadForSale(),
+      updatedAt: server.messages[server.messages.length - 1].createdAt,
+      messages: withMessages ? server.messages.map((m) => ({ ...m })) : [],
+    });
+    routes = [
+      { method: "GET", url: "/api/conversations", reply: () => ok([snapshot(false)]) },
+      { method: "GET", url: `/api/conversations/${CHAT_ID}`, reply: () => ok(snapshot(true)) },
+      { method: "PUT", url: `/api/conversations/${CHAT_ID}/read`, reply: () => { server.messages.forEach((m) => { if (m.senderRole === "Customer") m.isRead = true; }); return ok({ message: "Đã đánh dấu đọc tin nhắn." }); } },
+      { method: "POST", url: "/api/uploads/images", reply: (req) => ok({ message: "Upload 1 ảnh thành công.", urls: req.body.getAll("files").map((f) => `https://res.cloudinary.test/vcl/${f.name}`) }) },
+      {
+        method: "POST",
+        url: `/api/conversations/${CHAT_ID}/messages`,
+        reply: (req) => {
+          if (!server.salesId) server.salesId = CHAT_SALE_USER;
+          const message = { id: `s${server.messages.length}`, conversationId: CHAT_ID, senderId: CHAT_SALE_USER, senderRole: "Sale", content: req.body.content, attachmentUrl: req.body.attachmentUrl ?? null, isRead: false, createdAt: `2026-09-26T01:1${server.messages.length}:00` };
+          server.messages.push(message);
+          return ok(message);
+        },
+      },
+    ];
+
+    const inbox = await conversation.getConversationsApi();
+    const badges = await saleBadges.loadSaleBadges();
+    const opened = await conversation.getConversationDetailApi(CHAT_ID);
+    await conversation.markConversationAsReadApi(CHAT_ID);
+    const afterRead = await conversation.getConversationsApi();
+    const textReply = await conversation.sendConversationMessageApi(CHAT_ID, { content: "Đơn đang ở kho VN ạ", attachmentUrl: null, sentAtUtc: "x", clientTimeZone: "Asia/Ho_Chi_Minh" });
+    const [imageUrl] = await chatUpload.uploadChatImages([chatFile("hang.jpg", "image/jpeg")]);
+    await conversation.sendConversationMessageApi(CHAT_ID, { content: "", attachmentUrl: imageUrl, sentAtUtc: "x" });
+    const reloaded = await conversation.getConversationDetailApi(CHAT_ID);
+    const badgesAfter = await saleBadges.loadSaleBadges();
+    const sends = requests.filter((r) => r.method === "POST" && r.url.endsWith("/messages"));
+    const upload = requests.find((r) => r.url === "/api/uploads/images");
+    const [, reply, imageReply] = reloaded.messages;
+    return all(
+      expectEqual("Sale thấy hội thoại + chưa đọc", [inbox.length, inbox[0]?.unreadCount, inbox[0]?.lastMessage], [1, 1, "1 tin nhắn mới từ khách hàng"]),
+      expectEqual("badge Chăm sóc khách hàng", [badges.support, badgesAfter.support], [1, 0]),
+      expectEqual("tin khách trong khung chat", opened.messages[0]?.content, "Cho tôi hỏi đơn VCL-20260917161921-540135"),
+      expectEqual("đọc xong hết chưa đọc", afterRead[0]?.unreadCount, 0),
+      expectEqual("body trả lời chỉ đúng DTO", sends.map((r) => r.body), [
+        { content: "Đơn đang ở kho VN ạ", attachmentUrl: null },
+        { content: "Đã gửi một hình ảnh", attachmentUrl: "https://res.cloudinary.test/vcl/hang.jpg" },
+      ]),
+      expectEqual("upload thật", [upload?.authorization, upload?.timeout > 30000, upload?.body?.getAll?.("files")?.length], ["Bearer tok", true, 1]),
+      expectEqual("tin trả về", [textReply?.senderRole, textReply?.content], ["Sale", "Đơn đang ở kho VN ạ"]),
+      expectEqual("backend gán Sale", [reloaded.staffName, chatHelpers.hasAssignedStaff(reloaded)], ["Nguyễn Văn Sale", true]),
+      expectEqual("tin Sale bên phải", [chatHelpers.isMessageMine(reply, CHAT_SALE_USER, "Sale"), chatHelpers.isMessageMine(reloaded.messages[0], CHAT_SALE_USER, "Sale")], [true, false]),
+      expectEqual("tin ảnh hiện ảnh, ẩn câu thay thế", [imageReply?.content, chatHelpers.getMessageAttachment(imageReply)], ["", "https://res.cloudinary.test/vcl/hang.jpg"]),
+      /* Phía khách (web khách) đọc cùng MessageDto: senderRole "Sale" + content thật đã lưu. */
+      expectEqual("khách đọc được tin Sale", server.messages.filter((m) => m.senderRole === "Sale").map((m) => m.content), ["Đơn đang ở kho VN ạ", "Đã gửi một hình ảnh"])
+    );
+  });
+
+  await check("Chat CSKH (Sale): chặn tại chỗ (rỗng, > 2000, URL ảnh > 500); 400 ModelState → câu tiếng Việt; 403 rỗng khi tạo hội thoại → câu tiếng Việt; 403 có message giữ nguyên", async () => {
+    resetState({ token: "tok" });
+    const empty = await rejection(conversation.sendConversationMessageApi(CHAT_ID, { content: "  ", attachmentUrl: null }));
+    const tooLong = await rejection(conversation.sendConversationMessageApi(CHAT_ID, { content: "x".repeat(2001) }));
+    const longUrl = await rejection(conversation.sendConversationMessageApi(CHAT_ID, { content: "", attachmentUrl: `https://x.test/${"a".repeat(500)}` }));
+    const blocked = requests.length;
+    routes = [
+      { method: "POST", url: `/api/conversations/${CHAT_ID}/messages`, reply: () => fail(400, { title: "One or more validation errors occurred.", errors: { Content: ["Nội dung tin nhắn không được để trống."] } }) },
+      { method: "POST", url: "/api/conversations", reply: () => fail(403, "") },
+      { method: "GET", url: `/api/conversations/${CHAT_ID}`, reply: () => fail(403, { message: "Cuộc trao đổi này đã được phân công cho Sales khác." }) },
+    ];
+    const invalid = await rejection(conversation.sendConversationMessageApi(CHAT_ID, { content: "hi" }));
+    const create = await rejection(conversation.createConversationApi({ message: "Xin chào" }));
+    const taken = await rejection(conversation.getConversationDetailApi(CHAT_ID));
+    return all(
+      expectEqual("chặn tại chỗ", [empty.resolved, tooLong.resolved, longUrl.resolved, blocked], [false, false, false, 0]),
+      expectEqual("400 → message", chatHelpers.getApiErrorText(invalid.error, ""), "Nội dung tin nhắn không được để trống."),
+      expectTrue("403 rỗng khi tạo → tiếng Việt", /Chỉ khách hàng mới tạo/.test(chatHelpers.getApiErrorText(create.error, ""))),
+      expectEqual("403 có message giữ nguyên", chatHelpers.getApiErrorText(taken.error, ""), "Cuộc trao đổi này đã được phân công cho Sales khác."),
+      expectEqual("không đăng xuất", fakeLocation.replaced, [])
+    );
+  });
+
+  await check("Chat CSKH (Sale): ảnh chặn đúng giới hạn backend trước khi gửi (JPG/PNG/WEBP theo MIME, ≤ 5MB, không rỗng); 413 HTML → câu tiếng Việt", async () => {
+    resetState({ token: "tok" });
+    const tryPick = (file) => {
+      try {
+        chatHelpers.validateImageFile(file);
+        return "ok";
+      } catch (error) {
+        return error.message;
+      }
+    };
+    const heic = await rejection(chatUpload.uploadChatImages([chatFile("iphone.heic", "image/heic")]));
+    const big = await rejection(chatUpload.uploadChatImages([chatFile("to.jpg", "image/jpeg", 5 * 1024 * 1024 + 1)]));
+    const blank = await rejection(chatUpload.uploadChatImages([chatFile("rong.png", "image/png", 0)]));
+    const blocked = requests.length;
+    routes = [{ method: "POST", url: "/api/uploads/images", reply: () => fail(413, "<html><body>413 Request Entity Too Large</body></html>") }];
+    const tooLarge = await rejection(chatUpload.uploadChatImages([chatFile("y.jpg", "image/jpeg")]));
+    return all(
+      expectEqual("jpg đúng 5MB", tryPick(chatFile("a.jpg", "image/jpeg", 5 * 1024 * 1024)), "ok"),
+      expectTrue("> 5MB", /5MB/.test(tryPick(chatFile("b.jpg", "image/jpeg", 5 * 1024 * 1024 + 1)))),
+      expectTrue("đuôi .jpg nhưng MIME rỗng", /JPG, PNG hoặc WEBP/.test(tryPick(chatFile("c.jpg", "")))),
+      expectTrue("rỗng", /rỗng/.test(tryPick(chatFile("e.png", "image/png", 0)))),
+      expectEqual("upload chặn tại chỗ", [heic.resolved, big.resolved, blank.resolved, blocked], [false, false, false, 0]),
+      expectTrue("413 HTML → tiếng Việt", !tooLarge.resolved && /quá lớn/.test(tooLarge.error?.message) && !/<html/.test(tooLarge.error?.message))
+    );
+  });
+  /* =========================================================
+     ĐỢT 27/09/2026 — GỠ MOCK CÒN LẠI: upload ảnh, tỷ giá, hàng cấm, trợ lý AI, khách hàng,
+     danh mục địa chỉ GoShip. Response mẫu bám UploadsController / ExchangeRateController /
+     RestrictedItemController / AiController / CustomerController / GoshipController.
+     ========================================================= */
+
+  const upFile = (name, type = "image/jpeg", size = 1000) => new File([new Uint8Array(size)], name, { type });
+  const uploadRoute = {
+    method: "POST",
+    url: "/api/uploads/images",
+    reply: (req) => ok({ message: "Upload 1 ảnh thành công.", urls: req.body.getAll("files").map((f) => `https://res.cloudinary.test/vcl/${f.name}`) }),
+  };
+
+  await check("Upload ảnh (shared, THẬT): mỗi request MỘT ảnh field \"files\", đúng thứ tự; uploadImage → chuỗi URL; uploadImages → { url, urls, data[].url }; % tới 100", async () => {
+    resetState({ token: "tok" });
+    routes = [uploadRoute];
+    const percents = [];
+    const many = await uploadShared.uploadImages([upFile("a.jpg"), upFile("b.png", "image/png"), upFile("c.webp", "image/webp")], (p) => percents.push(p));
+    const one = await uploadShared.uploadImage(upFile("mot.jpg"));
+    const posts = requests.filter((r) => r.url === "/api/uploads/images");
+    return all(
+      expectEqual("số request", posts.length, 4),
+      expectEqual("mỗi request 1 file", posts.map((r) => r.body.getAll("files").length), [1, 1, 1, 1]),
+      expectEqual("token + timeout dài", [posts[0].authorization, posts[0].timeout > 30000], ["Bearer tok", true]),
+      expectEqual("urls đúng thứ tự", many.urls, ["https://res.cloudinary.test/vcl/a.jpg", "https://res.cloudinary.test/vcl/b.png", "https://res.cloudinary.test/vcl/c.webp"]),
+      expectEqual("url + data", [many.url, many.data.map((d) => d.url).length, many.success], ["https://res.cloudinary.test/vcl/a.jpg", 3, true]),
+      expectEqual("uploadImage trả chuỗi", one, "https://res.cloudinary.test/vcl/mot.jpg"),
+      expectEqual("% cuối", percents[percents.length - 1], 100),
+      expectEqual("chat dùng chung instance", chatUpload.chatUploadAxios === uploadShared.uploadAxios, true)
+    );
+  });
+
+  await check("Upload ảnh (shared): chặn trước HEIC / > 5MB / rỗng / > 10 ảnh; 400 { message } → câu backend; server trả URL không phải http(s) → lỗi, không nhận URL giả", async () => {
+    resetState({ token: "tok" });
+    const heic = await rejection(uploadShared.uploadImages([upFile("x.heic", "image/heic")]));
+    const big = await rejection(uploadShared.uploadImage(upFile("to.jpg", "image/jpeg", 5 * 1024 * 1024 + 1)));
+    const eleven = await rejection(uploadShared.uploadImages(Array.from({ length: 11 }, (_, i) => upFile(`${i}.jpg`))));
+    const blocked = requests.length;
+    routes = [{ method: "POST", url: "/api/uploads/images", reply: () => fail(400, { message: "File thứ 1 (a.jpg): chỉ chấp nhận ảnh JPG, PNG hoặc WEBP." }) }];
+    const bad = await rejection(uploadShared.uploadImage(upFile("a.jpg")));
+    routes = [{ method: "POST", url: "/api/uploads/images", reply: () => ok({ message: "ok", urls: ["cdn/giả.jpg"] }) }];
+    const notHttp = await rejection(uploadShared.uploadImage(upFile("b.jpg")));
+    routes = [{ method: "POST", url: "/api/uploads/images", reply: () => fail(500, { message: "Cloudinary chưa được cấu hình." }) }];
+    const noCloud = await rejection(uploadShared.uploadImages([upFile("c.jpg")]));
+    return all(
+      expectEqual("chặn tại chỗ", [heic.resolved, big.resolved, eleven.resolved, blocked], [false, false, false, 0]),
+      expectTrue("HEIC tiếng Việt", /JPG, PNG hoặc WEBP/.test(heic.error?.message)),
+      expectTrue("> 10 ảnh", /tối đa 10/.test(eleven.error?.message)),
+      expectEqual("400 giữ câu backend", bad.error?.message, "File thứ 1 (a.jpg): chỉ chấp nhận ảnh JPG, PNG hoặc WEBP."),
+      expectTrue("URL không http(s) bị từ chối", !notHttp.resolved && /không trả đường dẫn/.test(notHttp.error?.message)),
+      expectEqual("500 cấu hình", noCloud.error?.message, "Cloudinary chưa được cấu hình.")
+    );
+  });
+
+  await check("Tỷ giá (THẬT): GET /api/exchange-rates?activeOnly=true; mã tắt/thiếu → null (không số mặc định); quy đổi làm tròn như backend; convert gọi /convert", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/exchange-rates", reply: (req) => ok([{ id: "r1", currencyCode: "cny", currencyName: "Nhân dân tệ", rateToVnd: 3612.5, isActive: true }, ...(req.params?.activeOnly ? [] : [{ id: "r2", currencyCode: "KRW", rateToVnd: 19, isActive: false }])]) },
+      { method: "GET", url: "/api/exchange-rates/convert", reply: (req) => (req.params.currency === "JPY" ? fail(404, { message: "Chưa cấu hình tỷ giá cho JPY. Vui lòng liên hệ Admin bổ sung." }) : ok({ currency: "CNY", exchangeRate: 3612.5, amountOriginal: req.params.amount, amountVnd: 144139 })) },
+    ];
+    const active = await exchangeRate.getExchangeRatesApi({ activeOnly: true });
+    const all_ = await exchangeRate.getExchangeRatesApi({ activeOnly: false });
+    const conv = await exchangeRate.convertCurrencyApi("cny", 39.9);
+    const jpy = await rejection(exchangeRate.convertCurrencyApi("JPY", 10));
+    const listReq = requests.find((r) => r.url === "/api/exchange-rates");
+    return all(
+      expectEqual("activeOnly gửi lên", listReq?.params, { activeOnly: true }),
+      expectEqual("chuẩn hoá", [active.length, active[0].currencyCode, active[0].rateToVnd], [1, "CNY", 3612.5]),
+      expectEqual("tìm tỷ giá đang bật", exchangeRate.findActiveExchangeRate(active, "CNY")?.id, "r1"),
+      expectEqual("mã tắt → null", exchangeRate.findActiveExchangeRate(all_, "KRW"), null),
+      expectEqual("mã thiếu → null", exchangeRate.findActiveExchangeRate(active, "JPY"), null),
+      expectEqual("39,9 CNY × 3612,5", exchangeRate.convertToVndWithRate(39.9, 3612.5), Math.round(39.9 * 3612.5)),
+      expectEqual("không tỷ giá → 0", exchangeRate.convertToVndWithRate(10, 0), 0),
+      expectEqual("convert", [conv.amountVnd, requests.find((r) => r.url.endsWith("/convert"))?.params], [144139, { currency: "CNY", amount: 39.9 }]),
+      expectEqual("404 giữ câu backend", jpy.error?.response?.data?.message, "Chưa cấu hình tỷ giá cho JPY. Vui lòng liên hệ Admin bổ sung.")
+    );
+  });
+
+  await check("Báo giá mua hộ: gửi currency + GIÁ NGOẠI TỆ (giữ lẻ 2 số) để backend tự quy đổi; VND vẫn làm tròn đồng", async () => {
+    resetState({ token: "tok" });
+    const PR_ID = "d1d2d3d4-0000-4000-8000-000000000009";
+    routes = [{ method: "POST", url: `/api/purchase-requests/${PR_ID}/quotation`, reply: (req) => ok({ quotationId: "q1", currency: req.body.currency }) }];
+    await purchaseRequest.createPurchaseRequestQuotationApi(PR_ID, { currency: "cny", purchaseFee: 30000, items: [{ purchaseRequestItemId: "i1", unitPrice: 39.9 }, { purchaseRequestItemId: "i2", unitPrice: 12.346 }] });
+    await purchaseRequest.createPurchaseRequestQuotationApi(PR_ID, { purchaseFee: 30000, items: [{ purchaseRequestItemId: "i1", unitPrice: 144139.6 }] });
+    const [foreign, vnd] = requests.map((r) => r.body);
+    return all(
+      expectEqual("currency", [foreign.currency, vnd.currency], ["CNY", undefined]),
+      expectEqual("giá ngoại tệ giữ lẻ", foreign.items.map((i) => i.unitPrice), [39.9, 12.35]),
+      expectEqual("VND làm tròn", vnd.items[0].unitPrice, 144140)
+    );
+  });
+
+  await check("Hàng cấm (THẬT): GET /api/restricted-items qua catalogAdminService; quốc gia tự do (\"Trung Quốc\"/\"CN\") về China; lọc client; chi tiết 404 ném lỗi axios", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/restricted-items", reply: () => ok([
+        { id: "a1", itemName: "Pin lithium rời", country: "Trung Quốc", restrictionType: "banned", note: "Cấm bay", isActive: true },
+        { id: "a2", itemName: "Nước hoa", country: "VN", restrictionType: "RESTRICTED", note: "", isActive: false },
+      ]) },
+      { method: "GET", url: "/api/restricted-items/zz", reply: () => fail(404, { message: "Không tìm thấy mặt hàng cấm/hạn chế." }) },
+    ];
+    const list = await restricted.getRestrictedItemsApi();
+    const china = await restricted.getRestrictedItemsApi({ country: "China" });
+    const active = await restricted.getActiveRestrictedItemsApi();
+    const kw = await restricted.getRestrictedItemListApi({ keyword: "nước" });
+    const missing = await rejection(restricted.getRestrictedItemDetailApi("zz"));
+    return all(
+      expectEqual("chuẩn hoá", list.map((i) => [i.country, i.countryDisplayName, i.restrictionTypeDisplayName]), [["China", "Trung Quốc", "Cấm vận chuyển"], ["Vietnam", "Việt Nam", "Hạn chế"]]),
+      expectEqual("lọc quốc gia / đang áp dụng / từ khoá", [china.map((i) => i.id), active.map((i) => i.id), kw.map((i) => i.id)], [["a1"], ["a1"], ["a2"]]),
+      expectEqual("404", [missing.resolved, missing.error?.response?.data?.message], [false, "Không tìm thấy mặt hàng cấm/hạn chế."]),
+      expectEqual("không query lên server", requests.filter((r) => r.url === "/api/restricted-items").every((r) => !r.params), true)
+    );
+  });
+
+  await check("Trợ lý AI Sales (THẬT): POST /api/ai/sales/order-status-query; bỏ customerId không phải GUID, relatedId không GUID → orderCode; nhãn tiếng Việt; 404 hiện câu backend, không trả lời giả", async () => {
+    resetState({ token: "tok" });
+    const ORDER = "e1e2e3e4-0000-4000-8000-000000000001";
+    routes = [{ method: "POST", url: "/api/ai/sales/order-status-query", reply: (req) => (req.body.orderCode === "VCL-KHONG-CO" ? fail(404, { message: "Không tìm thấy dữ liệu đơn hàng, kiện hàng hoặc khách hàng liên quan đến câu hỏi." }) : ok({
+      answer: "Đơn đang chờ tất toán.", relatedOrders: [{ orderId: ORDER, orderCode: "VCL-1", orderType: "CONSIGNMENT", customerName: "A", customerPhone: "0900000000", status: "WAITING_PAYMENT", createdAt: "2026-09-20T00:00:00Z" }],
+      relatedParcels: [], currentStatus: "WAITING_PAYMENT", paymentStatus: "Chưa thanh toán (UNPAID)", warehouseStatus: "Chưa nhập kho", shipmentStatus: "Chưa ghép lô vận chuyển quốc tế (NOT_ASSIGNED)", nextActionSuggestion: "Nhắc khách tất toán.", dataSources: ["Orders"], warning: null,
+    })) }];
+    const res = await saleAi.querySalesOrderStatus({ message: " Kiểm tra đơn ", orderCode: "VCL-1", customerId: "khach-01", relatedType: "consignment", relatedId: ORDER });
+    await saleAi.querySalesOrderStatus({ message: "hỏi", relatedId: "VCL-2", relatedType: "CONSIGNMENT" });
+    const nf = await rejection(saleAi.querySalesOrderStatus({ message: "hỏi", orderCode: "VCL-KHONG-CO" }));
+    const empty = await rejection(saleAi.querySalesOrderStatus({ message: "  " }));
+    const [first, second] = requests.map((r) => r.body);
+    return all(
+      expectEqual("body 1", first, { message: "Kiểm tra đơn", orderCode: "VCL-1", relatedType: "CONSIGNMENT", relatedId: ORDER }),
+      expectEqual("body 2 (relatedId không GUID → orderCode)", second, { message: "hỏi", orderCode: "VCL-2" }),
+      expectEqual("kết quả", [res.answer, res.labels.currentStatus, res.relatedOrders.length], ["Đơn đang chờ tất toán.", "Chờ tất toán", 1]),
+      expectEqual("404 → câu backend", saleAi.getSalesAiError(nf.error), "Không tìm thấy dữ liệu đơn hàng, kiện hàng hoặc khách hàng liên quan đến câu hỏi."),
+      expectEqual("câu hỏi rỗng chặn tại chỗ", [empty.resolved, requests.length], [false, 3])
+    );
+  });
+
+  await check("Khách hàng (THẬT): GET ?search=; lọc trạng thái client; POST/PUT body đúng DTO; DELETE = vô hiệu hoá (câu backend); chi tiết 404 → null", async () => {
+    resetState({ token: "tok" });
+    const CUS = "c1c2c3c4-0000-4000-8000-000000000001";
+    routes = [
+      { method: "GET", url: "/api/customers", reply: () => ok({ items: [
+        { id: CUS, customerCode: "KH0001", fullName: "Nguyễn Văn A", email: "a@x.vn", phone: "0900000001", address: "", companyName: null, taxId: null, status: "ACTIVE" },
+        { id: "c1c2c3c4-0000-4000-8000-000000000002", customerCode: "KH0002", fullName: "B", email: "", phone: "0900000002", address: "", status: "INACTIVE" },
+      ] }) },
+      { method: "POST", url: "/api/customers", reply: (req) => ok({ message: "Tạo hồ sơ khách hàng thành công.", customer: { id: "new-id", customerCode: "KH0003", ...req.body } }, 201) },
+      { method: "PUT", url: `/api/customers/${CUS}`, reply: (req) => ok({ message: "Cập nhật hồ sơ khách hàng thành công.", customer: { id: CUS, customerCode: "KH0001", ...req.body } }) },
+      { method: "DELETE", url: `/api/customers/${CUS}`, reply: () => ok({ message: "Vô hiệu hóa hồ sơ khách hàng thành công." }) },
+      { method: "GET", url: "/api/customers/c1c2c3c4-0000-4000-8000-000000000009", reply: () => fail(404, { message: "Không tìm thấy khách hàng" }) },
+    ];
+    const listAll = await customerSvc.getCustomersApi({ search: "nguyen" });
+    const inactive = await customerSvc.getCustomersApi({ status: "INACTIVE" });
+    const created = await customerSvc.createCustomerApi({ fullName: " C ", phone: "090-000-0003", email: "C@X.VN", address: "" });
+    const updated = await customerSvc.updateCustomerApi(CUS, { fullName: "A2", phone: "0900000001", email: "a@x.vn", status: "ACTIVE" });
+    const removed = await customerSvc.deleteCustomerApi(CUS);
+    const missing = await customerSvc.getCustomerByIdApi("c1c2c3c4-0000-4000-8000-000000000009");
+    const post = requests.find((r) => r.method === "POST");
+    return all(
+      expectEqual("search gửi lên", requests[0].params, { search: "nguyen" }),
+      expectEqual("chuẩn hoá + lọc", [listAll.length, listAll[0].isActive, inactive.map((c) => c.customerCode)], [2, true, ["KH0002"]]),
+      expectEqual("body POST", post?.body, { fullName: "C", phone: "0900000003", email: "c@x.vn", address: null, companyName: null, taxId: null, status: "ACTIVE" }),
+      expectEqual("tạo / sửa", [created.id, created.customerCode, updated.fullName], ["new-id", "KH0003", "A2"]),
+      expectEqual("xoá = vô hiệu hoá", removed.message, "Vô hiệu hóa hồ sơ khách hàng thành công."),
+      expectEqual("404 → null", missing, null)
+    );
+  });
+
+  await check("Địa chỉ GoShip (THẬT): tỉnh/huyện/xã từ /api/Goship/*; cache tỉnh; dò tên cũ (bỏ tiền tố/dấu); lỗi không rơi về danh sách giả; ghép chuỗi bằng tên GoShip; chặn khi chưa đủ 3 cấp", async () => {
+    resetState({ token: "tok" });
+    address.clearAddressCache();
+    let failCities = true;
+    routes = [
+      { method: "GET", url: "/api/Goship/cities", reply: () => (failCities ? fail(500, { message: "GoShip lỗi" }) : ok({ message: "ok", items: [{ id: 100, name: "Hồ Chí Minh" }, { id: 101, name: "Hà Nội" }] })) },
+      { method: "GET", url: "/api/Goship/cities/100/districts", reply: () => ok({ message: "ok", items: [{ id: 1001, name: "Quận 1" }, { id: 1010, name: "Quận 10" }] }) },
+      { method: "GET", url: "/api/Goship/districts/1001/wards", reply: () => ok({ message: "ok", items: [{ id: 50, name: "Phường Bến Nghé" }] }) },
+    ];
+    const firstFail = await rejection(address.getProvinces());
+    failCities = false;
+    const provinces = await address.getProvinces();
+    await address.getProvinces();
+    const cityCalls = requests.filter((r) => r.url === "/api/Goship/cities").length;
+    const resolved = await address.resolveAddressByNames({ province: "TP. Hồ Chí Minh", district: "quan 1", ward: "Bến Nghé" });
+    const partial = await address.resolveAddressByNames({ province: "Hồ Chí Minh", district: "Quận 99", ward: "X" });
+    const full = await address.getFullAddressByCodes({ provinceCode: "100", districtCode: "1001", wardCode: "50", detailAddress: "12 Lê Lợi" });
+    return all(
+      expectEqual("lỗi lần đầu → ném, không danh sách giả", [firstFail.resolved, firstFail.error?.response?.status], [false, 500]),
+      expectEqual("tỉnh", provinces.map((p) => [p.value, p.label, p.code, p.name]), [["100", "Hồ Chí Minh", "100", "Hồ Chí Minh"], ["101", "Hà Nội", "101", "Hà Nội"]]),
+      expectEqual("cache tỉnh (lỗi không cache)", cityCalls, 2),
+      expectEqual("dò tên cũ", [resolved.matched, resolved.provinceCode, resolved.districtCode, resolved.wardCode, resolved.wardName], [true, "100", "1001", "50", "Phường Bến Nghé"]),
+      expectEqual("khớp một phần", [partial.matched, partial.provinceCode, partial.districtCode], [false, "100", ""]),
+      expectEqual("ghép bằng tên GoShip", full.fullAddress, "12 Lê Lợi, Phường Bến Nghé, Quận 1, Hồ Chí Minh"),
+      expectEqual("tách chuỗi", address.splitVietnamAddress("12 Lê Lợi, Phường Bến Nghé, Quận 1, Hồ Chí Minh"), { addressDetail: "12 Lê Lợi", ward: "Phường Bến Nghé", district: "Quận 1", province: "Hồ Chí Minh" }),
+      expectTrue("chưa đủ 3 cấp → lỗi", Boolean(address.getAddressSelectionError({ touched: true, empty: false, complete: false }))),
+      expectEqual("chưa sửa / xoá trắng / đủ → hợp lệ", [address.getAddressSelectionError(null), address.getAddressSelectionError({ touched: true, empty: true }), address.getAddressSelectionError({ touched: true, complete: true })], ["", "", ""]),
+      expectEqual("địa chỉ giao đủ mã + tên", [address.isDeliveryAddressComplete({ province: "Hồ Chí Minh", district: "Quận 1", ward: "Phường Bến Nghé" }), address.isDeliveryAddressComplete({ provinceCode: "100", province: "Hồ Chí Minh", districtCode: "1001", district: "Quận 1", wardCode: "50", ward: "Phường Bến Nghé" })], [false, true])
+    );
+  });
 }
 
 /* =========================================================
-   7. KIỂM TĨNH — màn ngoài đợt này phải dùng bản *.mock.js
+   7. KIỂM TĨNH — KHÔNG CÒN FILE NÀO (ngoài mock) IMPORT BẢN MOCK
    ========================================================= */
 
-const OUT_OF_WAVE_IMPORTS = [
-  ["src/features/chat/components/SalesAiAssistantPanel/SalesAiAssistantPanel.jsx", "consignmentService"],
-  ["src/features/chat/pages/CustomerServiceChat/CustomerServiceChat.constants.js", "consignmentService"],
-  ["src/features/documents/pages/ConsignmentDocumentsList/ConsignmentDocumentsList.jsx", "consignmentService"],
-  ["src/features/documents/pages/ConsignmentDocumentsList/ConsignmentDocumentsList.jsx", "consignmentReceiptService"],
-  ["src/features/dashboard/pages/SaleDashboard/SaleDashboard.jsx", "consignmentService"],
-  ["src/features/dashboard/pages/SaleDashboard/SaleDashboard.jsx", "servicePricingService"],
-  /*
-   * ConsignmentOrder.jsx ĐÃ RA KHỎI danh sách này với consignmentService và
-   * consignmentMasterService: màn "Sale tạo đơn hộ khách" nay gọi thật
-   * POST /api/staff/consignments. Dịch vụ bổ sung (pricingRuleService) vẫn là mock,
-   * nên dòng dưới đây còn nguyên.
-   */
-  ["src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.jsx", "pricingRuleService"],
-  ["src/features/consignment/components/PackageOptionalServices/PackageOptionalServices.jsx", "pricingRuleService"],
-  /*
-   * ConsignmentBuyOrder.jsx đã RA KHỎI danh sách với consignmentMasterService: tuyến và
-   * phương thức vận chuyển nay đọc từ bảng giá thật (production chỉ có Express/Standard),
-   * mock liệt kê thêm "Tiết kiệm"/"Đường biển" không có dòng giá nên chọn vào là hỏng báo giá.
-   */
-  ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.helpers.js", "pricingRuleService"],
-  ["src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.constants.js", "pricingRuleService"],
-  ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx", "pricingRuleService"],
-  ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx", "servicePricingService"],
-  ["src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.helpers.js", "pricingRuleService"],
-  ["src/features/purchase/components/PackageOptionalServicesS1/PackageOptionalServicesS1.jsx", "pricingRuleService"],
-  ["src/features/pricing/pages/ServicePricings/ServicePricings.jsx", "pricingRuleService"],
-  ["src/features/pricing/pages/ServicePricings/ServicePricings.jsx", "servicePricingService"],
-  ["src/features/pricing/pages/ServicePricings/ServicePricings.jsx", "packageConfigurationService"],
-  ["src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js", "pricingRuleService"],
-  ["src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js", "servicePricingService"],
-];
+/*
+ * Từ 27/09/2026 mọi màn nội bộ đều chạy API thật: danh sách OUT_OF_WAVE_IMPORTS (ServicePricings,
+ * modal báo giá mua hộ, chat, giấy tờ ký gửi...) đã được chuyển hết sang bản thật. Phép kiểm
+ * đảo lại: file nào trong src/ (trừ src/mocks/** và chính các bản *.mock.js) còn import `*.mock`
+ * hoặc `@/mocks` là FAIL — lọt lại là màn đó hiện dữ liệu giả.
+ */
+const walkSource = (dir, out = []) => {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walkSource(full, out);
+    else if (/\.(jsx?|mjs)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+};
 
-await check("Màn ngoài đợt này vẫn chạy dữ liệu mẫu (import bản *.mock)", () => {
+await check("Không file nào ngoài src/mocks và *.mock.js còn import bản mock (*.mock / @/mocks)", () => {
   const wrong = [];
+  const importPattern = /(?:import|export)\s+[\s\S]*?\s+from\s+["']([^"']+)["']/g;
 
-  for (const [rel, moduleName] of OUT_OF_WAVE_IMPORTS) {
-    const file = path.join(ROOT, rel);
-
-    if (!fs.existsSync(file)) {
-      wrong.push(`${rel}: không còn file`);
-      continue;
-    }
+  for (const file of walkSource(path.join(ROOT, "src"))) {
+    const rel = path.relative(ROOT, file).split(path.sep).join("/");
+    if (rel.startsWith("src/mocks/") || /\.mock\.js$/.test(rel)) continue;
 
     const source = fs.readFileSync(file, "utf8");
-    const mockPattern = new RegExp(`api/${moduleName}\\.mock"`);
-    const realPattern = new RegExp(`api/${moduleName}"`);
+    const leaked = [...source.matchAll(importPattern)]
+      .map((match) => match[1])
+      .filter((spec) => /\.mock(\.js)?$/.test(spec) || spec.startsWith("@/mocks"));
 
-    if (!mockPattern.test(source)) {
-      wrong.push(`${rel} không import ${moduleName}.mock`);
-    }
-    if (realPattern.test(source)) {
-      wrong.push(`${rel} vẫn import bản THẬT ${moduleName}`);
+    if (leaked.length) wrong.push(`${rel}: ${leaked.join(", ")}`);
+  }
+
+  return wrong.length === 0 ? true : wrong.slice(0, 6).join("; ");
+});
+
+/* Các màn tiền/nghiệp vụ vừa chuyển phải import ĐÚNG bản thật (không chỉ "không import mock"). */
+const MUST_IMPORT_REAL = {
+  "src/features/pricing/pages/ServicePricings/ServicePricings.jsx": [
+    "@features/pricing/api/servicePricingService",
+    "@features/pricing/api/packageConfigurationService",
+    "@features/pricing/api/exchangeRateService",
+  ],
+  "src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js": [
+    "@features/pricing/api/servicePricingService",
+    "@features/pricing/api/exchangeRateService",
+  ],
+  "src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx": [
+    "@features/pricing/api/servicePricingService",
+    "@features/pricing/api/exchangeRateService",
+  ],
+  "src/features/chat/components/SalesAiAssistantPanel/SalesAiAssistantPanel.jsx": [
+    "@features/consignment/api/consignmentService",
+  ],
+  "src/features/chat/pages/CustomerServiceChat/CustomerServiceChat.constants.js": [
+    "@features/consignment/api/consignmentService",
+  ],
+  "src/features/documents/pages/ConsignmentDocumentsList/ConsignmentDocumentsList.jsx": [
+    "@features/consignment/api/consignmentService",
+    "@features/consignment/api/consignmentReceiptService",
+  ],
+  "src/features/chat/api/chatImageUploadApi.js": ["@shared/api/uploadImage"],
+  "src/features/catalog/api/restrictedItemService.js": ["@features/catalog/api/catalogAdminService"],
+  "src/features/pricing/api/exchangeRateService.js": ["@features/catalog/api/catalogAdminService"],
+  "src/features/purchase/pages/ConsignmentBuyOrder/ConsignmentBuyOrder.jsx": [
+    "@features/customer/api/customerLookupService",
+    "@shared/components/AddressSelect/AddressSelect",
+  ],
+  "src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.jsx": [
+    "@shared/components/AddressSelect/AddressSelect",
+  ],
+  "src/features/settlement/pages/SaleReleasePage/SaleReleasePage.jsx": [
+    "@shared/components/AddressSelect/DeliveryAddressPicker",
+  ],
+  "src/features/settlement/pages/SaleDeliveriesPage/SaleDeliveriesPage.jsx": [
+    "@shared/components/AddressSelect/DeliveryAddressPicker",
+  ],
+};
+
+await check("Màn vừa gỡ mock import đúng bản THẬT (bảng giá, tỷ giá, báo giá mua hộ, chat, giấy tờ, upload, hàng cấm, địa chỉ GoShip)", () => {
+  const wrong = [];
+  const importPattern = /import\s+[\s\S]*?\s+from\s+["']([^"']+)["']/g;
+
+  for (const [rel, wants] of Object.entries(MUST_IMPORT_REAL)) {
+    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    const specifiers = [...source.matchAll(importPattern)].map((match) => match[1].replace(/\.js$/, ""));
+    for (const want of wants) {
+      if (!specifiers.includes(want)) wrong.push(`${rel}: thiếu import "${want}"`);
     }
   }
 
-  return wrong.length === 0 ? true : wrong.slice(0, 5).join("; ");
+  /* Không còn ô GÕ TAY phường/quận/tỉnh ở hai màn giao hàng. */
+  for (const rel of [
+    "src/features/settlement/pages/SaleReleasePage/SaleReleasePage.jsx",
+    "src/features/settlement/pages/SaleDeliveriesPage/SaleDeliveriesPage.jsx",
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    if (/addonBefore="(Phường\/Xã|Quận\/Huyện|Tỉnh\/Thành phố)"|\["(ward|district|province)", "/.test(source)) {
+      wrong.push(`${rel}: còn ô gõ tay tỉnh/quận/phường`);
+    }
+  }
+
+  /* Không còn tỷ giá mặc định hard-code. */
+  for (const rel of [
+    "src/features/pricing/pages/ServicePricings/ServicePricings.jsx",
+    "src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js",
+    "src/features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal.jsx",
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    if (/DEFAULT_RATES|rateToVnd:\s*\d|\?\s*20\s*:\s*code === "JPY"|convertCurrencyApi/.test(source)) {
+      wrong.push(`${rel}: còn tỷ giá mặc định / quy đổi không qua tỷ giá thật`);
+    }
+  }
+
+  return wrong.length === 0 ? true : wrong.join("; ");
+});
+
+/*
+ * Chat CSKH nhân viên phải dùng bản THẬT: conversationApi.mock.js / @/mocks mà lọt lại vào màn
+ * chat là Sale lại không thấy tin khách. Upload đi qua chatImageUploadApi (lớp mỏng trên
+ * @shared/api/uploadImage — đã là API thật từ 27/09/2026), màn chat không import shared trực tiếp.
+ */
+const CHAT_MUST_USE_REAL = {
+  "src/features/chat/pages/CustomerServiceChat/CustomerServiceChat.jsx": [
+    "@features/chat/api/conversationApi",
+    "@features/chat/api/chatImageUploadApi",
+  ],
+  "src/features/workspace/api/saleBadgeService.js": ["@features/chat/api/conversationApi"],
+};
+
+await check("Chat CSKH nhân viên import bản THẬT (conversationApi + chatImageUploadApi), không còn *.mock / @/mocks / @shared/api/uploadImage; barrel chat không re-export bản mock", () => {
+  const wrong = [];
+  const importPattern = /import\s+[\s\S]*?\s+from\s+["']([^"']+)["']/g;
+
+  for (const [rel, wants] of Object.entries(CHAT_MUST_USE_REAL)) {
+    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    const specifiers = [...source.matchAll(importPattern)].map((match) => match[1].replace(/\.js$/, ""));
+
+    for (const want of wants) {
+      if (!specifiers.includes(want)) wrong.push(`${rel}: thiếu import "${want}"`);
+    }
+
+    const leaked = specifiers.filter(
+      (spec) => /\.mock$/.test(spec) || spec.startsWith("@/mocks") || spec === "@shared/api/uploadImage",
+    );
+    if (leaked.length) wrong.push(`${rel}: còn import ${leaked.join(", ")}`);
+  }
+
+  if (/\.mock["']/.test(fs.readFileSync(path.join(ROOT, "src/features/chat/index.js"), "utf8"))) {
+    wrong.push("src/features/chat/index.js: re-export bản mock");
+  }
+
+  return wrong.length === 0 ? true : wrong.join("; ");
+});
+
+await check("Quy tắc phụ phí (ServicePricings) đọc quy tắc tính phí THẬT, không qua bản mock", () => {
+  const wrong = [];
+  for (const rel of [
+    "src/features/pricing/pages/ServicePricings/ServicePricings.jsx",
+    "src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js",
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    if (/api\/pricingRuleService\.mock"/.test(source)) wrong.push(`${rel} còn import pricingRuleService.mock`);
+    if (!/api\/pricingRuleService"/.test(source)) wrong.push(`${rel} không import pricingRuleService thật`);
+  }
+  return wrong.length === 0 ? true : wrong.join("; ");
+});
+
+await check("Quy tắc phụ phí: rule hệ thống hiện đơn vị (cm³/kg, kg), không hiện \"Cố định\"", async () => {
+  const helpers = await load("/src/features/pricing/pages/ServicePricings/ServicePricings.helpers.js");
+  const divisorRule = { ruleCode: "VOLUMETRIC_DIVISOR", ruleType: "VOLUMETRIC_DIVISOR", calculationType: "FIXED", calculationTypeDisplayName: "Cố định", value: 5000 };
+  const byTypeOnly = { ruleCode: "HE_SO", ruleType: "VOLUMETRIC_DIVISOR", calculationType: "FIXED", calculationTypeDisplayName: "Cố định", value: 6000 };
+  const minWeightRule = { ruleCode: "MIN_WEIGHT", ruleType: "MIN_WEIGHT", calculationType: "FIXED", calculationTypeDisplayName: "Cố định", value: 1 };
+  const feeRule = { ruleCode: "DOMESTIC_FEE", ruleType: "DOMESTIC_FEE", calculationType: "FIXED", calculationTypeDisplayName: "Cố định", value: 5000 };
+  return all(
+    expectEqual("hệ số DIM", helpers.formatRuleValue(divisorRule), "5.000 cm³/kg"),
+    expectEqual("hệ số theo ruleType", helpers.formatRuleValue(byTypeOnly), "6.000 cm³/kg"),
+    expectEqual("cân tối thiểu", helpers.formatRuleValue(minWeightRule), "1 kg"),
+    expectEqual("nhãn giá trị", [helpers.getRuleValueUnit(divisorRule), helpers.getRuleValueUnit(minWeightRule)], ["Hệ số quy đổi", "Cân tối thiểu"]),
+    expectTrue("rule hệ thống không hiện Cố định", !helpers.getRuleCalculationDisplay(divisorRule).includes("Cố định") && !helpers.getRuleCalculationDisplay(minWeightRule).includes("Cố định")),
+    expectEqual("phí thường vẫn hiện Cố định", helpers.getRuleCalculationDisplay(feeRule), "Cố định")
+  );
+});
+
+await check("Chi tiết đơn (Admin): DIM từng dòng chia đúng hệ số đang hiện; lệch với API thì báo", async () => {
+  const helpers = await load("/src/features/consignment/pages/ConsignmentDetail/ConsignmentDetail.helpers.js");
+  const item = { length: 50, width: 40, height: 30, weight: 2, volumetricWeight: 12 };
+  const sameDivisor = helpers.resolveItemDim(item, 5000);
+  const otherDivisor = helpers.resolveItemDim(item, 6000);
+  const noDivisor = helpers.resolveItemDim(item, 0);
+  return all(
+    expectEqual("hệ số 5000", [sameDivisor.dimKg, sameDivisor.source, sameDivisor.isApiMismatch], [12, "DIVISOR", false]),
+    expectEqual("hệ số 6000 → tính theo 6000, báo lệch API", [otherDivisor.dimKg, otherDivisor.source, otherDivisor.isApiMismatch], [10, "DIVISOR", true]),
+    expectEqual("chưa có hệ số → số API", [noDivisor.dimKg, noDivisor.source], [12, "API"]),
+    expectEqual("tổng dùng cùng số", helpers.calculateItemDimKg(item, 6000), 10)
+  );
 });
 
 await check("Bản sao *.mock.js không được nối mạng", () => {
@@ -1996,6 +3341,15 @@ await check("Bản sao *.mock.js không được nối mạng", () => {
     "src/features/pricing/api/packageConfigurationService.mock.js",
     "src/features/warehouse/api/warehouseService.mock.js",
     "src/features/consignment/api/consignmentReceiptService.mock.js",
+    "src/features/chat/api/conversationApi.mock.js",
+    /* Bản sao lưu của đợt gỡ mock 27/09/2026. */
+    "src/shared/api/uploadImage.mock.js",
+    "src/features/pricing/api/exchangeRateService.mock.js",
+    "src/features/catalog/api/restrictedItemService.mock.js",
+    "src/features/chat/api/saleAiService.mock.js",
+    "src/features/customer/api/customerService.mock.js",
+    "src/features/consignment/api/deliveryAddressService.mock.js",
+    "src/shared/api/vietnamAddressService.mock.js",
   ];
 
   const wrong = [];

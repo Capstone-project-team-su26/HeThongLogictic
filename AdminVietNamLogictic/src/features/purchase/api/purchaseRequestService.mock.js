@@ -225,7 +225,59 @@ const normalizeNonNegativeNumber = (
    NORMALIZE LIST ITEM
 ========================================================= */
 
+/* Trạng thái mà khách đã trả phần trả trước (mock không có sổ thanh toán riêng). */
+const PREPAID_REQUEST_STATUSES = new Set([
+  "DEPOSIT_PAID",
+  "PAID",
+  "PURCHASING",
+  "PROCESSING",
+  "COMPLETED",
+]);
+
+/**
+ * Số liệu lập đơn mua của một yêu cầu — cùng luật backend (PurchaseRequestListItemDto):
+ * chỉ tính khi báo giá đã ACCEPTED; một dòng còn mua được nếu có trong báo giá, không nằm
+ * trong đơn mua chưa huỷ nào và SL khách đặt − SL đã đóng "không mua được" > 0.
+ * Mock không có kho đơn mua / khoản hoàn nên hai phần đó mặc định rỗng.
+ */
+const buildPurchaseLineSummary = (item = {}) => {
+  const quotation = item?.quotation || null;
+  /* Bộ dữ liệu mẫu còn dùng mã đời cũ (CONFIRMED / CUSTOMER_CONFIRMED) cho báo giá khách đã chấp nhận. */
+  const accepted = ["ACCEPTED", "CONFIRMED", "CUSTOMER_CONFIRMED"].includes(
+    normalizeUpperText(quotation?.status)
+  );
+
+  const quotedIds = new Set(
+    (Array.isArray(quotation?.items) ? quotation.items : [])
+      .map((line) => normalizeText(line?.purchaseRequestItemId).toLowerCase())
+      .filter(Boolean)
+  );
+
+  const openLines = accepted
+    ? (Array.isArray(item?.items) ? item.items : []).filter(
+      (line) =>
+        quotedIds.has(normalizeText(line?.itemId ?? line?.purchaseRequestItemId).toLowerCase()) &&
+        (Number(line?.quantity) || 0) > 0
+    )
+    : [];
+
+  return {
+    activePurchaseOrderCount: 0,
+    openLineCount: openLines.length,
+    openQuantity: openLines.reduce(
+      (total, line) => total + (Number(line?.quantity) || 0),
+      0
+    ),
+    closedQuantity: 0,
+    prepaidAmount: PREPAID_REQUEST_STATUSES.has(normalizeUpperText(item?.status))
+      ? Number(quotation?.depositAmount ?? quotation?.totalAmount) || 0
+      : 0,
+  };
+};
+
 const normalizePurchaseRequestListItem = (item = {}) => {
+  const lineSummary = buildPurchaseLineSummary(item);
+
   return {
     ...item,
     purchaseRequestId: item?.purchaseRequestId ?? item?.id ?? "",
@@ -233,6 +285,16 @@ const normalizePurchaseRequestListItem = (item = {}) => {
     customerId: item?.customerId ?? "",
     customerName: item?.customerName ?? item?.receiverName ?? item?.customer?.fullName ?? "",
     customerPhone: item?.customerPhone ?? item?.receiverPhone ?? item?.phone ?? item?.customer?.phone ?? "",
+    customerCode: item?.customerCode ?? item?.customer?.customerCode ?? null,
+
+    /* Trường mới của PurchaseRequestListItemDto (màn Đơn mua NCC dùng để chọn yêu cầu). */
+    activePurchaseOrderCount:
+      Number(item?.activePurchaseOrderCount ?? lineSummary.activePurchaseOrderCount) || 0,
+    openLineCount: Number(item?.openLineCount ?? lineSummary.openLineCount) || 0,
+    openQuantity: Number(item?.openQuantity ?? lineSummary.openQuantity) || 0,
+    closedQuantity: Number(item?.closedQuantity ?? lineSummary.closedQuantity) || 0,
+    prepaidAmount: Number(item?.prepaidAmount ?? lineSummary.prepaidAmount) || 0,
+
     receiverName: item?.receiverName ?? item?.customerName ?? "",
     receiverPhone: item?.receiverPhone ?? item?.customerPhone ?? item?.phone ?? item?.customer?.phone ?? "",
     receiverAddress: item?.receiverAddress ?? item?.address ?? "",
@@ -587,6 +649,13 @@ const normalizeCreateQuotationPayload =
         normalizeNonNegativeNumber(
           payload?.shippingFee,
           "Phí vận chuyển"
+        ),
+
+      /* Ship nội địa từ NCC — nguồn duy nhất của khoản này (xem createPurchaseRequestQuotationApi). */
+      domesticShippingFee:
+        normalizeNonNegativeNumber(
+          payload?.domesticShippingFee ?? 0,
+          "Ship nội địa"
         ),
 
       note:
@@ -1178,11 +1247,10 @@ const PURCHASE_SERVICE_FEE_RULE_ID =
 /**
  * KHÔNG dùng id của quy tắc DOMESTIC_FEE cho khoản này.
  *
- * Modal lập báo giá luôn tính DOMESTIC_FEE thành một dòng riêng trong additionalFees (nó
- * bị bật cứng cùng VAT và thuế nhập khẩu), trong khi ô "phí vận chuyển" là số Sale tự gõ ở
- * cấp cao nhất. Cho hai dòng đó cùng pricingRuleId là dữ liệu sai: cùng một quy tắc phí lại
- * xuất hiện hai lần với hai số tiền. Vì vậy khoản tổng hợp này mang id riêng, cùng khuôn với
- * "Phí mua hộ" và cũng không trùng quy tắc nào trong catalog.
+ * Ô "phí vận chuyển" là số Sale tự gõ ở cấp cao nhất, không phải ship nội địa; khoản ship
+ * nội địa (nếu có) đã mang id quy tắc DOMESTIC_FEE. Cho hai dòng cùng pricingRuleId là dữ
+ * liệu sai, nên khoản tổng hợp này mang id riêng, cùng khuôn với "Phí mua hộ" và cũng không
+ * trùng quy tắc nào trong catalog.
  */
 const SHIPPING_SERVICE_FEE_RULE_ID =
   "aaaa0009-0000-4000-8000-000000000009";
@@ -1209,6 +1277,17 @@ const withUniqueFeeIds = (fees) => {
 const VAT_RULE_ID =
   findPricingRuleByCode("VAT")?.id ||
   "";
+
+const DOMESTIC_FEE_RULE_ID =
+  findPricingRuleByCode("DOMESTIC_FEE")?.id ||
+  "";
+
+const isDomesticFeeLine = (fee) =>
+  (DOMESTIC_FEE_RULE_ID &&
+    normalizeText(fee?.pricingRuleId) ===
+      DOMESTIC_FEE_RULE_ID) ||
+  normalizeUpperText(fee?.feeType) ===
+    "DOMESTIC_FEE";
 
 const IMPORT_TAX_RULE_ID =
   findPricingRuleByCode(
@@ -1274,12 +1353,14 @@ const splitTaxAmounts = (fees) => {
  * sau đó lại thấy quotation = null và nút "Tạo báo giá" hiện lại như chưa làm gì.
  *
  * Tổng tiền tính đúng công thức của modal (productSubtotal + phí mua hộ + phí vận
- * chuyển + phụ phí) để QuotationView không bật cảnh báo "Tổng báo giá chưa khớp".
+ * chuyển + ship nội địa + phụ phí) để QuotationView không bật cảnh báo "Tổng báo giá
+ * chưa khớp".
  *
  * @param {string} purchaseRequestId
  * @param {Object} payload
  * @param {number} payload.purchaseFee
  * @param {number} payload.shippingFee
+ * @param {number} [payload.domesticShippingFee]
  * @param {string} payload.note
  * @param {Array} payload.items
  * @param {Array} payload.additionalFees
@@ -1386,10 +1467,45 @@ export const createPurchaseRequestQuotationApi =
       });
     }
 
+    /*
+     * Ship nội địa tính ĐÚNG MỘT LẦN, như backend: ô domesticShippingFee > 0 là nguồn duy
+     * nhất (mọi phụ phí DOMESTIC_FEE bị bỏ qua); ô = 0 mà có phụ phí DOMESTIC_FEE (client
+     * cũ) thì lấy tổng các dòng đó làm ship nội địa.
+     */
+    const domesticFeeLines =
+      requestBody.additionalFees.filter(
+        isDomesticFeeLine
+      );
+
+    const domesticShippingFee =
+      requestBody.domesticShippingFee > 0
+        ? requestBody.domesticShippingFee
+        : domesticFeeLines.reduce(
+          (total, fee) =>
+            total + fee.amount,
+          0
+        );
+
+    if (domesticShippingFee > 0) {
+      leadingFees.push({
+        pricingRuleId:
+          DOMESTIC_FEE_RULE_ID ||
+          nextUuid(),
+        feeName: "Ship nội địa từ NCC",
+        feeType: "DOMESTIC_FEE",
+        calculationType: "FIXED",
+        value: domesticShippingFee,
+        amount: domesticShippingFee,
+        note: "Phí NCC giao tới kho nguồn",
+      });
+    }
+
     const additionalFees =
       withUniqueFeeIds([
         ...leadingFees,
-        ...requestBody.additionalFees,
+        ...requestBody.additionalFees.filter(
+          (fee) => !isDomesticFeeLine(fee)
+        ),
       ]);
 
     const additionalFeeTotal =
@@ -1428,6 +1544,7 @@ export const createPurchaseRequestQuotationApi =
         requestBody.purchaseFee,
       shippingFee:
         requestBody.shippingFee,
+      domesticShippingFee,
 
       vat: taxAmounts.vat,
       importTax: taxAmounts.importTax,

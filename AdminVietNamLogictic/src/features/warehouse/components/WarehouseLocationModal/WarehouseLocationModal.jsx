@@ -1,4 +1,5 @@
-import { Col, Form, Input, InputNumber, Modal, Row, Space, Switch, Typography } from "antd";
+import { Alert, Col, Form, Input, InputNumber, Modal, Row, Select, Space, Switch, Typography } from "antd";
+import { ZONE_TYPE_OPTIONS } from "@features/warehouse/api/warehouseZoneService";
 
 const { Text } = Typography;
 
@@ -19,6 +20,7 @@ export default function WarehouseLocationModal({
   setLocationForm,
   isZonePreset = false,
   isShelfPreset = false,
+  isNewZone = false,
   onSubmit,
   onCancel,
 }) {
@@ -64,6 +66,27 @@ export default function WarehouseLocationModal({
             </Form.Item>
           </Col>
         </Row>
+
+        {/* Khu MỚI (chưa có trong kho) thì backend bắt buộc loại khu; khu đã có giữ loại cũ. */}
+        {isNewZone && (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={`Khu "${String(locationForm.zoneName || "").trim()}" chưa có trong kho — hệ thống sẽ tạo khu mới.`}
+              description="Hàng lưu kho chỉ được xếp vào ô thuộc khu lưu kho đang dùng."
+            />
+            <Form.Item label={renderFieldLabel("Loại khu mới", true)}>
+              <Select
+                placeholder="Chọn loại khu"
+                value={locationForm.zoneType || undefined}
+                options={ZONE_TYPE_OPTIONS.map(({ value, label }) => ({ value, label }))}
+                onChange={(val) => setLocationForm((prev) => ({ ...prev, zoneType: val }))}
+              />
+            </Form.Item>
+          </>
+        )}
 
         <Form.Item label={renderFieldLabel("Mã Ô Chứa Hàng (Bin Code)", true)}>
           <Input

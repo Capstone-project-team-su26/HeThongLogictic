@@ -354,6 +354,9 @@ export default function AdminResourcePage({
     }
   };
 
+  /* Trường backend không cho đổi khi sửa (vd. mã tiền tệ của tỷ giá): khoá ô, không giả vờ lưu. */
+  const isLockedOnEdit = (field) => Boolean(editingRecord && field.disabledOnEdit);
+
   const updateField = (name, value) => {
     setForm((current) => ({ ...current, [name]: value }));
   };
@@ -549,6 +552,7 @@ export default function AdminResourcePage({
                 {field.label}
                 {field.required && <b>*</b>}
               </span>
+              {field.hint && <small className="admin-form-field__hint">{field.hint}</small>}
 
               {field.type === "select" && (
                 <Select
@@ -557,6 +561,7 @@ export default function AdminResourcePage({
                   placeholder={field.placeholder || `Chọn ${field.label.toLowerCase()}`}
                   loading={Boolean(field.optionsApi) && !asyncSelectOptions[field.name]}
                   allowClear={!field.required}
+                  disabled={isLockedOnEdit(field)}
                   onChange={(value) => updateField(field.name, value)}
                 />
               )}
@@ -594,6 +599,7 @@ export default function AdminResourcePage({
                   type={field.type || "text"}
                   value={form[field.name]}
                   placeholder={field.placeholder}
+                  disabled={isLockedOnEdit(field)}
                   onChange={(event) => updateField(field.name, event.target.value)}
                 />
               )}

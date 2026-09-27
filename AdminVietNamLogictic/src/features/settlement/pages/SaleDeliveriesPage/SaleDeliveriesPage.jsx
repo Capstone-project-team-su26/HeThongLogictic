@@ -17,6 +17,7 @@ import {
   Empty,
   Input,
   InputNumber,
+  Modal,
   Select,
   Space,
   Spin,
@@ -41,6 +42,16 @@ import {
   listAttachments,
 } from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import DeliveryAddressPicker from "@shared/components/AddressSelect/DeliveryAddressPicker";
+import { isDeliveryAddressComplete } from "@shared/api/vietnamAddressService";
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
+/* Cân từng kiện, hàng khai và tiền của đơn cho hộp xác nhận — phiếu giao không có mấy số này. */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/settlement/pages/SaleSettlementPage/SaleSettlementPage.css";
 
 const { Title, Text } = Typography;
@@ -64,6 +75,13 @@ const formatMoney = (value) => `${Number(value || 0).toLocaleString("vi-VN")}đ`
 
 const idOf = (row) => row?.deliveryRequestId || row?.id;
 
+const PARCEL_COLUMNS = [
+  { title: "Kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
+  { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => <Tag>{v || "—"}</Tag> },
+  { title: "Hướng xử lý", dataIndex: "customerIntentText", render: (v) => v || "—" },
+  { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "—" },
+];
+
 export default function SaleDeliveriesPage() {
   const [rows, setRows] = useState([]);
   const [statusFilter, setStatusFilter] = useState("");
@@ -78,6 +96,14 @@ export default function SaleDeliveriesPage() {
 
   const [proof, setProof] = useState({ receivedBy: "", note: "" });
   const [redelivery, setRedelivery] = useState(null);
+
+  /*
+   * Hai thao tác ghi của màn ("Ghi nhận đã giao", "Gửi yêu cầu giao lại") trước đây bấm là gửi.
+   * Giờ cả hai qua một hộp xác nhận hiện đủ phiếu, người nhận / địa chỉ sẽ ghi, từng kiện, cân
+   * và tiền của đơn. `confirmAction`: "proof" | "redelivery" | null.
+   */
+  const [confirmAction, setConfirmAction] = useState(null);
+  const orderReview = useOrderReview(confirmAction ? detail?.orderId : "");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +163,7 @@ export default function SaleDeliveriesPage() {
     setSubmitting(true);
     try {
       await recordDeliveryProof(idOf(detail), proof);
+      setConfirmAction(null);
       AuthNotify.success(
         "Đã ghi bằng chứng giao",
         `Phiếu ${detail.deliveryCode}: kiện chuyển Đã giao, khách nhận thông báo.`,
@@ -164,6 +191,10 @@ export default function SaleDeliveriesPage() {
       ward: detail.ward || "",
       district: detail.district || "",
       province: detail.province || "",
+      /* Mã GoShip dò lại từ tên đã lưu trong DeliveryAddressPicker. */
+      provinceCode: "",
+      districtCode: "",
+      wardCode: "",
       note: "",
       redeliveryFee: null,
     });
@@ -171,9 +202,17 @@ export default function SaleDeliveriesPage() {
 
   const submitRedelivery = async () => {
     if (!detail || !redelivery) return;
+    if (!String(redelivery.addressDetail || "").trim() || !isDeliveryAddressComplete(redelivery)) {
+      AuthNotify.error(
+        "Thiếu địa chỉ giao lại",
+        "Nhập số nhà và CHỌN đủ tỉnh/quận/phường từ danh sách rồi mới gửi được.",
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await createDeliveryRequest({ orderId: detail.orderId, ...redelivery });
+      setConfirmAction(null);
       AuthNotify.success(
         "Đã lập yêu cầu giao lại",
         result?.redeliveryFeeCheckoutUrl
@@ -297,7 +336,10 @@ export default function SaleDeliveriesPage() {
 
       <Drawer
         open={Boolean(detail)}
-        onClose={() => setDetail(null)}
+        onClose={() => {
+          setDetail(null);
+          setConfirmAction(null);
+        }}
         width={820}
         title={`Phiếu giao ${detail?.deliveryCode || ""}`}
       >
@@ -364,12 +406,7 @@ export default function SaleDeliveriesPage() {
               pagination={false}
               dataSource={detail.parcels || []}
               style={{ marginBottom: 16 }}
-              columns={[
-                { title: "Kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
-                { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => <Tag>{v || "—"}</Tag> },
-                { title: "Hướng xử lý", dataIndex: "customerIntentText", render: (v) => v || "—" },
-                { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "—" },
-              ]}
+              columns={PARCEL_COLUMNS}
             />
 
             <Title level={5}>Ảnh ký nhận / giấy tờ</Title>
@@ -406,9 +443,9 @@ export default function SaleDeliveriesPage() {
                     icon={<CheckCircleOutlined />}
                     loading={submitting}
                     disabled={!hasProofPhoto || !proof.receivedBy.trim()}
-                    onClick={submitProof}
+                    onClick={() => setConfirmAction("proof")}
                   >
-                    Ghi nhận đã giao
+                    Xem lại và ghi nhận đã giao
                   </Button>
                 </Space>
               </div>
@@ -427,10 +464,6 @@ export default function SaleDeliveriesPage() {
                   {[
                     ["receiverName", "Người nhận"],
                     ["receiverPhone", "Điện thoại"],
-                    ["addressDetail", "Số nhà, đường"],
-                    ["ward", "Phường/Xã"],
-                    ["district", "Quận/Huyện"],
-                    ["province", "Tỉnh/Thành phố"],
                   ].map(([field, label]) => (
                     <Input
                       key={field}
@@ -439,6 +472,11 @@ export default function SaleDeliveriesPage() {
                       onChange={(event) => setRedelivery((r) => ({ ...r, [field]: event.target.value }))}
                     />
                   ))}
+                  <DeliveryAddressPicker
+                    value={redelivery}
+                    savedText={[detail?.addressDetail, detail?.ward, detail?.district, detail?.province].filter(Boolean).join(", ")}
+                    onChange={(patch) => setRedelivery((r) => ({ ...r, ...patch }))}
+                  />
                   <InputNumber
                     min={0}
                     step={1000}
@@ -461,8 +499,12 @@ export default function SaleDeliveriesPage() {
                   />
                   <Space>
                     <Button onClick={() => setRedelivery(null)}>Huỷ</Button>
-                    <Button type="primary" loading={submitting} onClick={submitRedelivery}>
-                      Gửi yêu cầu giao lại
+                    <Button
+                      type="primary"
+                      disabled={!String(redelivery.addressDetail || "").trim() || !isDeliveryAddressComplete(redelivery)}
+                      onClick={() => setConfirmAction("redelivery")}
+                    >
+                      Xem lại và gửi yêu cầu giao lại
                     </Button>
                   </Space>
                 </Space>
@@ -471,6 +513,162 @@ export default function SaleDeliveriesPage() {
           </Spin>
         )}
       </Drawer>
+
+      {/*
+        XÁC NHẬN TRƯỚC KHI GHI. Đang tải chi tiết đơn thì khoá nút; tải lỗi không chặn vì dữ liệu
+        sẽ ghi (người ký nhận / địa chỉ giao lại / phí) đã hiện đủ ở đây từ chính phiếu giao.
+      */}
+      <Modal
+        {...REVIEW_MODAL_PROPS}
+        open={Boolean(confirmAction && detail)}
+        title={
+          confirmAction === "redelivery"
+            ? `Xác nhận yêu cầu giao lại · ${detail?.orderCode || ""}`
+            : `Xác nhận đã giao · phiếu ${detail?.deliveryCode || ""}`
+        }
+        okText={
+          orderReview.loading
+            ? "Đang tải thông tin…"
+            : confirmAction === "redelivery"
+              ? "Gửi yêu cầu giao lại"
+              : "Ghi nhận đã giao"
+        }
+        cancelText="Xem lại"
+        confirmLoading={submitting}
+        okButtonProps={{ disabled: orderReview.loading }}
+        onOk={confirmAction === "redelivery" ? submitRedelivery : submitProof}
+        onCancel={() => setConfirmAction(null)}
+      >
+        {detail && confirmAction === "proof" && (
+          <>
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 14 }}
+              message="Ghi xong, các kiện dưới đây chuyển sang Đã giao và khách nhận thông báo."
+            />
+            <ReviewFacts
+              items={[
+                { label: "Phiếu giao", value: <Text strong>{detail.deliveryCode}</Text> },
+                { label: "Đơn", value: detail.orderCode },
+                { label: "Khách hàng", value: detail.customerName },
+                {
+                  label: "Người nhận trên phiếu",
+                  value: [detail.receiverName, detail.receiverPhone].filter(Boolean).join(" · "),
+                },
+                { label: "Địa chỉ giao", value: detail.fullAddress, span: 2 },
+                {
+                  label: "Đặt giao lúc",
+                  value: `${formatDateTime(detail.dispatchedAt)}${
+                    detail.carrierTrackingCode ? ` · vận đơn ${detail.carrierTrackingCode}` : ""
+                  }`,
+                },
+                {
+                  label: "Ảnh ký nhận",
+                  value: `${
+                    attachments.filter(
+                      (item) => String(item.documentType).toUpperCase() === "DELIVERY_PROOF",
+                    ).length
+                  } ảnh`,
+                },
+                { label: "Người ký nhận (sẽ ghi)", value: <Text strong>{proof.receivedBy}</Text> },
+                { label: "Ghi chú (sẽ ghi)", value: proof.note },
+              ]}
+            />
+            <div style={{ height: 14 }} />
+            <ReviewItemsTable
+              title="Kiện của phiếu"
+              items={detail.parcels || []}
+              columns={PARCEL_COLUMNS}
+              rowKey={(row, index) => row?.parcelId || index}
+              extra={`${(detail.parcels || []).length} kiện`}
+            />
+          </>
+        )}
+
+        {detail && confirmAction === "redelivery" && redelivery && (
+          <>
+            <Alert
+              type={Number(redelivery.redeliveryFee) > 0 ? "warning" : "info"}
+              showIcon
+              style={{ marginBottom: 14 }}
+              message={
+                Number(redelivery.redeliveryFee) > 0
+                  ? `Có phí giao lại ${formatMoney(redelivery.redeliveryFee)}: hệ thống phát hành khoản thu ngay, khách trả xong kho mới đặt giao.`
+                  : "Giao lại miễn phí — phiếu mới chờ quản lý kho duyệt."
+              }
+            />
+            <ReviewFacts
+              items={[
+                { label: "Phiếu giao cũ", value: detail.deliveryCode },
+                { label: "Đơn", value: detail.orderCode },
+                { label: "Khách hàng", value: detail.customerName },
+                { label: "Hàng hoàn về kho", value: formatDateTime(detail.returnedAt) },
+                {
+                  label: "Người nhận (sẽ ghi)",
+                  value: [redelivery.receiverName, redelivery.receiverPhone]
+                    .filter(Boolean)
+                    .join(" · "),
+                },
+                {
+                  label: "Phí giao lại",
+                  value:
+                    Number(redelivery.redeliveryFee) > 0
+                      ? formatMoney(redelivery.redeliveryFee)
+                      : "Miễn phí",
+                },
+                {
+                  label: "Địa chỉ giao lại (sẽ ghi)",
+                  value: [
+                    redelivery.addressDetail,
+                    redelivery.ward,
+                    redelivery.district,
+                    redelivery.province,
+                  ]
+                    .filter((part) => String(part || "").trim())
+                    .join(", "),
+                  span: 2,
+                },
+                { label: "Ghi chú cho kho", value: redelivery.note, span: 2 },
+                {
+                  label: "Phí giao lại phiếu cũ",
+                  value: detail.redeliveryFee
+                    ? `${formatMoney(detail.redeliveryFee)} · ${
+                        getPaymentStatusMeta(detail.redeliveryFeePaymentStatus).label
+                      }`
+                    : null,
+                  hidden: !detail.redeliveryFee,
+                },
+              ]}
+            />
+            <div style={{ height: 14 }} />
+            <ReviewItemsTable
+              title="Kiện sẽ giao lại"
+              items={(detail.parcels || []).filter((parcel) =>
+                redelivery.parcelIds.includes(parcel.parcelId),
+              )}
+              columns={PARCEL_COLUMNS}
+              rowKey={(row, index) => row?.parcelId || index}
+              extra={`${redelivery.parcelIds.length} kiện`}
+            />
+          </>
+        )}
+
+        {detail && confirmAction ? (
+          <OrderReviewPanel
+            review={orderReview}
+            fallback={detail}
+            showFacts={false}
+            parcelIds={
+              confirmAction === "redelivery" && redelivery
+                ? redelivery.parcelIds
+                : (detail.parcels || []).map((parcel) => parcel.parcelId)
+            }
+            parcelTitle="Cân và kết quả kiểm đếm các kiện (theo đơn)"
+            errorHint="Bạn vẫn gửi được; thông tin sẽ ghi đã hiện đủ ở trên."
+          />
+        ) : null}
+      </Modal>
     </div>
   );
 }

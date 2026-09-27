@@ -1,0 +1,25 @@
+/* Ô chọn địa chỉ dùng chung (antd Select có tìm kiếm). */
+
+.address-select {
+  width: 100%;
+}
+
+.address-select .address-select__control {
+  width: 100%;
+  font-size: 13px;
+}
+
+.address-select__load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.address-select__load-error span {
+  flex: 1 1 200px;
+}

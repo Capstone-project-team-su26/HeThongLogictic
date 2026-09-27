@@ -10,7 +10,53 @@ import {
   getSyncedNowUtcIso,
 } from "@shared/utils/timeUtc";
 
-import { MAX_IMAGE_SIZE } from "./ConsignmentBuyOrder.constants";
+import {
+  MAX_IMAGE_SIZE,
+  MAX_PURCHASE_ITEM_QUANTITY,
+  MAX_PURCHASE_ITEMS,
+  PURCHASE_FIELD_MAX_LENGTH,
+  PURCHASE_SERVICE_NOTES,
+  STAFF_CREATED_NOTE,
+} from "./ConsignmentBuyOrder.constants";
+
+/** Câu báo lỗi dùng chung cho ô Số lượng. */
+export const PURCHASE_QUANTITY_RANGE_MESSAGE = `Số lượng từ 1 đến ${MAX_PURCHASE_ITEM_QUANTITY}.`;
+
+/** Câu giải thích khi đã đủ số dòng sản phẩm tối đa. */
+export const MAX_PURCHASE_ITEMS_MESSAGE = `Mỗi yêu cầu mua hộ tối đa ${MAX_PURCHASE_ITEMS} sản phẩm. Cần mua thêm thì tạo yêu cầu mới.`;
+
+/** "" nếu `value` (sau khi trim) không vượt `max` ký tự, ngược lại là câu báo lỗi. */
+const validateMaxLength = (value, max, label) =>
+  String(value ?? "").trim().length > max
+    ? `${label} tối đa ${max} ký tự.`
+    : "";
+
+/*
+ * Ghi chú chung đúng như backend sẽ lưu: ghi chú Sale gõ (trim) + câu của từng dịch vụ
+ * được tick + câu "Đơn do nhân viên lên hộ khách", nối bằng ". ".
+ */
+export const buildStoredGeneralNote = (generalNote, optionalServices) =>
+  [
+    String(generalNote ?? "").trim(),
+    ...PURCHASE_SERVICE_NOTES.filter(({ key }) =>
+      Boolean(optionalServices?.[key]),
+    ).map(({ text }) => text),
+    STAFF_CREATED_NOTE,
+  ]
+    .filter(Boolean)
+    .join(". ");
+
+/**
+ * Số ký tự tối đa Sale còn được gõ vào ô ghi chú chung, sau khi trừ phần backend tự nối
+ * (câu dịch vụ + câu "đơn do nhân viên lên hộ" + các dấu ". " ngăn cách).
+ */
+export const getGeneralNoteMaxLength = (optionalServices) =>
+  Math.max(
+    0,
+    PURCHASE_FIELD_MAX_LENGTH.generalNote -
+      buildStoredGeneralNote("", optionalServices).length -
+      ". ".length,
+  );
 
 export const createUniqueId = () => {
   if (
@@ -45,6 +91,8 @@ export const createEmptyFormErrors = () => ({
   receiverPhone: "",
   selectedDeliveryAddress: "",
   generalNote: "",
+  /* Lỗi cấp YÊU CẦU (quá số dòng sản phẩm tối đa), không thuộc ô nào. */
+  items: "",
 });
 
 export const isCanceledRequest = (error) =>
@@ -449,7 +497,18 @@ export const uploadProductImages = async (
     );
   }
 
-  return imageUrls.slice(0, files.length);
+  const productImageUrls = imageUrls.slice(0, files.length);
+
+  /* Backend nối các URL ảnh của một sản phẩm bằng "|" và giới hạn tổng độ dài. */
+  if (
+    productImageUrls.join("|").length > PURCHASE_FIELD_MAX_LENGTH.imageUrls
+  ) {
+    throw new Error(
+      "Đường dẫn ảnh của một sản phẩm quá dài để lưu. Vui lòng bớt số ảnh của sản phẩm đó.",
+    );
+  }
+
+  return productImageUrls;
 };
 
 export const isValidHttpUrl = (value) => {
@@ -495,44 +554,59 @@ export const getClientTimePayload = () => {
 export const validateItem = (item) => {
   const errors = {};
 
+  const limits = PURCHASE_FIELD_MAX_LENGTH;
+
   if (!item.productLink.trim()) {
     errors.productLink = "Vui lòng nhập liên kết sản phẩm.";
   } else if (!isValidHttpUrl(item.productLink)) {
     errors.productLink =
-      "Liên kết sản phẩm phải bắt đầu bằng http:// hoặc https://.";
+      "Liên kết sản phẩm phải là đường dẫn đầy đủ bắt đầu bằng http:// hoặc https://.";
+  } else {
+    errors.productLink = validateMaxLength(
+      item.productLink,
+      limits.productLink,
+      "Liên kết sản phẩm",
+    );
   }
 
-  if (!item.sourceWebsite.trim()) {
-    errors.sourceWebsite = "Vui lòng nhập website nguồn.";
-  }
+  errors.sourceWebsite = !item.sourceWebsite.trim()
+    ? "Vui lòng nhập website nguồn."
+    : validateMaxLength(item.sourceWebsite, limits.sourceWebsite, "Website nguồn");
 
-  if (!item.productType) {
-    errors.productType = "Vui lòng chọn loại sản phẩm.";
-  }
+  errors.productType = !item.productType
+    ? "Vui lòng chọn loại sản phẩm."
+    : validateMaxLength(item.productType, limits.productType, "Loại sản phẩm");
 
-  if (!item.productName.trim()) {
-    errors.productName = "Vui lòng nhập tên sản phẩm.";
-  }
+  errors.productName = !item.productName.trim()
+    ? "Vui lòng nhập tên sản phẩm."
+    : validateMaxLength(item.productName, limits.productName, "Tên sản phẩm");
 
   const quantity = Number(item.quantity);
 
   if (item.quantity === "") {
     errors.quantity = "Vui lòng nhập số lượng.";
-  } else if (!Number.isInteger(quantity) || quantity < 1) {
-    errors.quantity = "Số lượng phải là số nguyên từ 1 trở lên.";
-  } else if (quantity > 2147483647) {
-    errors.quantity = "Số lượng vượt quá giới hạn cho phép.";
+  } else if (
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > MAX_PURCHASE_ITEM_QUANTITY
+  ) {
+    errors.quantity = PURCHASE_QUANTITY_RANGE_MESSAGE;
   }
 
-  if (!item.attributes.trim()) {
-    errors.attributes = "Vui lòng nhập thuộc tính sản phẩm.";
-  }
+  errors.attributes = !item.attributes.trim()
+    ? "Vui lòng nhập thuộc tính sản phẩm."
+    : validateMaxLength(item.attributes, limits.attributes, "Thuộc tính sản phẩm");
+
+  errors.note = validateMaxLength(item.note, limits.note, "Ghi chú sản phẩm");
 
   if (!getItemImages(item).length) {
     errors.image = "Vui lòng tải ít nhất một ảnh sản phẩm.";
   }
 
-  return errors;
+  /* Bỏ các khoá rỗng để `errors` chỉ chứa lỗi thật. */
+  return Object.fromEntries(
+    Object.entries(errors).filter(([, message]) => Boolean(message)),
+  );
 };
 
 export const validateBuyOrderForm = ({ form, items }) => {
@@ -547,10 +621,18 @@ export const validateBuyOrderForm = ({ form, items }) => {
       "Vui lòng chọn phương thức vận chuyển.";
   }
 
+  const limits = PURCHASE_FIELD_MAX_LENGTH;
+
   if (!form.receiverName.trim()) {
     formErrors.receiverName = "Vui lòng nhập tên người nhận.";
   } else if (form.receiverName.trim().length < 2) {
     formErrors.receiverName = "Tên người nhận phải có ít nhất 2 ký tự.";
+  } else {
+    formErrors.receiverName = validateMaxLength(
+      form.receiverName,
+      limits.receiverName,
+      "Tên người nhận",
+    );
   }
 
   if (!form.receiverPhone.trim()) {
@@ -558,11 +640,36 @@ export const validateBuyOrderForm = ({ form, items }) => {
   } else if (!/^0\d{9}$/.test(form.receiverPhone.trim())) {
     formErrors.receiverPhone =
       "Số điện thoại phải có 10 số và bắt đầu bằng số 0.";
+  } else {
+    formErrors.receiverPhone = validateMaxLength(
+      form.receiverPhone,
+      limits.receiverPhone,
+      "Số điện thoại",
+    );
   }
 
   if (!form.selectedDeliveryAddress.trim()) {
     formErrors.selectedDeliveryAddress =
       "Vui lòng thêm và chọn địa chỉ nhận hàng.";
+  } else {
+    formErrors.selectedDeliveryAddress = validateMaxLength(
+      form.selectedDeliveryAddress,
+      limits.receiverAddress,
+      "Địa chỉ nhận hàng",
+    );
+  }
+
+  const storedGeneralNoteLength = buildStoredGeneralNote(
+    form.generalNote,
+    form.optionalServices,
+  ).length;
+
+  if (storedGeneralNoteLength > limits.generalNote) {
+    formErrors.generalNote = `Ghi chú chung quá dài: khi ghép với các dịch vụ đã chọn và câu "${STAFF_CREATED_NOTE}" sẽ thành ${storedGeneralNoteLength}/${limits.generalNote} ký tự. Vui lòng rút gọn ghi chú (tối đa ${getGeneralNoteMaxLength(form.optionalServices)} ký tự).`;
+  }
+
+  if (items.length > MAX_PURCHASE_ITEMS) {
+    formErrors.items = `Yêu cầu đang có ${items.length} sản phẩm. ${MAX_PURCHASE_ITEMS_MESSAGE}`;
   }
 
   const itemErrors = Object.fromEntries(

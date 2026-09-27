@@ -1043,17 +1043,19 @@ export const pricingRules = withIds("0a71", [
   {
     servicePricingId: null,
     ruleName: "Hệ số khối lượng thể tích",
+    /* Khớp rule thật trong PRICING_RULES: type VOLUMETRIC_DIVISOR, FIXED, 5000, không bắt buộc.
+       Số nghiệp vụ đọc từ backend, sửa ở màn "Tham số vận hành". */
     ruleCode: "VOLUMETRIC_DIVISOR",
-    ruleType: "VOLUMETRIC_WEIGHT",
+    ruleType: "VOLUMETRIC_DIVISOR",
     conditionType: null,
     conditionValue: null,
     calculationType: "FIXED",
-    value: 6000,
+    value: 5000,
     minAmount: null,
     maxAmount: null,
-    isRequired: true,
+    isRequired: false,
     status: "ACTIVE",
-    description: "Chia thể tích (cm³) cho 6000 để ra khối lượng quy đổi (kg).",
+    description: "Chia thể tích (cm³) cho 5000 để ra khối lượng quy đổi (kg).",
   },
   {
     servicePricingId: null,
@@ -1410,7 +1412,8 @@ export const volumetricDivisorRule =
   pricingRules.find((rule) => rule.ruleCode === "VOLUMETRIC_DIVISOR") ?? null;
 
 /* Giá trị hệ số, tiện cho mock nào chỉ cần con số. */
-export const volumetricDivisor = volumetricDivisorRule?.value ?? 6000;
+/* Thiếu rule thì dùng mặc định cuối của backend (QuotationService.Helpers.GetVolumetricDivisor = 5000). */
+export const volumetricDivisor = volumetricDivisorRule?.value ?? 5000;
 
 /* ==================== 8. TỶ GIÁ (exchangeRates) ==================== */
 

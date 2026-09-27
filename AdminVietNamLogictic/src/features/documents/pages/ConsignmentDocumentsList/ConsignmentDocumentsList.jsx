@@ -27,8 +27,9 @@ import {
   FilterOutlined,
 } from "@ant-design/icons";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
-import { getConsignmentsApi } from "@features/consignment/api/consignmentService.mock";
-import { getConsignmentReceiptApi } from "@features/consignment/api/consignmentReceiptService.mock";
+/* API THẬT: danh sách GET /api/orders/consignments, phiếu PDF GET /api/orders/consignments/{id}/receipt. */
+import { getConsignmentsApi } from "@features/consignment/api/consignmentService";
+import { getConsignmentReceiptApi } from "@features/consignment/api/consignmentReceiptService";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import {
   ORDER_STATUS_LABELS,

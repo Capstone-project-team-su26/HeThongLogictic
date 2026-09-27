@@ -19,24 +19,26 @@ import {
   DashboardOutlined,
   DollarOutlined,
   EnvironmentOutlined,
+  FileDoneOutlined,
+  FileSearchOutlined,
   GlobalOutlined,
   InboxOutlined,
   LineChartOutlined,
   PieChartOutlined,
   RightOutlined,
   SafetyCertificateOutlined,
+  SendOutlined,
   ShoppingCartOutlined,
   ShoppingOutlined,
   SwapOutlined,
 } from "@ant-design/icons";
 
-import { getPurchaseRequestsApi } from "@features/purchase/api/purchaseRequestService";
-import { getConsignmentsApi } from "@features/consignment/api/consignmentService.mock";
-import {
-  getExchangeRatesApi,
-  convertCurrencyApi,
-} from "@features/pricing/api/exchangeRateService";
-import { getServicePricingsApi } from "@features/pricing/api/servicePricingService.mock";
+/*
+ * Mọi con số trên trang lấy từ MỘT lời gọi GET /api/staff/dashboard — backend tự đếm/cộng.
+ * Trước đây trang kéo danh sách mua hộ (chỉ trang đầu) + đơn ký gửi MẪU + tỷ giá MẪU về rồi
+ * tự cộng ở trình duyệt, còn biểu đồ 7 ngày là đường vẽ cứng.
+ */
+import { getSaleDashboardApi } from "@features/dashboard/api/dashboardService";
 
 import {
   getOrderStatusLabel,
@@ -116,213 +118,154 @@ const STATUS_CONFIGS = {
     text: "Từ chối",
   },
 };
+/* Cờ + lớp màu thanh cho bốn tuyến chính; tuyến khác (nếu backend trả về) dùng màu trung tính. */
+const ROUTE_META = {
+  KR: { flag: "🇰🇷", name: "Hàn Quốc (Korea)", barClass: "is-krw" },
+  JP: { flag: "🇯🇵", name: "Nhật Bản (Japan)", barClass: "is-jpy" },
+  CN: { flag: "🇨🇳", name: "Trung Quốc (China)", barClass: "is-cny" },
+  US: { flag: "🇺🇸", name: "Mỹ (USA)", barClass: "is-usd" },
+};
+
+const STATUS_GROUP_CLASS = {
+  PENDING: "pending",
+  QUOTED: "quoted",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+const WEEKDAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+/* "yyyy-MM-dd" (giờ VN, do backend tính) → nhãn thứ. Dựng Date theo UTC để không lệch ngày. */
+const weekdayOf = (isoDate) => {
+  const [y, m, d] = String(isoDate).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return WEEKDAY_LABELS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+};
+
+const shortDate = (isoDate) => {
+  const [, m, d] = String(isoDate).split("-");
+  return m && d ? `${d}/${m}` : String(isoDate);
+};
+
+/* Khung vẽ của biểu đồ 7 ngày (viewBox 0 0 300 140): trục x 20→280 (khớp nhãn thứ bên dưới), trục y 110 (0 đơn) → 30 (đỉnh). */
+const TREND_X0 = 20;
+const TREND_STEP = 260 / 6;
+const TREND_Y_BASE = 110;
+const TREND_Y_TOP = 30;
+
+const EMPTY_DASHBOARD = {
+  exchangeRates: [],
+  exchangeRatesUpdatedAt: null,
+  totalOrders: 0,
+  consignmentTotal: 0,
+  purchaseTotal: 0,
+  routes: [],
+  statusGroups: [],
+  last7Days: [],
+  workQueue: {
+    consignmentsToReview: 0,
+    purchasesToQuote: 0,
+    quotationsAwaitingCustomer: 0,
+    purchaseOrdersToPlace: 0,
+  },
+  recentPurchaseRequests: [],
+  recentConsignments: [],
+};
 
 export default function SaleDashboard() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [purchaseRequests, setPurchaseRequests] = useState([]);
-  const [consignments, setConsignments] = useState([]);
-  const [exchangeRates, setExchangeRates] = useState([]);
-  const [, setServicePricings] = useState([]);
+  const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
 
-  // Quick convert state
+  // Quick convert state — tỷ giá lấy từ bảng tỷ giá công ty (trong response dashboard).
   const [convertCurrency, setConvertCurrency] = useState("CNY");
   const [convertAmount, setConvertAmount] = useState(1);
-  const [convertedVnd, setConvertedVnd] = useState(3650);
-  const [convertRate, setConvertRate] = useState(3650);
-  const [, setConverting] = useState(false);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-
-      const [purchaseRes, consignRes, rateList, pricingList] =
-        await Promise.allSettled([
-          getPurchaseRequestsApi(),
-          getConsignmentsApi(),
-          getExchangeRatesApi({ activeOnly: true }),
-          getServicePricingsApi(),
-        ]);
-
-      if (purchaseRes.status === "fulfilled") {
-        const val = purchaseRes.value;
-        const list = Array.isArray(val)
-          ? val
-          : Array.isArray(val?.items)
-          ? val.items
-          : Array.isArray(val?.data)
-          ? val.data
-          : [];
-        setPurchaseRequests(list);
-      }
-      if (consignRes.status === "fulfilled") {
-        const val = consignRes.value;
-        const list = Array.isArray(val)
-          ? val
-          : Array.isArray(val?.items)
-          ? val.items
-          : Array.isArray(val?.data)
-          ? val.data
-          : [];
-        setConsignments(list);
-      }
-      if (rateList.status === "fulfilled") {
-        const val = rateList.value;
-        const list = Array.isArray(val)
-          ? val
-          : Array.isArray(val?.items)
-          ? val.items
-          : Array.isArray(val?.data)
-          ? val.data
-          : [];
-        setExchangeRates(list);
-      }
-      if (pricingList.status === "fulfilled") {
-        const val = pricingList.value;
-        const list = Array.isArray(val)
-          ? val
-          : Array.isArray(val?.items)
-          ? val.items
-          : Array.isArray(val?.data)
-          ? val.data
-          : [];
-        setServicePricings(list);
-      }
-    } catch (err) {
-      console.error("LOAD SALE DASHBOARD ERROR:", err);
-      AuthNotify.error("Lỗi tải dữ liệu", "Không thể tải đầy đủ thông tin tổng quan.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  /* Mọi setState nằm trong callback của promise (không cập nhật đồng bộ trong effect). */
   useEffect(() => {
-    loadDashboardData();
+    const controller = new AbortController();
+    getSaleDashboardApi({ signal: controller.signal })
+      .then((data) => setDashboard(data))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        console.error("LOAD SALE DASHBOARD ERROR:", err);
+        AuthNotify.error("Lỗi tải dữ liệu", "Không thể tải số liệu tổng quan.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
-  // Quick converter handler
-  const handleConvertQuick = async (curr, amt) => {
-    const currency = curr || convertCurrency;
-    const amount = Number(amt ?? convertAmount);
+  const exchangeRates = dashboard.exchangeRates;
 
-    setConvertCurrency(currency);
-    setConvertAmount(amount);
-
-    if (!amount || amount <= 0) {
-      setConvertedVnd(0);
-      setConvertRate(0);
-      return;
-    }
-
-    try {
-      setConverting(true);
-      const res = await convertCurrencyApi(currency, amount);
-      if (res?.amountVnd >= 0) {
-        setConvertedVnd(res.amountVnd);
-        setConvertRate(res.exchangeRate);
-      }
-    } catch {
-      const foundRate = exchangeRates.find((r) => r.currencyCode === currency);
-      const rate = foundRate?.rateToVnd || 0;
-      if (rate > 0) {
-        setConvertedVnd(Math.round(amount * rate));
-        setConvertRate(rate);
-      }
-    } finally {
-      setConverting(false);
-    }
-  };
-
-  // Calculated Stats
-
-
-
-  // Combined All Orders (Mua Hộ & Ký Gửi)
-  const allOrders = useMemo(
-    () => [...purchaseRequests, ...consignments],
-    [purchaseRequests, consignments]
+  const currencyOptions = useMemo(
+    () =>
+      exchangeRates.map((rate) => ({
+        value: rate.currencyCode,
+        label: `${rate.currencyCode} (${rate.currencyName || rate.currencyCode})`,
+      })),
+    [exchangeRates]
   );
 
-  // Dynamic Route Distribution from combined API data (Mua Hộ & Ký Gửi)
-  const routeStats = useMemo(() => {
-    const total = allOrders.length || 1;
-    let krwCount = 0;
-    let jpyCount = 0;
-    let cnyCount = 0;
-    let usdCount = 0;
+  /*
+   * Quy đổi nhanh: số tiền × tỷ giá công ty đang bật, làm tròn về đồng — cùng công thức với
+   * GET /api/exchange-rates/convert. Chưa có tỷ giá cho đồng tiền đang chọn thì hiện 0.
+   */
+  const convertRate =
+    exchangeRates.find((rate) => rate.currencyCode === convertCurrency)?.rateToVnd || 0;
+  const convertedVnd = convertRate > 0 ? Math.round((Number(convertAmount) || 0) * convertRate) : 0;
 
-    allOrders.forEach((req) => {
-      const r = String(req?.route || req?.destinationWarehouse || "").toUpperCase();
-      if (r.includes("KOREA") || r.includes("HAN") || r.includes("HÀN")) krwCount++;
-      else if (r.includes("JAPAN") || r.includes("NHAT") || r.includes("NHẬT")) jpyCount++;
-      else if (r.includes("CHINA") || r.includes("TRUNG")) cnyCount++;
-      else if (r.includes("USA") || r.includes("US") || r.includes("MỸ")) usdCount++;
-      else krwCount++;
-    });
-
-    const krwPct = Math.round((krwCount / total) * 100);
-    const jpyPct = Math.round((jpyCount / total) * 100);
-    const cnyPct = Math.round((cnyCount / total) * 100);
-    const usdPct = Math.max(0, 100 - krwPct - jpyPct - cnyPct);
-
-    return {
-      krwCount, krwPct,
-      jpyCount, jpyPct,
-      cnyCount, cnyPct,
-      usdCount, usdPct,
-      totalCount: allOrders.length,
-    };
-  }, [allOrders]);
-
-  // Dynamic Status Distribution from combined API data (Mua Hộ & Ký Gửi)
-  const statusStats = useMemo(() => {
-    const total = allOrders.length || 1;
-    let pending = 0;
-    let quoted = 0;
-    let approved = 0;
-    let rejected = 0;
-
-    allOrders.forEach((req) => {
-      const st = String(req?.status || "").toUpperCase();
-      if (st === "PENDING_REVIEW" || st === "PENDING_QUOTATION" || st === "PENDING" || st === "NEW") pending++;
-      else if (st === "QUOTATION_SENT" || st === "QUOTED") quoted++;
-      else if (st === "QUOTATION_APPROVED" || st === "PURCHASE_CONFIRMED" || st === "APPROVED" || st === "COMPLETED") approved++;
-      else if (st === "CANCELLED" || st === "REJECTED") rejected++;
-      else pending++;
-    });
-
-    const pendingPct = Math.round((pending / total) * 100);
-    const quotedPct = Math.round((quoted / total) * 100);
-    const approvedPct = Math.round((approved / total) * 100);
-    const rejectedPct = Math.max(0, 100 - pendingPct - quotedPct - approvedPct);
-
-    // Circumference = 2 * PI * 60 = 377
-    const CIRCUMFERENCE = 377;
-    const pendingDash = Math.round((pendingPct / 100) * CIRCUMFERENCE);
-    const quotedDash = Math.round((quotedPct / 100) * CIRCUMFERENCE);
-    const approvedDash = Math.round((approvedPct / 100) * CIRCUMFERENCE);
-    const rejectedDash = Math.round((rejectedPct / 100) * CIRCUMFERENCE);
-
-    return {
-      pending, pendingPct, pendingDash,
-      quoted, quotedPct, quotedDash,
-      approved, approvedPct, approvedDash,
-      rejected, rejectedPct, rejectedDash,
-      totalCount: allOrders.length,
-      CIRCUMFERENCE,
-    };
-  }, [allOrders]);
-
-  const recentPurchaseRequests = useMemo(
-    () => purchaseRequests.slice(0, 5),
-    [purchaseRequests]
+  const routeRows = useMemo(
+    () =>
+      dashboard.routes.map((route) => {
+        const meta = ROUTE_META[route.countryCode];
+        return {
+          ...route,
+          flag: meta?.flag ?? "🌐",
+          name: meta?.name ?? route.countryName,
+          barClass: meta?.barClass ?? "is-other",
+        };
+      }),
+    [dashboard.routes]
   );
 
-  const recentConsignments = useMemo(
-    () => consignments.slice(0, 5),
-    [consignments]
-  );
+  // Donut: độ dài cung theo phần trăm backend đã chia (tổng đúng 100).
+  const donut = useMemo(() => {
+    const CIRCUMFERENCE = 377; // 2 * PI * 60
+    const dashes = dashboard.statusGroups.map((group) => Math.round((group.percent / 100) * CIRCUMFERENCE));
+    const segments = dashboard.statusGroups.map((group, index) => ({
+      ...group,
+      dash: dashes[index],
+      offset: dashes.slice(0, index).reduce((sum, value) => sum + value, 0),
+      className: STATUS_GROUP_CLASS[group.key] ?? "pending",
+    }));
+    return { segments, CIRCUMFERENCE };
+  }, [dashboard.statusGroups]);
+
+  const trend = useMemo(() => {
+    const days = dashboard.last7Days;
+    const max = Math.max(1, ...days.map((d) => d.total));
+    const points = days.map((day, index) => ({
+      ...day,
+      x: TREND_X0 + index * TREND_STEP,
+      y: TREND_Y_BASE - Math.round((day.total / max) * (TREND_Y_BASE - TREND_Y_TOP)),
+    }));
+    const line = points.map((p) => `${p.x},${p.y}`).join(" ");
+    const area = points.length
+      ? `${line} ${points[points.length - 1].x},${TREND_Y_BASE} ${points[0].x},${TREND_Y_BASE}`
+      : "";
+    return { points, line, area, max };
+  }, [dashboard.last7Days]);
+
+  const recentPurchaseRequests = dashboard.recentPurchaseRequests;
+  const recentConsignments = dashboard.recentConsignments;
+  const workQueue = dashboard.workQueue;
+
+  const ratesUpdatedText = dashboard.exchangeRatesUpdatedAt
+    ? formatDateTime(dashboard.exchangeRatesUpdatedAt)
+    : null;
 
   const purchaseColumns = [
     {
@@ -369,7 +312,7 @@ export default function SaleDashboard() {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
-      render: (status) => {
+      render: (status, record) => {
         const stKey = String(status || "").toUpperCase();
         const conf = STATUS_CONFIGS[stKey] || {
           color: "#475569",
@@ -382,7 +325,7 @@ export default function SaleDashboard() {
             className="dashboard-status-badge"
             style={{ color: conf.color, background: conf.bg, borderColor: conf.border }}
           >
-            {conf.text}
+            {record.statusText || conf.text}
           </span>
         );
       },
@@ -514,7 +457,7 @@ export default function SaleDashboard() {
             <h1>Xin chào Nhân viên Sale 👋</h1>
 
             <p>
-              Quản lý yêu cầu mua hộ, ký gửi hàng hóa quốc tế và tra cứu tỷ giá hối đoái real-time tại một nơi duy nhất.
+              Quản lý yêu cầu mua hộ, ký gửi hàng hóa quốc tế và tra cứu tỷ giá công ty tại một nơi duy nhất.
             </p>
 
             <div className="hero-action-buttons">
@@ -555,18 +498,75 @@ export default function SaleDashboard() {
 
             <div className="rates-list">
               {exchangeRates.map((rate) => (
-                <div key={rate.id || rate.currencyCode} className="rate-row">
+                <div key={rate.currencyCode} className="rate-row">
                   <span className="rate-name">
-                    <strong>{rate.currencyCode}</strong> ({rate.currencyName}):
+                    <strong>{rate.currencyCode}</strong> ({rate.currencyName || rate.currencyCode}):
                   </span>
                   <span className="rate-value">{formatNumber(rate.rateToVnd)} ₫</span>
                 </div>
               ))}
+              {!loading && exchangeRates.length === 0 && (
+                <div className="rate-row">
+                  <span className="rate-name">Chưa có tỷ giá nào đang bật.</span>
+                </div>
+              )}
             </div>
 
             <div className="rates-card-footer">
-              <ClockCircleOutlined /> Tỷ giá áp dụng cho quy đổi đơn hàng real-time.
+              <ClockCircleOutlined /> Tỷ giá công ty quy định (bảng Tỷ giá do Admin cập nhật)
+              {ratesUpdatedText ? ` · cập nhật ${ratesUpdatedText}` : ""}.
             </div>
+          </div>
+        </section>
+
+        {/* VIỆC ĐANG CHỜ SALE (đếm ở backend) */}
+        <section className="sale-dashboard-stats-grid">
+          <div
+            className="stat-card is-pending-consign"
+            onClick={() => navigate("/sale/consignments")}
+          >
+            <span className="stat-icon-wrapper"><FileSearchOutlined /></span>
+            <div className="stat-info">
+              <span>Ký gửi chờ duyệt</span>
+              <strong>{formatNumber(workQueue.consignmentsToReview)}</strong>
+              <small>Đơn mới chờ Sale xem và báo giá</small>
+            </div>
+            <RightOutlined className="stat-arrow" />
+          </div>
+
+          <div
+            className="stat-card is-pending-buy"
+            onClick={() => navigate("/sale/purchase-requests")}
+          >
+            <span className="stat-icon-wrapper"><ShoppingCartOutlined /></span>
+            <div className="stat-info">
+              <span>Mua hộ chờ báo giá</span>
+              <strong>{formatNumber(workQueue.purchasesToQuote)}</strong>
+              <small>Yêu cầu chưa có báo giá gửi khách</small>
+            </div>
+            <RightOutlined className="stat-arrow" />
+          </div>
+
+          <div className="stat-card is-approved">
+            <span className="stat-icon-wrapper"><SendOutlined /></span>
+            <div className="stat-info">
+              <span>Báo giá chờ khách</span>
+              <strong>{formatNumber(workQueue.quotationsAwaitingCustomer)}</strong>
+              <small>Đã gửi, khách chưa trả lời</small>
+            </div>
+          </div>
+
+          <div
+            className="stat-card is-support"
+            onClick={() => navigate("/sale/purchase-requests")}
+          >
+            <span className="stat-icon-wrapper"><FileDoneOutlined /></span>
+            <div className="stat-info">
+              <span>Đơn mua NCC chờ đặt</span>
+              <strong>{formatNumber(workQueue.purchaseOrdersToPlace)}</strong>
+              <small>Admin đã duyệt, chờ Sale đặt hàng</small>
+            </div>
+            <RightOutlined className="stat-arrow" />
           </div>
         </section>
 
@@ -584,45 +584,21 @@ export default function SaleDashboard() {
               </div>
 
               <div className="bar-chart-container">
-                <div className="bar-chart-item">
-                  <div className="bar-item-header">
-                    <span>🇰🇷 Hàn Quốc (Korea)</span>
-                    <strong>{routeStats.krwPct}% ({routeStats.krwCount} đơn)</strong>
+                {routeRows.map((route) => (
+                  <div
+                    key={route.countryCode}
+                    className="bar-chart-item"
+                    title={`${route.name}: ${route.consignmentCount} ký gửi, ${route.purchaseCount} mua hộ`}
+                  >
+                    <div className="bar-item-header">
+                      <span>{route.flag} {route.name}</span>
+                      <strong>{route.percent}% ({formatNumber(route.total)} đơn)</strong>
+                    </div>
+                    <div className="bar-track">
+                      <div className={`bar-fill ${route.barClass}`} style={{ width: `${route.percent}%` }} />
+                    </div>
                   </div>
-                  <div className="bar-track">
-                    <div className="bar-fill is-krw" style={{ width: `${routeStats.krwPct}%` }} />
-                  </div>
-                </div>
-
-                <div className="bar-chart-item">
-                  <div className="bar-item-header">
-                    <span>🇯🇵 Nhật Bản (Japan)</span>
-                    <strong>{routeStats.jpyPct}% ({routeStats.jpyCount} đơn)</strong>
-                  </div>
-                  <div className="bar-track">
-                    <div className="bar-fill is-jpy" style={{ width: `${routeStats.jpyPct}%` }} />
-                  </div>
-                </div>
-
-                <div className="bar-chart-item">
-                  <div className="bar-item-header">
-                    <span>🇨🇳 Trung Quốc (China)</span>
-                    <strong>{routeStats.cnyPct}% ({routeStats.cnyCount} đơn)</strong>
-                  </div>
-                  <div className="bar-track">
-                    <div className="bar-fill is-cny" style={{ width: `${routeStats.cnyPct}%` }} />
-                  </div>
-                </div>
-
-                <div className="bar-chart-item">
-                  <div className="bar-item-header">
-                    <span>🇺🇸 Mỹ (USA)</span>
-                    <strong>{routeStats.usdPct}% ({routeStats.usdCount} đơn)</strong>
-                  </div>
-                  <div className="bar-track">
-                    <div className="bar-fill is-usd" style={{ width: `${routeStats.usdPct}%` }} />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </Col>
@@ -641,66 +617,37 @@ export default function SaleDashboard() {
               <div className="donut-chart-wrapper">
                 <svg className="donut-svg" viewBox="0 0 160 160">
                   <circle cx="80" cy="80" r="60" className="donut-bg" />
-                  {/* Arc 1: Pending (Amber) */}
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="60"
-                    className="donut-segment segment-pending"
-                    strokeDasharray={`${statusStats.pendingDash} ${statusStats.CIRCUMFERENCE}`}
-                    strokeDashoffset="0"
-                  />
-                  {/* Arc 2: Quoted (Blue) */}
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="60"
-                    className="donut-segment segment-quoted"
-                    strokeDasharray={`${statusStats.quotedDash} ${statusStats.CIRCUMFERENCE}`}
-                    strokeDashoffset={`-${statusStats.pendingDash}`}
-                  />
-                  {/* Arc 3: Approved (Green) */}
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="60"
-                    className="donut-segment segment-approved"
-                    strokeDasharray={`${statusStats.approvedDash} ${statusStats.CIRCUMFERENCE}`}
-                    strokeDashoffset={`-${statusStats.pendingDash + statusStats.quotedDash}`}
-                  />
-                  {/* Arc 4: Rejected (Red) */}
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r="60"
-                    className="donut-segment segment-rejected"
-                    strokeDasharray={`${statusStats.rejectedDash} ${statusStats.CIRCUMFERENCE}`}
-                    strokeDashoffset={`-${statusStats.pendingDash + statusStats.quotedDash + statusStats.approvedDash}`}
-                  />
+                  {donut.segments.map((segment) => (
+                    <circle
+                      key={segment.key}
+                      cx="80"
+                      cy="80"
+                      r="60"
+                      className={`donut-segment segment-${segment.className}`}
+                      strokeDasharray={`${segment.dash} ${donut.CIRCUMFERENCE}`}
+                      strokeDashoffset={`-${segment.offset}`}
+                    >
+                      <title>{`${segment.label}: ${segment.count} đơn (${segment.consignmentCount} ký gửi, ${segment.purchaseCount} mua hộ)`}</title>
+                    </circle>
+                  ))}
                 </svg>
                 <div className="donut-center-text">
-                  <strong>{formatNumber(statusStats.totalCount)}</strong>
+                  <strong>{formatNumber(dashboard.totalOrders)}</strong>
                   <span>TỔNG ĐƠN</span>
                 </div>
               </div>
 
               <div className="donut-legend">
-                <div className="legend-item">
-                  <span className="dot dot-pending" />
-                  <span>Chờ duyệt ({statusStats.pendingPct}%)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="dot dot-quoted" />
-                  <span>Đã báo giá ({statusStats.quotedPct}%)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="dot dot-approved" />
-                  <span>Đã duyệt ({statusStats.approvedPct}%)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="dot dot-rejected" />
-                  <span>Từ chối ({statusStats.rejectedPct}%)</span>
-                </div>
+                {donut.segments.map((segment) => (
+                  <div
+                    key={segment.key}
+                    className="legend-item"
+                    title={segment.statuses.map((st) => `${st.label}: ${st.count}`).join("\n")}
+                  >
+                    <span className={`dot dot-${segment.className}`} />
+                    <span>{segment.label} ({segment.percent}% · {formatNumber(segment.count)})</span>
+                  </div>
+                ))}
               </div>
             </div>
           </Col>
@@ -724,46 +671,43 @@ export default function SaleDashboard() {
                       <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
-                  {/* Grid Lines */}
+                  {/* Grid Lines: đỉnh = ngày nhiều đơn nhất, giữa = một nửa, đáy = 0 */}
                   <line x1="0" y1="30" x2="300" y2="30" className="chart-grid-line" />
                   <line x1="0" y1="70" x2="300" y2="70" className="chart-grid-line" />
                   <line x1="0" y1="110" x2="300" y2="110" className="chart-grid-line" />
+                  <text x="2" y="26" className="chart-axis-label">{`đỉnh ${trend.max}`}</text>
 
-                  {/* Filled Area */}
-                  <polygon
-                    points="20,110 60,75 100,85 140,40 180,60 220,30 260,45 260,110 20,110"
-                    fill="url(#areaGradient)"
-                  />
+                  {trend.points.length > 0 && (
+                    <>
+                      <polygon points={trend.area} fill="url(#areaGradient)" />
+                      <polyline
+                        points={trend.line}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </>
+                  )}
 
-                  {/* Trend Line */}
-                  <polyline
-                    points="20,110 60,75 100,85 140,40 180,60 220,30 260,45"
-                    fill="none"
-                    stroke="#2563eb"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-
-                  {/* Data Points */}
-                  <circle cx="20" cy="110" r="4.5" className="chart-point" />
-                  <circle cx="60" cy="75" r="4.5" className="chart-point" />
-                  <circle cx="100" cy="85" r="4.5" className="chart-point" />
-                  <circle cx="140" cy="40" r="4.5" className="chart-point" />
-                  <circle cx="180" cy="60" r="4.5" className="chart-point" />
-                  <circle cx="220" cy="30" r="4.5" className="chart-point" />
-                  <circle cx="260" cy="45" r="4.5" className="chart-point" />
+                  {trend.points.map((point) => (
+                    <g key={point.date}>
+                      <circle cx={point.x} cy={point.y} r="4.5" className="chart-point">
+                        <title>{`${shortDate(point.date)}: ${point.total} đơn (${point.consignmentCount} ký gửi, ${point.purchaseCount} mua hộ)`}</title>
+                      </circle>
+                      <text x={point.x} y={point.y - 9} textAnchor="middle" className="chart-point-label">
+                        {point.total}
+                      </text>
+                      {/* Nhãn thứ nằm trong SVG để luôn thẳng hàng với điểm dù thẻ rộng hẹp thế nào */}
+                      <text x={point.x} y="132" textAnchor="middle" className="chart-axis-label">
+                        {weekdayOf(point.date)}
+                        <title>{shortDate(point.date)}</title>
+                      </text>
+                    </g>
+                  ))}
                 </svg>
 
-                <div className="area-x-axis">
-                  <span>T2</span>
-                  <span>T3</span>
-                  <span>T4</span>
-                  <span>T5</span>
-                  <span>T6</span>
-                  <span>T7</span>
-                  <span>CN</span>
-                </div>
               </div>
             </div>
           </Col>
@@ -776,8 +720,8 @@ export default function SaleDashboard() {
               <div className="card-heading">
                 <CalculatorOutlined className="heading-icon" />
                 <div>
-                  <h3>Công cụ Tính nhanh Ngoại tệ Real-time</h3>
-                  <span>Quy đổi trực tiếp số tiền ngoại tệ sang Việt Nam Đồng (VNĐ)</span>
+                  <h3>Công cụ Tính nhanh Ngoại tệ</h3>
+                  <span>Quy đổi số tiền ngoại tệ sang VNĐ theo tỷ giá công ty đang áp dụng</span>
                 </div>
               </div>
 
@@ -787,13 +731,8 @@ export default function SaleDashboard() {
                     <label>Loại ngoại tệ</label>
                     <Select
                       value={convertCurrency}
-                      options={[
-                        { value: "CNY", label: "🇨🇳 CNY (Nhân dân tệ)" },
-                        { value: "JPY", label: "🇯🇵 JPY (Yên Nhật)" },
-                        { value: "KRW", label: "🇰🇷 KRW (Won Hàn)" },
-                        { value: "USD", label: "🇺🇸 USD (Đô la Mỹ)" },
-                      ]}
-                      onChange={(curr) => handleConvertQuick(curr, convertAmount)}
+                      options={currencyOptions}
+                      onChange={setConvertCurrency}
                       className="converter-select"
                     />
                   </div>
@@ -804,7 +743,7 @@ export default function SaleDashboard() {
                       value={convertAmount}
                       min={0}
                       controls={false}
-                      onChange={(amt) => handleConvertQuick(convertCurrency, amt)}
+                      onChange={(amt) => setConvertAmount(amt ?? 0)}
                       placeholder="VD: 100"
                       className="converter-number-input"
                     />
@@ -896,7 +835,7 @@ export default function SaleDashboard() {
                 key: "purchase",
                 label: (
                   <span className="tab-title">
-                    <ShoppingCartOutlined /> Yêu cầu Mua hộ mới nhất ({purchaseRequests.length})
+                    <ShoppingCartOutlined /> Yêu cầu Mua hộ mới nhất (tổng {formatNumber(dashboard.purchaseTotal)})
                   </span>
                 ),
                 children: (
@@ -915,7 +854,7 @@ export default function SaleDashboard() {
                     <Table
                       dataSource={recentPurchaseRequests}
                       columns={purchaseColumns}
-                      rowKey={(r) => r.purchaseRequestId || r.purchaseCode || Math.random()}
+                      rowKey={(r) => r.purchaseRequestId || r.purchaseCode}
                       loading={loading}
                       pagination={false}
                       className="dashboard-recent-table"
@@ -927,7 +866,7 @@ export default function SaleDashboard() {
                 key: "consignment",
                 label: (
                   <span className="tab-title">
-                    <InboxOutlined /> Đơn Ký gửi mới nhất ({consignments.length})
+                    <InboxOutlined /> Đơn Ký gửi mới nhất (tổng {formatNumber(dashboard.consignmentTotal)})
                   </span>
                 ),
                 children: (
@@ -946,7 +885,7 @@ export default function SaleDashboard() {
                     <Table
                       dataSource={recentConsignments}
                       columns={consignmentColumns}
-                      rowKey={(r) => r.orderId || r.id || r.code || Math.random()}
+                      rowKey={(r) => r.orderId || r.orderCode}
                       loading={loading}
                       pagination={false}
                       className="dashboard-recent-table"

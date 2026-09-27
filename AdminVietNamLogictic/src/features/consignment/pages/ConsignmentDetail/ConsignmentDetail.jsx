@@ -65,8 +65,14 @@ import {
   summarizeJourney,
 } from "@features/shipment/components/ShipmentJourney/journeySummary";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { formatReviewMoney } from "@shared/components/SubmitReview/submitReviewFormat";
 import { DIM_DECIMAL_PLACES } from "./ConsignmentDetail.constants";
 import {
+  getOrderStatusLabel,
   normalizeOrderStatus,
   ORDER_STATUS,
 } from "../../constants/orderStatus";
@@ -80,7 +86,7 @@ import {
   formatMeasurement,
   formatOrderNote,
   formatSystemDescription,
-  getItemApiDimWeight,
+  resolveItemDim,
   describeItemService,
   getItemDeclaredValue,
   getItemDomesticTrackingCode,
@@ -724,10 +730,22 @@ export default function ConsignmentDetail({
   }, [productTypes]);
 
   const dimRule = useMemo(() => {
-    return findPricingRuleByCode(
-      pricingRules,
-      PRICING_RULE_CODE
-        .VOLUMETRIC_DIVISOR
+    /* Backend nhận rule hệ số theo ruleCode HOẶC ruleType VOLUMETRIC_DIVISOR. */
+    return (
+      findPricingRuleByCode(
+        pricingRules,
+        PRICING_RULE_CODE
+          .VOLUMETRIC_DIVISOR
+      ) ||
+      pricingRules.find(
+        (rule) =>
+          normalizeText(
+            rule?.ruleType
+          ).toUpperCase() ===
+          PRICING_RULE_CODE
+            .VOLUMETRIC_DIVISOR
+      ) ||
+      null
     );
   }, [pricingRules]);
 
@@ -1435,8 +1453,25 @@ export default function ConsignmentDetail({
               )}{" "}
               kg
             </strong>
-            <small>
-              Lấy mức lớn hơn giữa trọng lượng thực và khối lượng quy đổi
+            {/*
+              Viết thẳng phép so sánh ra chữ. Trước đây chỉ ghi "lấy mức lớn hơn",
+              Sale vẫn phải tự nhìn hai thẻ bên cạnh rồi tự so.
+            */}
+            <small className="consignment-chargeable-formula">
+              max(cân thực{" "}
+              {formatMeasurement(
+                displayTotalWeightKg,
+                DIM_DECIMAL_PLACES
+              )}{" "}
+              kg ; quy đổi{" "}
+              {formatMeasurement(
+                totalDimKg,
+                DIM_DECIMAL_PLACES
+              )}{" "}
+              kg)
+              {totalDimKg > displayTotalWeightKg
+                ? " → tính theo quy đổi"
+                : " → tính theo cân thực"}
             </small>
           </div>
         </article>
@@ -2022,8 +2057,50 @@ export default function ConsignmentDetail({
                 </strong>
 
                 <small>
-                  Khối lượng quy đổi được lấy từ thông tin của kiện hàng. Khi chưa có sẵn, hệ thống tính theo kích thước và hệ số quy đổi đang áp dụng.
+                  Kích thước (cm) lấy theo từng dòng hàng khách khai; hệ số lấy từ cấu hình
+                  hệ thống (màn Tham số vận hành), cùng số backend dùng để báo giá.
+                  Mọi số quy đổi bên dưới đều chia cho đúng hệ số này.
+                  Cước tính theo <b>cân lớn hơn</b> giữa cân thực và cân quy đổi.
                 </small>
+
+                {/*
+                  Ví dụ bằng chính số của đơn này: bản tổng để Sale đọc nhanh,
+                  bản chi tiết từng kiện nằm ở cột "Khối lượng quy đổi" bên dưới.
+                */}
+                {hasApiDimDivisor &&
+                  displayTotalVolumeCm3 > 0 && (
+                    <span className="consignment-dim-formula__example">
+                      Đơn này:{" "}
+                      {formatMeasurement(
+                        displayTotalVolumeCm3,
+                        4
+                      )}{" "}
+                      cm³ ÷{" "}
+                      {formatMeasurement(
+                        dimDivisor,
+                        0
+                      )}{" "}
+                      ={" "}
+                      {formatMeasurement(
+                        totalDimKg,
+                        DIM_DECIMAL_PLACES
+                      )}{" "}
+                      kg quy đổi, cân thực{" "}
+                      {formatMeasurement(
+                        displayTotalWeightKg,
+                        DIM_DECIMAL_PLACES
+                      )}{" "}
+                      kg →{" "}
+                      <b>
+                        tính cước{" "}
+                        {formatMeasurement(
+                          chargeableWeightKg,
+                          DIM_DECIMAL_PLACES
+                        )}{" "}
+                        kg
+                      </b>
+                    </span>
+                  )}
               </div>
 
               <Tag
@@ -2088,16 +2165,40 @@ export default function ConsignmentDetail({
                             item
                           );
 
-                        const itemDimKg =
-                          calculateItemDimKg(
+                        const itemDim =
+                          resolveItemDim(
                             item,
                             dimDivisor
                           );
 
-                        const apiDimWeight =
-                          getItemApiDimWeight(
-                            item
+                        const itemDimKg =
+                          itemDim.dimKg;
+
+                        /*
+                         * Ba số dưới đây để Sale đọc được CÔNG THỨC ngay trên dòng,
+                         * không phải mở máy tính: kích thước thật của kiện, cân thực,
+                         * và cân nào đang thắng để tính cước.
+                         */
+                        const itemActualWeightKg =
+                          getItemWeightKg(item);
+
+                        const itemChargeableKg =
+                          Math.max(
+                            itemActualWeightKg,
+                            itemDimKg
                           );
+
+                        const itemDimIsBilled =
+                          itemDimKg >
+                          itemActualWeightKg;
+
+                        const itemHasDimensions =
+                          getItemLengthCm(item) >
+                            0 &&
+                          getItemWidthCm(item) >
+                            0 &&
+                          getItemHeightCm(item) >
+                            0;
 
                         const productTypeName =
                           getProductTypeName(
@@ -2316,16 +2417,91 @@ export default function ConsignmentDetail({
                                   kg
                                 </strong>
 
-                                <small>
-                                  {apiDimWeight !== null
-                                    ? "Khối lượng quy đổi của kiện"
-                                    : hasApiDimDivisor
-                                      ? `÷ ${formatMeasurement(
+                                {/*
+                                  Công thức viết ra bằng CHÍNH SỐ CỦA KIỆN NÀY.
+                                  Khách hay hỏi "sao ra con số đó" nên Sale phải
+                                  đọc được ngay, không đi tra bảng.
+                                */}
+                                {itemHasDimensions &&
+                                  hasApiDimDivisor && (
+                                    <small className="consignment-dim-formula-line">
+                                      {formatMeasurement(
+                                        getItemLengthCm(
+                                          item
+                                        ),
+                                        4
+                                      )}
+                                      {" × "}
+                                      {formatMeasurement(
+                                        getItemWidthCm(
+                                          item
+                                        ),
+                                        4
+                                      )}
+                                      {" × "}
+                                      {formatMeasurement(
+                                        getItemHeightCm(
+                                          item
+                                        ),
+                                        4
+                                      )}
+                                      {" ÷ "}
+                                      {formatMeasurement(
                                         dimDivisor,
                                         0
-                                      )}`
+                                      )}
+                                    </small>
+                                  )}
+
+                                <small>
+                                  {itemDim.source ===
+                                  "DIVISOR"
+                                    ? `= ${formatMeasurement(
+                                      itemVolumeCm3,
+                                      4
+                                    )} cm³ ÷ ${formatMeasurement(
+                                      dimDivisor,
+                                      0
+                                    )}`
+                                    : itemDim.source ===
+                                      "API"
+                                      ? "Số hệ thống trả theo kích thước khai trên dòng hàng (chưa tải được hệ số)"
                                       : "Chưa đủ dữ liệu để tính"}
                                 </small>
+
+                                {itemDim.isApiMismatch && (
+                                  <small className="consignment-dim-formula-line">
+                                    API chi tiết đơn trả{" "}
+                                    {formatDimWeight(
+                                      itemDim.apiDimKg
+                                    )}{" "}
+                                    kg (backend chia theo hệ số khác cấu hình hiện hành)
+                                  </small>
+                                )}
+
+                                {/*
+                                  Cân tính cước = cân lớn hơn. Ghi rõ bên nào thắng
+                                  để Sale không phải tự so hai cột.
+                                */}
+                                {itemChargeableKg > 0 && (
+                                  <span
+                                    className={`consignment-dim-billed ${itemDimIsBilled
+                                        ? "is-dim"
+                                        : "is-actual"
+                                      }`}
+                                  >
+                                    Tính cước{" "}
+                                    {formatDimWeight(
+                                      itemChargeableKg
+                                    )}{" "}
+                                    kg
+                                    <small>
+                                      {itemDimIsBilled
+                                        ? "theo quy đổi"
+                                        : "theo cân thực"}
+                                    </small>
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -2703,7 +2879,7 @@ export default function ConsignmentDetail({
       <Modal
         open={reviewModalOpen}
         centered
-        width={560}
+        width={900}
         footer={null}
         title={null}
         mask={{ closable: !statusUpdating }}
@@ -2760,6 +2936,56 @@ export default function ConsignmentDetail({
                   "—"}
               </strong>
             </div>
+
+            {/*
+              Đủ thông tin đơn sắp đổi trạng thái: khách, trạng thái hiện tại → mới, tuyến,
+              báo giá đang có (từ chối thì báo giá này hết hiệu lực) và từng dòng hàng. Lấy
+              nguyên từ chi tiết đơn đã nạp trên trang, không gọi thêm.
+            */}
+            <ReviewFacts
+              items={[
+                {
+                  label: "Khách hàng",
+                  value: [detail?.customer?.fullName, detail?.customer?.phone]
+                    .filter(Boolean)
+                    .join(" · "),
+                },
+                { label: "Email", value: detail?.customer?.email },
+                {
+                  label: "Trạng thái",
+                  value: `${getOrderStatusLabel(detail?.status)} → ${
+                    reviewAction === "REJECT"
+                      ? "Đã từ chối"
+                      : "Cần bổ sung thông tin"
+                  }`,
+                },
+                { label: "Tuyến", value: detail?.route },
+                {
+                  label: "Người nhận",
+                  value: [detail?.receiverName, detail?.receiverPhone]
+                    .filter(Boolean)
+                    .join(" · "),
+                },
+                {
+                  label: "Báo giá hiện có",
+                  value: detail?.quotation
+                    ? `${detail.quotation.status || "—"} · ${formatReviewMoney(
+                        detail.quotation.totalEstimatedCost
+                      )}`
+                    : "Chưa có",
+                },
+                {
+                  label: "Địa chỉ giao",
+                  value: detail?.receiverAddress,
+                  span: 2,
+                },
+              ]}
+            />
+
+            <ReviewItemsTable
+              title="Hàng khách khai trên đơn"
+              items={detail?.items || []}
+            />
 
             {/* Cả hai quyết định đều bắt buộc ghi lý do — backend chặn nếu để trống. */}
             <div className="consignment-review-modal__reason">

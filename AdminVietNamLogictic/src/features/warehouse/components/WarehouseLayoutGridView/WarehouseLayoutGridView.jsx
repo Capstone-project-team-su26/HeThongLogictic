@@ -3,11 +3,17 @@ import { AppstoreOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@a
 
 const { Text } = Typography;
 
-const formatNumber = (value, unit = "") => {
-  if (value == null || Number.isNaN(Number(value))) return "—";
-  const formatted = Number(value).toLocaleString("vi-VN");
-  return unit ? `${formatted} ${unit}` : formatted;
+const LAYOUT_TYPE_LABEL = { BIN: "Ô kệ", SHELF: "Kệ", ZONE: "Khu" };
+
+/* Ô sơ đồ gắn vào ô kệ / kệ / khu nào (backend trả binCode, shelfCode, zoneName). */
+const describeLink = (item) => {
+  if (item.binCode) return `Ô kệ ${item.binCode}${item.shelfCode ? ` · kệ ${item.shelfCode}` : ""}`;
+  if (item.shelfCode) return `Kệ ${item.shelfCode}`;
+  if (item.zoneName) return `Cả khu ${item.zoneName}`;
+  return "Chưa gắn khu/kệ/ô";
 };
+
+const formatCoord = (value) => (value == null || value === "" ? "—" : value);
 
 export default function WarehouseLayoutGridView({
   layoutItems = [],
@@ -57,11 +63,14 @@ export default function WarehouseLayoutGridView({
                 >
                   <Card.Meta
                     avatar={<AppstoreOutlined style={{ fontSize: 24, color: "#2563eb" }} />}
-                    title={`Khu ${item.zoneCode || item.zoneName || "A"} — ${item.label}`}
+                    title={`${item.zoneCode || item.zoneName ? `Khu ${item.zoneCode || item.zoneName} — ` : ""}${item.label}`}
                     description={
                       <div>
-                        <div>Tọa độ: Hàng {item.gridRow || 1}, Cột {item.gridColumn || 1}</div>
-                        <div>Dung tích max: {formatNumber(item.maxVolume, "cm³")}</div>
+                        <div>Tọa độ: Hàng {formatCoord(item.gridRow)}, Cột {formatCoord(item.gridColumn)}</div>
+                        <div>
+                          {LAYOUT_TYPE_LABEL[item.layoutType] || item.layoutType || "Ô sơ đồ"}: {describeLink(item)}
+                        </div>
+                        {item.isActive === false && <Text type="secondary">Ngừng sử dụng</Text>}
                       </div>
                     }
                   />

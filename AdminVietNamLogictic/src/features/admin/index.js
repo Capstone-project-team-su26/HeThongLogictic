@@ -78,3 +78,27 @@ export * from "./api/adminService";
  */
 export * from "./api/adminFinanceService";
 export { default as adminFinanceService } from "./api/adminFinanceService";
+
+/* ------------------------------------------------------------------ */
+/* API THẬT — kho phụ trách của nhân viên kho (adminUserService)        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * adminUserService.js còn sở hữu sáu hàm người dùng (getAdminUsers, createAdminUser,
+ * updateAdminUserRole, ...) nhưng chúng đã đi ra barrel qua `export * from "./api/adminService"`
+ * (adminService re-export CÙNG binding) — không liệt kê lại ở đây. Dưới đây chỉ các tên riêng
+ * của tính năng gán kho; liệt kê tay, đã đối chiếu không trùng tên nào của adminService /
+ * adminFinanceService, để ai thêm trùng sau này thì build báo lỗi ngay.
+ */
+export {
+  assignUserWarehousesApi,
+  getAdminUserApiError,
+  getAssignableWarehousesApi,
+  getUserWarehousesApi,
+  isWarehouseRole,
+  normalizeAdminUser,
+  normalizeAssignableWarehouse,
+  normalizeAssignedWarehouse,
+  toRegionKey,
+} from "./api/adminUserService";
+export { default as adminUserService } from "./api/adminUserService";

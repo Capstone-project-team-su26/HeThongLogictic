@@ -4,9 +4,13 @@
  *
  *   GET  /api/orders/awaiting-settlement               → { message, data: { items } }
  *   GET  /api/orders/{orderId}/settlement-preview      → { message, data: SettlementPreview }
- *        (cước tính lại theo cân đo VN, điều chỉnh +/−, VAT, phí lưu kho, blockers)
+ *        (cước tính lại theo cân đo VN, điều chỉnh +/−, VAT, phí lưu kho, blockers;
+ *         mua hộ: importTaxAdjustment ≤ 0 + importTaxAdjustmentNote — thuế NK không thu của phần
+ *         hàng không tới tay khách. Chỉ backend mới có, hiện chỉ trên env test.)
  *   POST /api/orders/{orderId}/payments/final          { extraFees, paymentMethod }
- *   POST /api/purchase-requests/{id}/final-payment     { extraFees, paymentMethod }  (đơn mua hộ)
+ *        Dùng cho CẢ đơn mua hộ: `orderId` trong hàng chờ tất toán của đơn mua hộ chính là đơn kho
+ *        PUR. Endpoint riêng `POST /api/purchase-requests/{id}/final-payment` backend ĐÃ BỎ (test
+ *        backend kiểm nó trả 404) — gọi vào đó là Sale không chốt được phí cuối đơn mua hộ.
  *   GET  /api/orders/{orderId}/payments                → { message, data: { payments, totalPaid... } }
  *   POST /api/delivery-requests                        { orderId, parcelIds, receiver..., redeliveryFee }
  *   PUT  /api/orders/consignments/{orderId}/notify-warehouse  { note }
@@ -71,16 +75,6 @@ export const getSettlementPreview = async (orderId) => {
 export const createFinalPayment = async (orderId, extraFees = [], paymentMethod = "") => {
   const id = requireId(orderId, "Thiếu mã đơn hàng.");
   const response = await httpClient.post(API_ENDPOINTS.orders.finalPayment(id), {
-    extraFees: normalizeExtraFees(extraFees),
-    ...(trimText(paymentMethod) ? { paymentMethod: trimText(paymentMethod) } : {}),
-  });
-  return getResponseData(response);
-};
-
-/** Đơn mua hộ phát hành đợt cuối qua endpoint riêng của yêu cầu mua hộ. */
-export const createPurchaseFinalPayment = async (purchaseRequestId, extraFees = [], paymentMethod = "") => {
-  const id = requireId(purchaseRequestId, "Thiếu mã yêu cầu mua hộ.");
-  const response = await httpClient.post(API_ENDPOINTS.purchaseFinalPayment(id), {
     extraFees: normalizeExtraFees(extraFees),
     ...(trimText(paymentMethod) ? { paymentMethod: trimText(paymentMethod) } : {}),
   });
@@ -155,7 +149,6 @@ export default {
   listAwaitingSettlement,
   getSettlementPreview,
   createFinalPayment,
-  createPurchaseFinalPayment,
   getOrderPayments,
   createDeliveryRequest,
   notifyWarehouse,

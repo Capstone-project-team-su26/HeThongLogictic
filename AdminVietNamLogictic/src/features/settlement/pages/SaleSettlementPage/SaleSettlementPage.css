@@ -73,3 +73,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Phương thức thanh toán — chỉ còn SePay nên là một dòng thông tin, không phải ô chọn. */
+.settlement-payment-method {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  margin-top: 8px;
+  padding: 10px 12px;
+
+  border: 1px solid #bae0ff;
+  border-radius: 10px;
+  background: #e6f4ff;
+
+  color: #0958d9;
+}
+
+.settlement-payment-method span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settlement-payment-method b {
+  font-size: 13px;
+}
+
+.settlement-payment-method small {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}

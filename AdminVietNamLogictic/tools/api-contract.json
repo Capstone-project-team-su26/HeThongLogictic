@@ -97,7 +97,31 @@
       "updateWarehouseLocation"
     ],
     "hasDefault": false,
-    "originalLines": 714
+    "originalLines": 714,
+    "realApiNote": "KHÔNG còn mock: chỉ còn 3 helper (getAdminApiData/List/Error) + re-export API thật — 17 hàm kho/ô kệ/sơ đồ/tồn kho từ src/features/warehouse/api/warehouseAdminService.js, 6 hàm người dùng từ src/features/admin/api/adminUserService.js, 55 hàm danh mục nền (11 nhóm) từ src/features/catalog/api/catalogAdminService.js. File này không import httpClient."
+  },
+  "src/features/admin/api/adminUserService.js": {
+    "named": [
+      "assignUserWarehousesApi",
+      "createAdminUser",
+      "getAdminUserApiError",
+      "getAdminUserDetail",
+      "getAdminUsers",
+      "getAssignableWarehousesApi",
+      "getUserWarehousesApi",
+      "isWarehouseRole",
+      "lockAdminUser",
+      "normalizeAdminUser",
+      "normalizeAssignableWarehouse",
+      "normalizeAssignedWarehouse",
+      "toRegionKey",
+      "unlockAdminUser",
+      "updateAdminUserRole"
+    ],
+    "hasDefault": true,
+    "originalLines": 0,
+    "realApi": true,
+    "realApiNote": "Quản lý người dùng: getAdminUsers/getAdminUserDetail/createAdminUser/updateAdminUserRole/lockAdminUser/unlockAdminUser (GET|POST /api/User, GET /api/User/{id}, PUT /api/User/{id}/role|lock|unlock — adminService re-export cùng tên) + kho phụ trách của nhân viên kho (GET|PUT /api/users/{id}/warehouses, GET /api/warehouses)."
   },
   "src/features/attachments/api/attachmentService.js": {
     "named": [
@@ -131,6 +155,78 @@
     "realApi": true,
     "realApiNote": "Đăng nhập + hồ sơ cá nhân (POST /api/Auth/login, GET|PUT /api/User/profile)."
   },
+  "src/features/catalog/api/catalogAdminService.js": {
+    "named": [
+      "CALCULATION_TYPES",
+      "RESTRICTION_TYPES",
+      "SUPPLIER_TYPES",
+      "createAdditionalServiceFee",
+      "createExchangeRate",
+      "createPackageConfiguration",
+      "createPricingRule",
+      "createProductType",
+      "createRestrictedItem",
+      "createServicePricing",
+      "createShippingMethod",
+      "createShippingRoute",
+      "createSupplier",
+      "createUnitOfMeasure",
+      "deleteAdditionalServiceFee",
+      "deleteExchangeRate",
+      "deletePackageConfiguration",
+      "deletePricingRule",
+      "deleteProductType",
+      "deleteRestrictedItem",
+      "deleteServicePricing",
+      "deleteShippingMethod",
+      "deleteShippingRoute",
+      "deleteSupplier",
+      "deleteUnitOfMeasure",
+      "getAdditionalServiceFeeDetail",
+      "getAdditionalServiceFees",
+      "getExchangeRateDetail",
+      "getExchangeRates",
+      "getPackageConfigurationDetail",
+      "getPackageConfigurations",
+      "getPricingRuleDetail",
+      "getPricingRules",
+      "getProductTypeDetail",
+      "getProductTypes",
+      "getRestrictedItemDetail",
+      "getRestrictedItems",
+      "getServicePricingDetail",
+      "getServicePricings",
+      "getShippingMethodDetail",
+      "getShippingMethods",
+      "getShippingRouteDetail",
+      "getShippingRoutes",
+      "getSupplierDetail",
+      "getSuppliers",
+      "getUnitOfMeasureDetail",
+      "getUnitsOfMeasure",
+      "normalizeAdditionalServiceFee",
+      "normalizeAdminProductType",
+      "normalizeAdminRestrictedItem",
+      "normalizeAdminSupplier",
+      "normalizeAdminUnitOfMeasure",
+      "normalizeExchangeRateRecord",
+      "normalizeShippingMethod",
+      "updateAdditionalServiceFee",
+      "updateExchangeRate",
+      "updatePackageConfiguration",
+      "updatePricingRule",
+      "updateProductType",
+      "updateRestrictedItem",
+      "updateServicePricing",
+      "updateShippingMethod",
+      "updateShippingRoute",
+      "updateSupplier",
+      "updateUnitOfMeasure"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "realApiNote": "Danh mục nền Admin (11 nhóm): /api/shipping-methods, /api/package-configurations, /api/additional-service-fees, /api/service-pricings, /api/pricing-rules, /api/restricted-items, /api/product-types(/all), /api/units-of-measure(/all), /api/suppliers, /api/shipping-routes (qua transportCatalogService), /api/exchange-rates — GET list/detail, POST, PUT/{id}, DELETE/{id}. adminService re-export 55 tên cũ từ đây."
+  },
   "src/features/catalog/api/restrictedItemService.js": {
     "named": [
       "RESTRICTION_TYPE",
@@ -141,7 +237,21 @@
       "normalizeRestrictedItem"
     ],
     "hasDefault": true,
-    "originalLines": 124
+    "originalLines": 124,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: GET /api/restricted-items(/{id}) qua catalogAdminService; lọc keyword/country/type/active phía client (backend không nhận query). Bản mock: restrictedItemService.mock.js."
+  },
+  "src/features/catalog/api/restrictedItemService.mock.js": {
+    "named": [
+      "RESTRICTION_TYPE",
+      "getActiveRestrictedItemsApi",
+      "getRestrictedItemDetailApi",
+      "getRestrictedItemListApi",
+      "getRestrictedItemsApi",
+      "normalizeRestrictedItem"
+    ],
+    "hasDefault": true,
+    "originalLines": 294
   },
   "src/features/catalog/api/transportCatalogService.js": {
     "named": [
@@ -161,6 +271,17 @@
     "originalLines": 152,
     "realApi": true
   },
+  "src/features/chat/api/chatImageUploadApi.js": {
+    "named": [
+      "CHAT_IMAGE_MAX_SIZE_BYTES",
+      "chatUploadAxios",
+      "uploadChatImages"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "originalLines": 35,
+    "realApiNote": "API THẬT: lớp mỏng trên @shared/api/uploadImage (27/09/2026) — không lặp logic upload."
+  },
   "src/features/chat/api/conversationApi.js": {
     "named": [
       "createConversationApi",
@@ -170,9 +291,39 @@
       "sendConversationMessageApi"
     ],
     "hasDefault": true,
-    "originalLines": 337
+    "originalLines": 337,
+    "realApi": true,
+    "realApiNote": "Chat CSKH nhân viên: GET/POST /api/conversations, /{id}, /{id}/messages, PUT /{id}/read."
+  },
+  "src/features/chat/api/conversationApi.mock.js": {
+    "named": [
+      "createConversationApi",
+      "getConversationDetailApi",
+      "getConversationsApi",
+      "markConversationAsReadApi",
+      "sendConversationMessageApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 337,
+    "mockCopyOf": "src/features/chat/api/conversationApi.js"
   },
   "src/features/chat/api/saleAiService.js": {
+    "named": [
+      "SALES_AI_ENDPOINT",
+      "buildCustomerReply",
+      "buildSalesAiPayload",
+      "buildWarnings",
+      "getSalesAiError",
+      "mapStatusLabel",
+      "normalizeSalesOrderStatusResponse",
+      "querySalesOrderStatus"
+    ],
+    "hasDefault": true,
+    "originalLines": 254,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: POST /api/ai/sales/order-status-query (tra cứu theo quy tắc trên DB, không LLM ngoài); lỗi 404/400/403/500 hiện câu backend, không tự dựng câu trả lời. Bản mock: saleAiService.mock.js."
+  },
+  "src/features/chat/api/saleAiService.mock.js": {
     "named": [
       "buildCustomerReply",
       "buildWarnings",
@@ -182,7 +333,7 @@
       "querySalesOrderStatus"
     ],
     "hasDefault": true,
-    "originalLines": 254
+    "originalLines": 1036
   },
   "src/features/consignment/api/consignmentMasterService.js": {
     "named": [
@@ -274,7 +425,18 @@
       "getDeliveryAddressesApi"
     ],
     "hasDefault": true,
-    "originalLines": 84
+    "originalLines": 84,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: /api/delivery-addresses (sổ của CHÍNH người gọi; POST/DELETE chỉ Customer). Không màn admin nào dùng — Sale dùng customerLookupService (/api/customers/{id}/delivery-addresses). Bản mock: deliveryAddressService.mock.js."
+  },
+  "src/features/consignment/api/deliveryAddressService.mock.js": {
+    "named": [
+      "createDeliveryAddressApi",
+      "deleteDeliveryAddressApi",
+      "getDeliveryAddressesApi"
+    ],
+    "hasDefault": true,
+    "originalLines": 233
   },
   "src/features/consignment/api/quotationService.js": {
     "named": [
@@ -322,7 +484,36 @@
       "validateCustomerUniqueness"
     ],
     "hasDefault": true,
-    "originalLines": 588
+    "originalLines": 588,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: GET/POST /api/customers, GET/PUT/DELETE /api/customers/{id} (DELETE = vô hiệu hoá INACTIVE). Bản mock: customerService.mock.js."
+  },
+  "src/features/customer/api/customerService.mock.js": {
+    "named": [
+      "createCustomerApi",
+      "deleteCustomerApi",
+      "findCustomerById",
+      "getActiveCustomersApi",
+      "getCustomerByIdApi",
+      "getCustomersApi",
+      "mapCustomersToOptions",
+      "normalizeCustomer",
+      "normalizeCustomerPayload",
+      "normalizeCustomerStatus",
+      "updateCustomerApi",
+      "validateCustomerUniqueness"
+    ],
+    "hasDefault": true,
+    "originalLines": 729
+  },
+  "src/features/dashboard/api/dashboardService.js": {
+    "named": [
+      "getAdminDashboardApi",
+      "getOperationsDashboardApi",
+      "getSaleDashboardApi"
+    ],
+    "hasDefault": true,
+    "realApi": true
   },
   "src/features/incident/api/parcelIncidentService.js": {
     "named": [
@@ -421,12 +612,28 @@
       "CURRENCY_CODES",
       "CURRENCY_NAMES",
       "convertCurrencyApi",
+      "convertToVndWithRate",
+      "findActiveExchangeRate",
       "getExchangeRatesApi",
       "normalizeConvertResult",
       "normalizeExchangeRateItem"
     ],
     "hasDefault": false,
-    "originalLines": 184
+    "originalLines": 184,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: GET /api/exchange-rates?activeOnly (qua catalogAdminService.getExchangeRates) + GET /api/exchange-rates/convert. Không tỷ giá mặc định; findActiveExchangeRate trả null khi mã không có tỷ giá đang bật. Bản mock: exchangeRateService.mock.js."
+  },
+  "src/features/pricing/api/exchangeRateService.mock.js": {
+    "named": [
+      "CURRENCY_CODES",
+      "CURRENCY_NAMES",
+      "convertCurrencyApi",
+      "getExchangeRatesApi",
+      "normalizeConvertResult",
+      "normalizeExchangeRateItem"
+    ],
+    "hasDefault": false,
+    "originalLines": 185
   },
   "src/features/pricing/api/packageConfigurationService.js": {
     "named": [
@@ -559,6 +766,45 @@
     "originalLines": 391,
     "mockCopyOf": "src/features/pricing/api/servicePricingService.js"
   },
+  "src/features/purchase/api/purchaseOrderService.js": {
+    "named": [
+      "PURCHASE_CANCEL_CAUSE",
+      "PURCHASE_CANCEL_CAUSE_META",
+      "PURCHASE_ORDER_STATUS",
+      "PURCHASE_ORDER_STATUS_META",
+      "REFUND_REASON_LABEL",
+      "REFUND_STATUS_META",
+      "REFUND_TYPE_LABEL",
+      "cancelPurchaseOrder",
+      "closeUnfulfilledPurchase",
+      "completePurchaseRefund",
+      "completePurchaseRequestRefund",
+      "createPurchaseOrder",
+      "decidePurchaseOrder",
+      "getPendingRefunds",
+      "getPurchaseOrder",
+      "getPurchaseOrderApiError",
+      "getPurchaseOrderStatusMeta",
+      "getPurchaseRequestRefunds",
+      "getRefundReasonLabel",
+      "getRefundStatusMeta",
+      "getRefundTypeLabel",
+      "hasPendingRefund",
+      "isEditablePurchaseOrder",
+      "listPurchaseOrders",
+      "listPurchaseOrdersOfRequest",
+      "normalizeRefund",
+      "normalizeRefundLine",
+      "normalizeRefundSummary",
+      "placePurchaseOrder",
+      "submitPurchaseOrder",
+      "updatePurchaseOrder",
+      "updatePurchaseOrderProgress"
+    ],
+    "hasDefault": true,
+    "originalLines": 0,
+    "realApi": true
+  },
   "src/features/purchase/api/purchaseRequestService.js": {
     "named": [
       "PURCHASE_REQUEST_STATUS",
@@ -572,6 +818,29 @@
     "hasDefault": true,
     "originalLines": 934,
     "realApi": true
+  },
+  "src/features/purchase/api/purchaseRequestService.mock.js": {
+    "named": [
+      "PURCHASE_REQUEST_STATUS",
+      "PURCHASE_SHIPPING_OPTION",
+      "createPurchaseRequestApi",
+      "createPurchaseRequestQuotationApi",
+      "getPurchaseRequestDetailApi",
+      "getPurchaseRequestsApi",
+      "normalizeCreatePurchaseRequestPayload"
+    ],
+    "hasDefault": true,
+    "originalLines": 934
+  },
+  "src/features/purchase/api/purchaseRequestShared.js": {
+    "named": [
+      "PURCHASE_REQUEST_STATUS",
+      "PURCHASE_SHIPPING_OPTION",
+      "normalizeCreatePurchaseRequestPayload"
+    ],
+    "hasDefault": false,
+    "originalLines": 115,
+    "note": "Hằng + hàm thuần luồng mua hộ tách khỏi purchaseRequestService.mock.js (27/09/2026); không mạng, không dữ liệu mẫu."
   },
   "src/features/receiving/api/receivingNoteService.js": {
     "named": [
@@ -608,7 +877,6 @@
       "SETTLEMENT_BLOCKER_HINTS",
       "createDeliveryRequest",
       "createFinalPayment",
-      "createPurchaseFinalPayment",
       "getOrderPayments",
       "getSettlementApiError",
       "getSettlementPreview",
@@ -651,11 +919,41 @@
     "originalLines": 122,
     "realApi": true
   },
+  "src/features/warehouse/api/warehouseAdminService.js": {
+    "named": [
+      "ZONE_TYPES",
+      "createWarehouse",
+      "createWarehouseLayoutItem",
+      "createWarehouseLocation",
+      "deleteWarehouse",
+      "deleteWarehouseLayoutItem",
+      "deleteWarehouseLocation",
+      "getActiveWarehouseLocations",
+      "getInventories",
+      "getWarehouseInventories",
+      "getWarehouseLayout",
+      "getWarehouseLayoutStatus",
+      "getWarehouseLayoutZones",
+      "getWarehouseLocations",
+      "getWarehouses",
+      "normalizeAdminInventory",
+      "normalizeAdminLocation",
+      "normalizeAdminWarehouse",
+      "normalizeLayoutItem",
+      "updateWarehouse",
+      "updateWarehouseLayoutItem",
+      "updateWarehouseLocation"
+    ],
+    "hasDefault": true,
+    "realApi": true,
+    "realApiNote": "Kho/ô kệ/sơ đồ/tồn kho cho Admin: GET|POST /api/warehouses, PUT|DELETE /api/warehouses/{id}, GET|POST /api/warehouses/{id}/locations(+/active), PUT|DELETE /api/warehouse-locations/{id}, GET /api/warehouses/{id}/layout(+/zones,/status), POST|PUT|DELETE /api/warehouses/{id}/layout[/{layoutId}], GET /api/inventories. adminService re-export 17 tên cũ từ đây."
+  },
   "src/features/warehouse/api/warehouseManagerService.js": {
     "named": [
       "assignWarehouseManager",
       "getWarehouseManager",
-      "getWarehouseManagerCandidates"
+      "getWarehouseManagerCandidates",
+      "getWarehouseStaff"
     ],
     "hasDefault": true,
     "originalLines": 0,
@@ -748,14 +1046,62 @@
   },
   "src/shared/api/uploadImage.js": {
     "named": [
+      "UPLOAD_ALLOWED_IMAGE_TYPES",
+      "UPLOAD_MAX_FILES_PER_BATCH",
+      "UPLOAD_MAX_FILE_SIZE_BYTES",
+      "uploadAxios",
+      "uploadImage",
+      "uploadImageUrls",
+      "uploadImages",
+      "validateUploadImageFiles"
+    ],
+    "hasDefault": true,
+    "originalLines": 374,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: POST /api/uploads/images, mỗi request MỘT ảnh (tránh 413 nginx); chặn trước JPG/PNG/WEBP ≤5MB ≤10 ảnh; chỉ nhận URL http(s). Hợp đồng giữ: uploadImage→chuỗi URL, uploadImages→{success,url,urls,data}. Bản mock: uploadImage.mock.js."
+  },
+  "src/shared/api/uploadImage.mock.js": {
+    "named": [
       "uploadAxios",
       "uploadImage",
       "uploadImages"
     ],
     "hasDefault": true,
-    "originalLines": 374
+    "originalLines": 562
   },
   "src/shared/api/vietnamAddressService.js": {
+    "named": [
+      "ADDRESS_REQUEST_TIMEOUT_MS",
+      "clearAddressCache",
+      "composeVietnamAddress",
+      "findAddressOptionByName",
+      "getAddressSelectionError",
+      "getDistrictByCode",
+      "getDistrictsByProvinceCode",
+      "getFullAddressByCodes",
+      "getProvinceByCode",
+      "getProvinces",
+      "getVietnamDistrictsApi",
+      "getVietnamProvincesApi",
+      "getVietnamWardsApi",
+      "getWardByCode",
+      "getWardsByDistrictCode",
+      "isDeliveryAddressComplete",
+      "normalizeAddressKeyword",
+      "normalizeAddressOption",
+      "normalizeAddressOptions",
+      "resolveAddressByNames",
+      "searchDistricts",
+      "searchProvinces",
+      "searchWards",
+      "splitVietnamAddress"
+    ],
+    "hasDefault": true,
+    "originalLines": 125,
+    "realApi": true,
+    "realApiNote": "API THẬT 27/09/2026: danh mục GoShip GET /api/Goship/cities, /cities/{id}/districts, /districts/{id}/wards; cache tỉnh theo phiên; lỗi ném ra (không rơi về danh sách giả). Bản mock: vietnamAddressService.mock.js."
+  },
+  "src/shared/api/vietnamAddressService.mock.js": {
     "named": [
       "composeVietnamAddress",
       "getDistrictsByProvinceCode",
@@ -767,19 +1113,6 @@
       "getWardsByDistrictCode"
     ],
     "hasDefault": true,
-    "originalLines": 125
-  },
-  "src/features/purchase/api/purchaseRequestService.mock.js": {
-    "named": [
-      "PURCHASE_REQUEST_STATUS",
-      "PURCHASE_SHIPPING_OPTION",
-      "createPurchaseRequestApi",
-      "createPurchaseRequestQuotationApi",
-      "getPurchaseRequestDetailApi",
-      "getPurchaseRequestsApi",
-      "normalizeCreatePurchaseRequestPayload"
-    ],
-    "hasDefault": true,
-    "originalLines": 934
+    "originalLines": 197
   }
 }

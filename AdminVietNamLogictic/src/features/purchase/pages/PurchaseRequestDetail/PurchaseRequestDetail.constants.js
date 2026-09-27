@@ -5,7 +5,7 @@
  */
 import {
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
 
 export const STATUS_CONFIG = {
   DRAFT: {
@@ -104,6 +104,23 @@ export const CREATE_QUOTATION_STATUSES =
     "PENDING_REVIEW",
     "IN_REVIEW",
     "APPROVED",
+  ]);
+
+/*
+ * Trạng thái yêu cầu cho phép "đóng phần không mua được": từ lúc khách đã trả trước (PAID) tới khi
+ * hàng về kho / hoàn tất. Khớp nhóm `BeyondPrepaid` + PAID của backend (PurchasePaymentEffects),
+ * trừ CANCELLED — yêu cầu đã huỷ thì không còn gì để đóng.
+ */
+export const CLOSE_UNFULFILLED_STATUSES =
+  new Set([
+    "PAID",
+    "PURCHASING",
+    "PURCHASED",
+    "SELLER_SHIPPED",
+    "ARRIVED_ORIGIN_WAREHOUSE",
+    "WAITING_STORED",
+    "STORED",
+    "COMPLETED",
   ]);
 
 export const HIDDEN_SERVICE_RULE_CODES =

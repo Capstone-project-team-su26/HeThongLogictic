@@ -369,7 +369,11 @@ try {
   const { estimateQuotationApi } = await server.ssrLoadModule(
     "/src/features/consignment/api/consignmentService.mock.js"
   );
-  const { updatePricingRule } = await server.ssrLoadModule("/src/features/admin/api/adminService.js");
+  /*
+   * adminService.updatePricingRule ĐÃ NỐI API THẬT (26/09/2026, catalogAdminService — kiểm ở
+   * tools/verify-api.mjs), nên không còn ghi vào fixture. Kịch bản "đổi DEPOSIT_RATE" dưới đây
+   * sửa thẳng bản ghi fixture mà bản mock báo giá đọc, để vẫn soi được logic đọc cấu hình lúc gọi.
+   */
   const { pricingRules, findPricingRuleByCode } = await server.ssrLoadModule("/src/mocks/data/catalog.js");
   const { consignments } = await server.ssrLoadModule("/src/mocks/data/consignments.js");
 
@@ -415,14 +419,14 @@ try {
     const originalValue = rule.value;
     const originalUpdatedAt = rule.updatedAt;
     try {
-      await updatePricingRule(rule.id, { value: 40 });
+      rule.value = 40;
       const quote = await estimate();
       return firstFailure(
         expectEqual("depositPercent", quote.depositPercent, 40),
         expectEqual("depositAmount", quote.depositAmount, 400000)
       );
     } finally {
-      await updatePricingRule(rule.id, { value: originalValue });
+      rule.value = originalValue;
       rule.updatedAt = originalUpdatedAt;
     }
   });

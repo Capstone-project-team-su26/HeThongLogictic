@@ -11,7 +11,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
-  Descriptions,
   Drawer,
   Empty,
   Input,
@@ -42,7 +41,18 @@ import {
   createReceivingNote,
   listActionQueue,
 } from "@features/settlement/api/actionQueueService";
+/*
+ * Tóm tắt đầy đủ đơn cho ba hộp xác nhận của trang (lập phiếu nhập kho, báo kho, yêu cầu
+ * giao): khách + mã khách, hàng từng dòng, kiện, báo giá, tiền đã cọc — đều từ API thật.
+ */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import DeliveryAddressPicker from "@shared/components/AddressSelect/DeliveryAddressPicker";
+import {
+  isDeliveryAddressComplete,
+  splitVietnamAddress,
+} from "@shared/api/vietnamAddressService";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 import "@features/settlement/pages/SaleSettlementPage/SaleSettlementPage.css";
 
 const { Title, Text } = Typography;
@@ -74,27 +84,10 @@ const formatDateTime = (value) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
 };
 
-/**
- * Địa chỉ trên đơn là một chuỗi liền, mà phiếu giao cần tách tỉnh / quận / phường.
- * Tách ngược từ đuôi vì thứ tự nhập luôn là "số nhà, phường, quận, tỉnh".
+/*
+ * Địa chỉ trên đơn là một chuỗi liền "số nhà, phường, quận, tỉnh"; phiếu giao cần tách tỉnh /
+ * quận / phường → splitVietnamAddress, rồi DeliveryAddressPicker dò mã GoShip theo tên.
  */
-const splitAddress = (address) => {
-  const parts = String(address || "")
-    .split(",")
-    .map((piece) => piece.trim())
-    .filter(Boolean);
-
-  if (parts.length < 4) {
-    return { addressDetail: parts.join(", "), ward: "", district: "", province: "" };
-  }
-
-  return {
-    province: parts[parts.length - 1],
-    district: parts[parts.length - 2],
-    ward: parts[parts.length - 3],
-    addressDetail: parts.slice(0, parts.length - 3).join(", "),
-  };
-};
 
 export default function SaleReleasePage() {
   const navigate = useNavigate();
@@ -114,6 +107,18 @@ export default function SaleReleasePage() {
 
   const [receivingTarget, setReceivingTarget] = useState(null);
   const [receivingNote, setReceivingNote] = useState("");
+
+  /*
+   * ĐẦY ĐỦ THÔNG TIN TRƯỚC KHI GHI.
+   *
+   * Hàng đợi việc chỉ trả phần đầu đơn (mã đơn, khách, kho, tuyến) — không có kiện, không có
+   * tiền. Mà người bấm "Lập phiếu nhập kho" / "Thông báo cho kho" / "Gửi yêu cầu giao" phải
+   * thấy mình đang bàn giao CÁI GÌ: khách nào (kèm mã khách), bao nhiêu dòng hàng, nặng bao
+   * nhiêu, kích thước, khai giá, thùng gỗ / dịch vụ kèm, báo giá và tiền đã cọc. Chỉ một hộp
+   * mở tại một thời điểm, nên một hook nạp chi tiết cho đúng đơn của hộp đang mở.
+   */
+  const reviewOrderId = receivingTarget?.orderId || notifyTarget?.orderId || target?.orderId || "";
+  const review = useOrderReview(reviewOrderId, { enabled: Boolean(reviewOrderId) });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,20 +153,24 @@ export default function SaleReleasePage() {
       receiverName: row.receiverName || row.customerName || "",
       receiverPhone: row.receiverPhone || row.customerPhone || "",
       note: "",
-      ...splitAddress(row.receiverAddress),
+      ...splitVietnamAddress(row.receiverAddress),
+      provinceCode: "",
+      districtCode: "",
+      wardCode: "",
     });
   }, []);
 
   const submitDelivery = useCallback(async () => {
     if (!target || !form) return;
 
-    const missing = ["receiverName", "receiverPhone", "addressDetail", "province", "district", "ward"]
+    const missing = ["receiverName", "receiverPhone", "addressDetail"]
       .filter((field) => !String(form[field] || "").trim());
 
-    if (missing.length > 0) {
+    /* Tỉnh/quận/phường phải CHỌN từ danh mục GoShip (có mã) — tên gõ tay/tên cũ chưa khớp thì chặn. */
+    if (missing.length > 0 || !isDeliveryAddressComplete(form)) {
       AuthNotify.error(
         "Thiếu thông tin giao hàng",
-        "Điền đủ người nhận, số điện thoại và địa chỉ (tỉnh/quận/phường) rồi mới gửi được.",
+        "Điền đủ người nhận, số điện thoại, số nhà và CHỌN đủ tỉnh/quận/phường từ danh sách rồi mới gửi được.",
       );
       return;
     }
@@ -442,12 +451,24 @@ export default function SaleReleasePage() {
       />
 
       {/* ============ Đầu chặng: lập phiếu tiếp nhận cho kho gốc ============ */}
+      {/*
+        Hộp này ghi ra một phiếu nhập kho mà quản lý kho sẽ duyệt và khách cầm tới kho, nên
+        người lập phải thấy ĐỦ: khách (tên, mã, SĐT), kho nhận, người nhận / địa chỉ giao, từng
+        dòng hàng (tên, loại, SL, cân, D×R×C, khai giá, thùng gỗ + dịch vụ), tổng, báo giá và
+        tiền đã cọc.
+
+        Đang tải chi tiết → khoá nút lập phiếu (không cho ký khi chưa nhìn thấy hàng).
+        Tải lỗi → báo rõ nhưng KHÔNG chặn: backend chỉ cần mã đơn + kho để lập phiếu, và phiếu
+        chờ quản lý kho duyệt nên còn một lượt người xem lại trước khi khách mang hàng tới.
+      */}
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={Boolean(receivingTarget)}
         onCancel={() => setReceivingTarget(null)}
         onOk={submitReceivingNote}
         confirmLoading={submitting}
-        okText="Lập phiếu nhập kho"
+        okButtonProps={{ disabled: review.loading }}
+        okText={review.loading ? "Đang tải thông tin…" : "Lập phiếu nhập kho"}
         cancelText="Để sau"
         title={`Lập phiếu tiếp nhận kho · ${receivingTarget?.orderCode || ""}`}
       >
@@ -458,20 +479,48 @@ export default function SaleReleasePage() {
               showIcon
               style={{ marginBottom: 14 }}
               message="Khách đã trả cọc — lập phiếu nhập kho để quản lý kho duyệt"
-              description="Phiếu chờ quản lý kho của kho nhận duyệt (bạn không tự duyệt được phiếu mình lập). Duyệt xong phiếu có mã WRN- và PDF, khách nhận thông báo để mang hàng tới; kho quét mã đó để nhận hàng."
+              description="Phiếu chờ quản lý kho của kho nhận duyệt (bạn không tự duyệt được phiếu mình lập). Duyệt xong phiếu có mã WRN- và PDF, khách nhận thông báo để mang hàng tới; kho quét mã đó để nhận hàng và đối chiếu với đúng các dòng hàng bên dưới."
             />
 
-            <Descriptions column={1} size="small" bordered style={{ marginBottom: 14 }}>
-              <Descriptions.Item label="Khách hàng">
-                {receivingTarget.customerName || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Kho tiếp nhận">
-                {receivingTarget.receivingWarehouseName || (
-                  <Text type="danger">Đơn chưa gắn kho — kiểm tra lại báo giá</Text>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="Tuyến">{receivingTarget.route || "—"}</Descriptions.Item>
-            </Descriptions>
+            {!receivingTarget.receivingWarehouseId && (
+              <Alert
+                type="error"
+                showIcon
+                style={{ marginBottom: 14 }}
+                message="Đơn chưa gắn kho tiếp nhận"
+                description="Báo giá của đơn này chưa chọn kho gốc nên chưa lập được phiếu — kiểm tra lại báo giá."
+              />
+            )}
+
+            <OrderReviewPanel
+              review={review}
+              fallback={receivingTarget}
+              errorHint="Bạn vẫn lập được phiếu (chỉ cần mã đơn và kho); quản lý kho sẽ xem đủ chi tiết khi duyệt."
+              extraFacts={[
+                {
+                  label: "Kho tiếp nhận",
+                  value: receivingTarget.receivingWarehouseName ? (
+                    <span>
+                      <Text strong>{receivingTarget.receivingWarehouseName}</Text>
+                      {review.detail?.quotation?.warehouseCode
+                        ? ` · ${review.detail.quotation.warehouseCode}`
+                        : ""}
+                    </span>
+                  ) : (
+                    <Text type="danger">Chưa gắn kho</Text>
+                  ),
+                },
+                {
+                  label: "Địa chỉ kho",
+                  value: review.detail?.quotation?.warehouseAddress,
+                  hidden: !review.detail?.quotation?.warehouseAddress,
+                },
+                {
+                  label: "Khách trả cọc lúc",
+                  value: formatDateTime(receivingTarget.arrivedAt),
+                },
+              ]}
+            />
 
             <Input.TextArea
               rows={3}
@@ -484,12 +533,19 @@ export default function SaleReleasePage() {
       </Modal>
 
       {/* ============ Nhánh gửi lại kho: thông báo cho kho ============ */}
+      {/*
+        Báo kho = cam kết với kho rằng đúng các kiện này của khách được nhập kệ VN. Hiện đủ
+        khách, từng kiện (mã, cân, lô, kết quả kiểm đếm) và tiền để Sale soát trước khi báo.
+        Đang tải thì khoá nút; tải lỗi không chặn (kho sẽ tự lập phiếu nhập và OM duyệt lại).
+      */}
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={Boolean(notifyTarget)}
         onCancel={() => setNotifyTarget(null)}
         onOk={submitNotify}
         confirmLoading={submitting}
-        okText="Thông báo cho kho"
+        okButtonProps={{ disabled: review.loading }}
+        okText={review.loading ? "Đang tải thông tin…" : "Thông báo cho kho"}
         cancelText="Để sau"
         title={`Thông báo cho kho · ${notifyTarget?.orderCode || ""}`}
       >
@@ -503,6 +559,40 @@ export default function SaleReleasePage() {
               description="Kho sẽ thấy đơn này ở mục Đơn hàng cần xử lý và lập phiếu nhập kho gửi OM duyệt."
             />
 
+            <OrderReviewPanel
+              review={review}
+              fallback={notifyTarget}
+              parcelIds={notifyTarget.parcelIds}
+              parcelTitle="Kiện khách gửi lại kho VN"
+              errorHint="Bạn vẫn báo kho được; kho lập phiếu nhập và OM duyệt lại từng kiện."
+              extraFacts={[
+                {
+                  label: "Nhóm hàng",
+                  value: `${notifyTarget.handlingGroupText || "Gửi lại kho"} · ${
+                    notifyTarget.groupParcelCount
+                  } kiện · ${Number(notifyTarget.groupTotalWeight || 0).toLocaleString("vi-VN")} kg`,
+                },
+                {
+                  label: "Hàng về kho lúc",
+                  value: formatDateTime(notifyTarget.arrivedAt),
+                },
+                {
+                  label: "Kiện lệch khi kiểm đếm",
+                  value: notifyTarget.discrepancyParcelCount ? (
+                    <Text type="danger">{notifyTarget.discrepancyParcelCount} kiện</Text>
+                  ) : (
+                    "Không"
+                  ),
+                },
+                {
+                  label: "Lý do kho từ chối lần trước",
+                  value: <Text type="danger">{notifyTarget.inboundRejectionReason}</Text>,
+                  hidden: !notifyTarget.inboundRejectionReason,
+                  span: 2,
+                },
+              ]}
+            />
+
             <Input.TextArea
               rows={3}
               placeholder="Ghi chú cho kho (không bắt buộc) — ví dụ điều kiện đã thoả thuận với khách"
@@ -514,10 +604,16 @@ export default function SaleReleasePage() {
       </Modal>
 
       {/* ============ Nhánh giao ngay: lập yêu cầu giao hàng ============ */}
+      {/*
+        Yêu cầu giao = lệnh kho nhặt đúng các kiện này và book xe tới địa chỉ bên dưới. Trước khi
+        gửi OM duyệt, Sale phải thấy đủ: khách, từng kiện sẽ giao (mã, cân, lô, kết quả kiểm
+        đếm), hàng khai trên đơn và tiền (đã tất toán chưa). Form địa chỉ ở dưới chính là dữ
+        liệu sẽ ghi. Đang tải thì khoá nút gửi; tải lỗi không chặn vì OM còn duyệt lại.
+      */}
       <Drawer
         open={Boolean(target)}
         onClose={() => setTarget(null)}
-        width={680}
+        width={980}
         title={`Tạo yêu cầu giao hàng · ${target?.orderCode || ""}`}
       >
         {target && form && (
@@ -527,18 +623,21 @@ export default function SaleReleasePage() {
                 Khách: <strong>{target.customerName || "—"}</strong>
               </span>
               <span>
-                Hàng giao ngay: <strong>{target.groupParcelCount}</strong> kiện
+                Hàng giao ngay: <strong>{target.groupParcelCount}</strong> kiện ·{" "}
+                <strong>{Number(target.groupTotalWeight || 0).toLocaleString("vi-VN")}</strong> kg
               </span>
               <span>
                 Loại đơn: <strong>{target.orderType === "PURCHASE" ? "Mua hộ" : "Ký gửi"}</strong>
               </span>
             </div>
 
-            <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Địa chỉ trên đơn">
-                {target.receiverAddress || "—"}
-              </Descriptions.Item>
-            </Descriptions>
+            <OrderReviewPanel
+              review={review}
+              fallback={target}
+              parcelIds={target.parcelIds}
+              parcelTitle="Kiện sẽ giao"
+              errorHint="Bạn vẫn gửi được yêu cầu; OM sẽ xem đủ kiện khi duyệt."
+            />
 
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <Input
@@ -551,25 +650,11 @@ export default function SaleReleasePage() {
                 value={form.receiverPhone}
                 onChange={(e) => setForm((f) => ({ ...f, receiverPhone: e.target.value }))}
               />
-              <Input
-                addonBefore="Số nhà, đường"
-                value={form.addressDetail}
-                onChange={(e) => setForm((f) => ({ ...f, addressDetail: e.target.value }))}
-              />
-              <Input
-                addonBefore="Phường/Xã"
-                value={form.ward}
-                onChange={(e) => setForm((f) => ({ ...f, ward: e.target.value }))}
-              />
-              <Input
-                addonBefore="Quận/Huyện"
-                value={form.district}
-                onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
-              />
-              <Input
-                addonBefore="Tỉnh/Thành phố"
-                value={form.province}
-                onChange={(e) => setForm((f) => ({ ...f, province: e.target.value }))}
+              <DeliveryAddressPicker
+                key={target.orderId}
+                value={form}
+                savedText={target.receiverAddress}
+                onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
               />
               <Input.TextArea
                 rows={2}
@@ -599,10 +684,11 @@ export default function SaleReleasePage() {
                 block
                 icon={<SendOutlined />}
                 loading={submitting}
+                disabled={review.loading || !isDeliveryAddressComplete(form)}
                 onClick={submitDelivery}
                 style={{ marginTop: 16 }}
               >
-                Gửi yêu cầu giao hàng cho OM duyệt
+                {review.loading ? "Đang tải thông tin đơn…" : "Gửi yêu cầu giao hàng cho OM duyệt"}
               </Button>
             )}
           </>

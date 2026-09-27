@@ -235,6 +235,8 @@ const ConfirmStatus = ({
 
 export default function ConsignmentBuyOrderConfirm({
   form,
+  /* Khách chủ đơn (Sale tạo hộ) — trước đây bước xác nhận chỉ hiện người nhận, không hiện khách. */
+  customer = null,
   items = [],
   routeOptions = [],
   shippingOptions = [],
@@ -483,6 +485,26 @@ export default function ConsignmentBuyOrderConfirm({
               </div>
 
               <div className="purchase-buy-confirm-info-grid">
+                {customer ? (
+                  <div className="purchase-buy-confirm-info-item is-full-width">
+                    <span className="purchase-buy-confirm-info-label">
+                      <SafetyCertificateOutlined />
+                      Khách chủ đơn
+                    </span>
+
+                    <strong>
+                      {[
+                        customer.fullName,
+                        customer.customerCode,
+                        customer.phone,
+                        customer.email,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Chưa cập nhật"}
+                    </strong>
+                  </div>
+                ) : null}
+
                 <div className="purchase-buy-confirm-info-item">
                   <span className="purchase-buy-confirm-info-label">
                     <EnvironmentOutlined />

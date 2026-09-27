@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Button, Empty, Space, Switch, Table, Tabs, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Empty, Space, Switch, Table, Tabs, Tag, Typography } from "antd";
 import { ClockCircleOutlined, ReloadOutlined, WarningOutlined } from "@ant-design/icons";
 
 import {
@@ -14,6 +14,9 @@ import { getDocumentTypeLabel } from "@features/attachments";
 import "@features/operations/styles/OperationsPage.css";
 
 const { Text } = Typography;
+
+/* Mốc chỉ ghi khi hàng gặp chuyện — không phải bước trên đường đi bình thường. */
+const EXCEPTION_MILESTONES = new Set(["DELAYED", "ON_HOLD", "CANCELLED"]);
 
 const formatDateTime = (value) => {
   if (!value) return "—";
@@ -144,33 +147,70 @@ export default function SaleShipmentsPage() {
         render: (_, row) => `${row.orderCount || 0} đơn · ${row.parcelCount || 0} kiện`,
       },
       {
-        title: "Mốc tiếp theo",
+        title: "Ghi mốc tiếp theo",
         key: "next",
-        width: 280,
+        width: 300,
         render: (_, row) => {
           const next = Array.isArray(row.nextMilestones) ? row.nextMilestones : [];
-          if (!next.length) return <Text type="secondary">—</Text>;
+          if (!next.length) return <Text type="secondary">Lô đã về kho, không còn mốc nào</Text>;
+
+          /*
+           * `nextMilestones` là các mốc ĐƯỢC PHÉP ghi kế tiếp — LỰA CHỌN chứ không phải các
+           * bước phải làm lần lượt. Bản cũ in tất cả thành 4 nút xanh giống nhau nên Sale
+           * đọc thành "còn 4 bước nữa" và không biết bấm cái nào. Giờ tách hai nhóm: đường đi
+           * bình thường (mốc đầu là việc nên làm, tô đậm) và nhóm ngoại lệ khi hàng có vấn đề.
+           */
+          const forward = next.filter((item) => !EXCEPTION_MILESTONES.has(item.status));
+          const exceptions = next.filter((item) => EXCEPTION_MILESTONES.has(item.status));
+
+          const renderButton = (item, index, tone) => {
+            const missing = item.missingDocuments || [];
+            return (
+              <div key={item.status} className="ship-next__item">
+                <Button
+                  size="small"
+                  type={tone === "primary" && index === 0 ? "primary" : "default"}
+                  danger={tone === "exception"}
+                  onClick={() => setOpenId(row.shipmentId)}
+                >
+                  {item.text || item.status}
+                </Button>
+
+                {/* Thiếu giấy tờ thì nói thẳng ra — trước đây chỉ nằm trong tooltip, phải trỏ
+                    chuột mới thấy, nên Sale bấm vào rồi mới biết còn thiếu. */}
+                {missing.length ? (
+                  <Text type="danger" className="ship-next__missing">
+                    Cần {missing.map(getDocumentTypeLabel).join(", ")}
+                  </Text>
+                ) : null}
+              </div>
+            );
+          };
+
           return (
-            <Space size={[4, 4]} wrap>
-              {next.map((item) => {
-                const missing = item.missingDocuments || [];
-                return (
-                  <Tooltip
-                    key={item.status}
-                    title={missing.length ? `Thiếu: ${missing.map(getDocumentTypeLabel).join(", ")}` : ""}
-                  >
-                    <Button
-                      size="small"
-                      type={missing.length ? "default" : "primary"}
-                      danger={missing.length > 0}
-                      onClick={() => setOpenId(row.shipmentId)}
-                    >
-                      {item.text || item.status}
-                    </Button>
-                  </Tooltip>
-                );
-              })}
-            </Space>
+            <div className="ship-next">
+              {forward.length ? (
+                <div className="ship-next__group">
+                  <Text type="secondary" className="ship-next__label">
+                    Đi tiếp
+                  </Text>
+                  <div className="ship-next__row">
+                    {forward.map((item, index) => renderButton(item, index, "primary"))}
+                  </div>
+                </div>
+              ) : null}
+
+              {exceptions.length ? (
+                <div className="ship-next__group">
+                  <Text type="secondary" className="ship-next__label">
+                    Nếu có vấn đề
+                  </Text>
+                  <div className="ship-next__row">
+                    {exceptions.map((item, index) => renderButton(item, index, "exception"))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           );
         },
       },

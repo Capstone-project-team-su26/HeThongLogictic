@@ -30,6 +30,12 @@ import {
   rejectInboundRequest,
 } from "@features/operations/api/destinationApprovalService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import SubmitReview, {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
 import "@features/operations/styles/OperationsPage.css";
 // Thẻ KPI dùng class wro-kpi-* khai bên trang WRO. Import thẳng thay vì trông chờ trang khác
 // đã kéo file này vào bundle giúp.
@@ -50,6 +56,96 @@ const formatDateTime = (value) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
 };
 
+/** Cột kiện của phiếu — dùng chung cho drawer chi tiết và hộp duyệt / từ chối. */
+const INBOUND_PARCEL_COLUMNS = [
+  { title: "Mã kiện", dataIndex: "packageCode" },
+  { title: "Đơn", dataIndex: "orderCode", render: (v) => v || "—" },
+  { title: "Khách", dataIndex: "customerName", render: (v) => v || "—" },
+  {
+    /*
+     * Khách muốn giao ngay mà kiện lại nằm trong phiếu nhập kho là dấu hiệu lệch:
+     * hoặc khách gọi đổi ý (hợp lệ), hoặc kho tick nhầm. Tô cảnh báo để OM hỏi lại
+     * trước khi ký duyệt, thay vì duyệt xong mới phát hiện.
+     */
+    title: "Ý khách",
+    dataIndex: "customerIntent",
+    render: (value, row) => {
+      if (!value) return <Tag>Chưa chọn</Tag>;
+
+      return value === "DIRECT_DELIVERY" ? (
+        <Tag color="warning" title={row.customerIntentText}>
+          Muốn giao ngay
+        </Tag>
+      ) : (
+        <Tag color="success" title={row.customerIntentText}>
+          Muốn gửi kho
+        </Tag>
+      );
+    },
+  },
+  { title: "Trạng thái", dataIndex: "packageStatus" },
+  { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "Chưa xếp" },
+];
+
+/**
+ * Đủ thông tin một phiếu nhập kho VN trong hộp duyệt / từ chối. Tải lỗi thì vẫn hiện phần
+ * có trên dòng bảng và nói rõ đang thiếu gì — không chặn cứng, vì server tự xét lại điều kiện.
+ */
+function InboundDecisionReview({ target, review }) {
+  const data = { ...target, ...(review.data || {}) };
+  const parcels = Array.isArray(data.parcels) ? data.parcels : [];
+  const orderCount = new Set(parcels.map((row) => row.orderCode).filter(Boolean)).size;
+  const conflicting = parcels.filter((row) => row.customerIntent === "DIRECT_DELIVERY").length;
+
+  return (
+    <SubmitReview
+      loading={review.loading}
+      loadingText="Đang tải đầy đủ phiếu nhập kho…"
+      error={review.error}
+      errorHint="Chưa xem được danh sách kiện — nên mở phiếu kiểm tra trước khi quyết định."
+    >
+      <ReviewFacts
+        items={[
+          { label: "Mã phiếu", value: <Text strong>{data.inboundCode}</Text> },
+          { label: "Lô vận chuyển", value: data.shipmentCode },
+          { label: "Kho nhận", value: data.warehouseName },
+          {
+            label: "Người lập",
+            value: `${data.createdByName || "—"} · ${formatDateTime(data.createdAt)}`,
+          },
+          {
+            label: "Số kiện",
+            value: `${data.totalParcels ?? parcels.length} kiện${
+              orderCount ? ` · ${orderCount} đơn` : ""
+            }`,
+          },
+          {
+            label: "Trạng thái",
+            value: data.statusText || getInboundStatusMeta(data.status).label,
+          },
+          { label: "Ghi chú của kho", value: data.note, span: 2 },
+        ]}
+      />
+      {conflicting > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`${conflicting} kiện có khách yêu cầu giao ngay khi về VN`}
+          description="Những kiện này đang được đề nghị nhập kho, ngược với nguyện vọng khách khai lúc đặt đơn."
+        />
+      )}
+      <ReviewItemsTable
+        title="Kiện trong phiếu"
+        items={parcels}
+        columns={INBOUND_PARCEL_COLUMNS}
+        rowKey={(row, index) => row?.parcelId || index}
+        extra={`${parcels.length} kiện`}
+        emptyText={review.error ? "Chưa đọc được danh sách kiện." : "Phiếu chưa có kiện nào."}
+      />
+    </SubmitReview>
+  );
+}
+
 export default function OperationsInboundApprovalsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +158,19 @@ export default function OperationsInboundApprovalsPage() {
 
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [approveTarget, setApproveTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  /*
+   * Trước đây nút "Duyệt" trên dòng bảng gửi lệnh ngay, người duyệt không thấy phiếu có kiện
+   * nào. Giờ cả duyệt lẫn từ chối đều qua một hộp xác nhận nạp lại chi tiết phiếu (GET phiếu)
+   * để hiện đủ lô, kho, người lập, từng kiện (mã, đơn, khách, ý khách, trạng thái, ô kệ).
+   */
+  const decisionTarget = approveTarget || rejectTarget;
+  const decisionReview = useSubmitReviewData(
+    decisionTarget ? decisionTarget.inboundRequestId || decisionTarget.id : "",
+    () => getInboundRequestDetail(decisionTarget.inboundRequestId || decisionTarget.id),
+  );
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -120,6 +228,7 @@ export default function OperationsInboundApprovalsPage() {
       try {
         await approveInboundRequest(row.inboundRequestId || row.id);
         AuthNotify.success(`Đã duyệt phiếu ${row.inboundCode}. Kho có thể xếp kệ.`);
+        setApproveTarget(null);
         setDetail(null);
         await fetchRows();
       } catch (error) {
@@ -189,8 +298,7 @@ export default function OperationsInboundApprovalsPage() {
                 type="primary"
                 size="small"
                 icon={<CheckOutlined />}
-                loading={submitting}
-                onClick={() => handleApprove(row)}
+                onClick={() => setApproveTarget(row)}
               >
                 Duyệt
               </Button>
@@ -210,7 +318,7 @@ export default function OperationsInboundApprovalsPage() {
         },
       },
     ],
-    [openDetail, handleApprove, submitting],
+    [openDetail],
   );
 
   return (
@@ -403,35 +511,7 @@ export default function OperationsInboundApprovalsPage() {
               size="small"
               pagination={false}
               dataSource={detail.parcels || []}
-              columns={[
-                { title: "Mã kiện", dataIndex: "packageCode" },
-                { title: "Đơn", dataIndex: "orderCode", render: (v) => v || "—" },
-                { title: "Khách", dataIndex: "customerName", render: (v) => v || "—" },
-                {
-                  /*
-                   * Khách muốn giao ngay mà kiện lại nằm trong phiếu nhập kho là dấu hiệu lệch:
-                   * hoặc khách gọi đổi ý (hợp lệ), hoặc kho tick nhầm. Tô cảnh báo để OM hỏi lại
-                   * trước khi ký duyệt, thay vì duyệt xong mới phát hiện.
-                   */
-                  title: "Ý khách",
-                  dataIndex: "customerIntent",
-                  render: (value, row) => {
-                    if (!value) return <Tag>Chưa chọn</Tag>;
-
-                    return value === "DIRECT_DELIVERY" ? (
-                      <Tag color="warning" title={row.customerIntentText}>
-                        Muốn giao ngay
-                      </Tag>
-                    ) : (
-                      <Tag color="success" title={row.customerIntentText}>
-                        Muốn gửi kho
-                      </Tag>
-                    );
-                  },
-                },
-                { title: "Trạng thái", dataIndex: "packageStatus" },
-                { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "Chưa xếp" },
-              ]}
+              columns={INBOUND_PARCEL_COLUMNS}
               locale={{ emptyText: "Phiếu chưa có kiện nào." }}
             />
 
@@ -440,8 +520,7 @@ export default function OperationsInboundApprovalsPage() {
                 <Button
                   type="primary"
                   icon={<CheckOutlined />}
-                  loading={submitting}
-                  onClick={() => handleApprove(detail)}
+                  onClick={() => setApproveTarget(detail)}
                 >
                   Duyệt phiếu
                 </Button>
@@ -462,14 +541,39 @@ export default function OperationsInboundApprovalsPage() {
       </Drawer>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
+        open={Boolean(approveTarget)}
+        title={`Duyệt phiếu nhập kho ${approveTarget?.inboundCode || ""}`}
+        okText={decisionReview.loading ? "Đang tải thông tin…" : "Duyệt phiếu"}
+        cancelText="Huỷ"
+        okButtonProps={{ loading: submitting, disabled: decisionReview.loading }}
+        onOk={() => handleApprove(approveTarget)}
+        onCancel={() => setApproveTarget(null)}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Duyệt xong kho được xếp các kiện dưới đây lên kệ kho Việt Nam."
+        />
+        {approveTarget ? (
+          <InboundDecisionReview target={approveTarget} review={decisionReview} />
+        ) : null}
+      </Modal>
+
+      <Modal
+        {...REVIEW_MODAL_PROPS}
         open={Boolean(rejectTarget)}
         title={`Từ chối phiếu ${rejectTarget?.inboundCode || ""}`}
-        okText="Xác nhận từ chối"
+        okText={decisionReview.loading ? "Đang tải thông tin…" : "Xác nhận từ chối"}
         cancelText="Huỷ"
-        okButtonProps={{ danger: true, loading: submitting }}
+        okButtonProps={{ danger: true, loading: submitting, disabled: decisionReview.loading }}
         onOk={handleReject}
         onCancel={() => setRejectTarget(null)}
       >
+        {rejectTarget ? (
+          <InboundDecisionReview target={rejectTarget} review={decisionReview} />
+        ) : null}
         <Text type="secondary">Lý do sẽ hiển thị cho kho, nên ghi rõ để họ xử lý tiếp.</Text>
         <Input.TextArea
           rows={4}

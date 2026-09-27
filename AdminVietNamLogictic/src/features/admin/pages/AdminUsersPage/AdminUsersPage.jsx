@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import {
+  Alert,
   Button,
   Descriptions,
   Drawer,
@@ -17,9 +18,11 @@ import {
   Table,
   Tag,
   Tooltip,
+  Typography,
 } from "antd";
 import {
   EyeOutlined,
+  HomeOutlined,
   LockOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -37,9 +40,11 @@ import {
   unlockAdminUser,
   updateAdminUserRole,
 } from "@features/admin/api/adminService";
+import { isWarehouseRole } from "@features/admin/api/adminUserService";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "@features/admin/styles/AdminPage.css";
+import UserWarehouseAssignModal from "@features/admin/components/UserWarehouseAssignModal/UserWarehouseAssignModal";
 
 const ROLE_OPTIONS = [
   { value: "Admin", label: "Quản trị viên" },
@@ -48,6 +53,27 @@ const ROLE_OPTIONS = [
   { value: "WarehouseStaff", label: "Nhân viên kho" },
   { value: "Delivery", label: "Nhân viên giao nhận" },
 ];
+
+/*
+ * Luật của PUT /api/User/{id}/role (backend thật):
+ *  - KHÔNG gán được vai trò Admin → khoá lựa chọn Admin trong hộp phân quyền;
+ *  - region rỗng = GIỮ NGUYÊN, không có cách xoá vùng → chặn lưu khi Admin xoá trống ô vùng
+ *    của tài khoản đang có vùng (không giả lập "đã xoá vùng");
+ *  - đổi vai trò khỏi vai trò kho / đổi vùng khi tài khoản đang được gán kho → 400, hiện
+ *    nguyên message của server.
+ */
+const ROLE_EDIT_OPTIONS = ROLE_OPTIONS.map((option) =>
+  option.value === "Admin"
+    ? { ...option, disabled: true, label: `${option.label} (máy chủ không cho gán)` }
+    : option
+);
+
+/** Tên chuẩn của vai trò nhân viên kho — các biến thể khác vẫn chạy nhưng nên đổi về tên này. */
+const STANDARD_WAREHOUSE_ROLE = "WarehouseStaff";
+
+/** Vai trò kho viết khác chuẩn ("Warehouse Staff VN", "WarehouseTQ", "Warehouse"...). */
+const isNonStandardWarehouseRole = (role) =>
+  isWarehouseRole(role) && String(role).trim() !== STANDARD_WAREHOUSE_ROLE;
 
 const INITIAL_CREATE_FORM = {
   fullName: "",
@@ -97,6 +123,8 @@ export default function AdminUsersPage() {
   const [detailUser, setDetailUser] = useState(null);
   const [createForm, setCreateForm] = useState(INITIAL_CREATE_FORM);
   const [roleForm, setRoleForm] = useState({ role: "", region: "" });
+  /* Tài khoản vai trò kho đang mở hộp "Gán kho" (null = đóng). */
+  const [warehouseAssignUser, setWarehouseAssignUser] = useState(null);
   const queryRef = useRef(query);
   const searchGuardTimersRef = useRef([]);
 
@@ -165,7 +193,18 @@ export default function AdminUsersPage() {
         return false;
       }
       if (!keyword) return true;
-      return [user.fullName, user.email, user.phone, user.role, user.region, user.status]
+      return [
+        user.fullName,
+        user.email,
+        user.phone,
+        user.role,
+        user.region,
+        user.status,
+        ...(user.assignedWarehouses || []).flatMap((warehouse) => [
+          warehouse.warehouseName,
+          warehouse.warehouseCode,
+        ]),
+      ]
         .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
     });
   }, [query, roleFilter, statusFilter, userTypeFilter, users]);
@@ -233,8 +272,23 @@ export default function AdminUsersPage() {
     setRoleOpen(true);
   };
 
+  const roleEditBlockedReason = (() => {
+    if (!selectedUser) return "";
+    if (String(roleForm.role).trim().toLowerCase() === "admin") {
+      return "Máy chủ không cho gán vai trò Admin (kể cả chỉ đổi vùng của tài khoản Admin) — thao tác này bị khoá.";
+    }
+    if (String(selectedUser.region || "").trim() && !roleForm.region.trim()) {
+      return `Máy chủ không xoá được vùng: để trống sẽ GIỮ NGUYÊN vùng ${selectedUser.region}. Nhập lại vùng hoặc giữ nguyên.`;
+    }
+    return "";
+  })();
+
   const submitRole = async () => {
     if (!selectedUser?.id || !roleForm.role) return;
+    if (roleEditBlockedReason) {
+      AuthNotify.warning("Không thể lưu", roleEditBlockedReason);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -310,7 +364,14 @@ export default function AdminUsersPage() {
         key: "role",
         width: 145,
         sorter: (a, b) => compareText(a.role, b.role),
-        render: (value) => <Tag color="blue">{value || "—"}</Tag>,
+        render: (value) =>
+          isNonStandardWarehouseRole(value) ? (
+            <Tag color="orange" title={`Vai trò kho viết khác chuẩn — nên đổi sang ${STANDARD_WAREHOUSE_ROLE}`}>
+              {value}
+            </Tag>
+          ) : (
+            <Tag color="blue">{value || "—"}</Tag>
+          ),
       },
       {
         title: "Loại tài khoản",
@@ -326,6 +387,43 @@ export default function AdminUsersPage() {
         width: 100,
         sorter: (a, b) => compareText(a.region, b.region),
         render: (value) => value || "—",
+      },
+      {
+        title: "Kho phụ trách",
+        dataIndex: "assignedWarehouses",
+        key: "assignedWarehouses",
+        width: 240,
+        sorter: (a, b) =>
+          (a.assignedWarehouses?.length || 0) - (b.assignedWarehouses?.length || 0),
+        render: (value, record) => {
+          if (!isWarehouseRole(record.role)) return <Typography.Text type="secondary">—</Typography.Text>;
+          const assigned = Array.isArray(value) ? value : [];
+          return (
+            <div className="uwa-assigned">
+              {assigned.length ? (
+                <Space size={[4, 4]} wrap>
+                  {assigned.map((warehouse) => (
+                    <Tag key={warehouse.warehouseId} color="geekblue">
+                      {warehouse.warehouseName || warehouse.warehouseCode || "Kho"}
+                    </Tag>
+                  ))}
+                </Space>
+              ) : (
+                <Typography.Text type="secondary">
+                  {record.region ? `Chưa gán — theo vùng ${record.region}` : "Chưa gán, chưa có vùng"}
+                </Typography.Text>
+              )}
+              <Button
+                type="link"
+                size="small"
+                icon={<HomeOutlined />}
+                onClick={() => setWarehouseAssignUser(record)}
+              >
+                Gán kho
+              </Button>
+            </div>
+          );
+        },
       },
       {
         title: "Trạng thái",
@@ -573,16 +671,59 @@ export default function AdminUsersPage() {
         confirmLoading={saving}
         mask={{ closable: !saving }}
         destroyOnHidden
+        okButtonProps={{ disabled: Boolean(roleEditBlockedReason) }}
         onOk={submitRole}
         onCancel={() => !saving && setRoleOpen(false)}
         className="admin-editor-modal"
       >
+        {roleEditBlockedReason ? (
+          <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={roleEditBlockedReason} />
+        ) : null}
+        {selectedUser?.assignedWarehouses?.length ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`Tài khoản đang được gán ${selectedUser.assignedWarehouses.length} kho`}
+            description="Đổi vai trò khỏi vai trò kho hoặc đổi vùng sẽ bị máy chủ từ chối — bỏ gán kho trước (nút “Gán kho”)."
+          />
+        ) : null}
+        {isNonStandardWarehouseRole(roleForm.role) ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`Vai trò “${roleForm.role}” là cách viết khác của Nhân viên kho`}
+            description={
+              <>
+                Hệ thống vẫn nhận, nhưng nên dùng đúng <b>{STANDARD_WAREHOUSE_ROLE}</b> và khai vùng ở ô
+                “Khu vực” (VN → giao diện Kho Việt Nam; CN/JP/KR… → Kho quốc tế).{" "}
+                <Button
+                  size="small"
+                  type="link"
+                  onClick={() => setRoleForm((current) => ({ ...current, role: STANDARD_WAREHOUSE_ROLE }))}
+                >
+                  Dùng {STANDARD_WAREHOUSE_ROLE}
+                </Button>
+              </>
+            }
+          />
+        ) : null}
+        {isWarehouseRole(roleForm.role) && !roleForm.region.trim() && !selectedUser?.assignedWarehouses?.length ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message="Nhân viên kho chưa có vùng"
+            description="Tài khoản trống vùng và chưa gán kho sẽ không thao tác được kho. Nhập vùng (VN, CN, JP, KR…) hoặc gán kho."
+          />
+        ) : null}
         <div className="admin-form-grid admin-form-grid--single">
           <label className="admin-form-field">
             <span>Vai trò <b>*</b></span>
             <Select
               value={roleForm.role}
-              options={ROLE_OPTIONS}
+              options={ROLE_EDIT_OPTIONS}
               onChange={(value) => setRoleForm((current) => ({ ...current, role: value }))}
             />
           </label>
@@ -595,6 +736,18 @@ export default function AdminUsersPage() {
           </label>
         </div>
       </Modal>
+
+      {warehouseAssignUser ? (
+        <UserWarehouseAssignModal
+          key={warehouseAssignUser.id}
+          user={warehouseAssignUser}
+          onClose={() => setWarehouseAssignUser(null)}
+          onSaved={() => {
+            setWarehouseAssignUser(null);
+            loadUsers();
+          }}
+        />
+      ) : null}
 
       <Drawer
         open={detailOpen}

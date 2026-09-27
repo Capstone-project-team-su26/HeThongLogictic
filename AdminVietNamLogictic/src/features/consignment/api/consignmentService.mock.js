@@ -71,7 +71,8 @@ import { getConsignmentReceiptApi } from "./consignmentReceiptService.mock";
 ========================= */
 
 const DEFAULT_DEPOSIT_PERCENT = 30;
-const DEFAULT_VOLUMETRIC_DIVISOR = 6000;
+/* Mặc định cuối của backend (QuotationService.Helpers.GetVolumetricDivisor) khi thiếu rule. */
+const DEFAULT_VOLUMETRIC_DIVISOR = 5000;
 
 const readActivePricingRuleValue = (ruleCode) => {
   const rule = findPricingRuleByCode(ruleCode);

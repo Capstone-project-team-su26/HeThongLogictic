@@ -198,6 +198,8 @@ export const SALE_WORKSPACES = Object.freeze({
         label: "Chăm sóc khách hàng",
         Icon: CustomerServiceOutlined,
         component: CustomerServiceChat,
+        /* Hội thoại còn tin khách chưa đọc. */
+        badgeKey: SALE_BADGE_KEYS.support,
       },
     ],
   },

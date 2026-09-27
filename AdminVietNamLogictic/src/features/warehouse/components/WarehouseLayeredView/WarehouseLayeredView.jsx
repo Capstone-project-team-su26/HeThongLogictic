@@ -20,6 +20,7 @@ import {
   InboxOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
+import { getZoneTypeMeta } from "@features/warehouse/api/warehouseZoneService";
 
 const { Text, Title } = Typography;
 
@@ -104,6 +105,10 @@ export default function WarehouseLayeredView({
                       KHU VỰC (ZONE): {displayZoneName.toUpperCase()}
                     </Title>
                     <Badge count={`${zoneBinCount} ô chứa`} className="zone-badge-count" />
+                    {(() => {
+                      const meta = getZoneTypeMeta(zone.zoneType);
+                      return <Tag color={meta.color} style={{ margin: 0 }}>{meta.label}</Tag>;
+                    })()}
                   </Space>
                   <Button
                     type="primary"
@@ -144,6 +149,10 @@ export default function WarehouseLayeredView({
                           const userNote = getCleanUserNote(bin.note);
                           const binInventories = getBinInventories(bin);
                           const parcelCount = binInventories.length;
+                          /* Mức lấp đầy thật: tổng thể tích kiện (cm³) / dung tích ô (cm³). */
+                          const usedVolume = binInventories.reduce((sum, inv) => sum + (Number(inv.actualVolume) || 0), 0);
+                          const maxVolume = Number(bin.maxVolume ?? bin.capacity) || 0;
+                          const fillPercent = maxVolume > 0 ? Math.min(100, Math.round((usedVolume / maxVolume) * 100)) : 0;
 
                           return (
                             <div
@@ -165,7 +174,7 @@ export default function WarehouseLayeredView({
                               {/* Capacity Fill Gauge */}
                               <div className="bin-capacity-bar">
                                 <Progress
-                                  percent={isActive ? (parcelCount > 0 ? Math.min(100, parcelCount * 45) : 15) : 0}
+                                  percent={isActive ? fillPercent : 0}
                                   size="small"
                                   showInfo={false}
                                   strokeColor={isActive ? { "0%": "#10b981", "100%": "#3b82f6" } : "#cbd5e1"}

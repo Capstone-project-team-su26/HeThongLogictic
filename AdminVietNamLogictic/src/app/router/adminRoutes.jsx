@@ -17,6 +17,7 @@ import AdminDeliveriesPage from "@features/admin/pages/AdminDeliveriesPage/Admin
 import AdminShipmentsPage from "@features/shipment/pages/AdminShipmentsPage/AdminShipmentsPage";
 import AdminReceivingNotesPage from "@features/receiving/pages/AdminReceivingNotesPage/AdminReceivingNotesPage";
 import AdminWarehouseManagersPage from "@features/warehouse/pages/AdminWarehouseManagersPage/AdminWarehouseManagersPage";
+import SystemParameters from "@features/pricing/pages/SystemParameters/SystemParameters";
 import {
   CarriersAdminPage,
   ExchangeRatesAdminPage,
@@ -98,6 +99,7 @@ export const adminRoutes = (
       element={<ServicePricingsAdminPage />}
     />
     <Route path={rel(ADMIN.pricingRules)} element={<PricingRulesAdminPage />} />
+    <Route path={rel(ADMIN.systemParameters)} element={<SystemParameters />} />
     <Route
       path={rel(ADMIN.exchangeRates)}
       element={<ExchangeRatesAdminPage />}

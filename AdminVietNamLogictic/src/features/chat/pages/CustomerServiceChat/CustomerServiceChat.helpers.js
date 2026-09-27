@@ -535,7 +535,7 @@ export const getConversationRelatedCode = (conversation) => {
     conversation?.requestCode ||
     conversation?.consignmentCode ||
     conversation?.purchaseRequestCode ||
-    conversation?.relatedId ||
+    /* KHÔNG rơi xuống relatedId: đó là GUID, không phải mã đơn khách nhìn thấy. */
     ""
   );
 };
@@ -547,14 +547,9 @@ export const getConversationSubtitle = (conversation) => {
   if (relatedType) {
     const typeLabel = getRelatedTypeLabel(relatedType);
 
+    /* In đủ mã đơn thật (VCL-20260917161921-540135...); dòng quá dài thì CSS tự "…". */
     if (relatedCode) {
-      const displayCode = String(relatedCode);
-      const shortCode =
-        displayCode.length > 12
-          ? `${displayCode.slice(0, 10)}…`
-          : displayCode;
-
-      return `${typeLabel} · ${shortCode}`;
+      return `${typeLabel} · ${relatedCode}`;
     }
 
     return typeLabel;
@@ -1133,15 +1128,13 @@ export const validateImageFile = (file) => {
     .trim()
     .toLowerCase();
 
-  const extensionIsAccepted = /\.(?:jpe?g|png|webp)$/i.test(
-    String(file.name || ""),
-  );
-
-  if (
-    !ACCEPTED_CHAT_IMAGE_TYPES.has(mimeType) &&
-    !extensionIsAccepted
-  ) {
+  /* Backend kiểm theo Content-Type (không theo đuôi file): MIME rỗng / HEIC là bị 400. */
+  if (!ACCEPTED_CHAT_IMAGE_TYPES.has(mimeType)) {
     throw new Error("Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP.");
+  }
+
+  if (!(Number(file.size) > 0)) {
+    throw new Error("Ảnh rỗng, vui lòng chọn ảnh khác.");
   }
 
   if (file.size > MAX_IMAGE_SIZE_BYTES) {

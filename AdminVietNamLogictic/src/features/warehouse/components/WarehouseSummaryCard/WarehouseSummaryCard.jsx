@@ -17,13 +17,16 @@ export default function WarehouseSummaryCard({
   if (!selectedWarehouse) return null;
 
   const inactiveBins = totalBins - activeBins;
-  const rawType = selectedWarehouse.warehouseType || "KHO VẬN HÀNH";
+  const rawType = String(selectedWarehouse.warehouseType || "").toUpperCase() || "KHO VẬN HÀNH";
   const warehouseTypeLabel =
     rawType === "DESTINATION"
       ? "Kho Đích (Destination)"
       : rawType === "ORIGIN"
       ? "Kho Nguồn (Origin)"
+      : rawType === "DOMESTIC"
+      ? "Kho Nội Địa (Domestic)"
       : rawType;
+  const region = selectedWarehouse.region || selectedWarehouse.regionCode;
 
   return (
     <div className="admin-warehouse-summary-card">
@@ -38,11 +41,16 @@ export default function WarehouseSummaryCard({
               {selectedWarehouse.name}
             </Title>
             <Tag color="blue" className="warehouse-code-badge">
-              {selectedWarehouse.code || "VN_WH"}
+              {selectedWarehouse.code || "Chưa có mã"}
             </Tag>
             <Tag color="cyan" className="warehouse-type-badge">
               <TagOutlined /> {warehouseTypeLabel}
             </Tag>
+            {region && (
+              <Tag color="geekblue" className="warehouse-type-badge">
+                Vùng {region}
+              </Tag>
+            )}
           </div>
 
           <div className="warehouse-address-row">

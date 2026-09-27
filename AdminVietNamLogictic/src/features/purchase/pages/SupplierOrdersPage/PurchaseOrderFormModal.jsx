@@ -24,8 +24,13 @@ import {
 } from "antd";
 
 import {
+  DEFAULT_PRICE_TOLERANCE_RATE,
+  formatSignedPercent,
+  formatSignedVnd,
   formatVnd,
-  getRemainingQuantity,
+  getClosedUnfulfilledQuantities,
+  getLineAvailability,
+  getPriceDiffInfo,
   summarizePriceDifference,
 } from "./SupplierOrdersPage.helpers";
 
@@ -42,6 +47,8 @@ export default function PurchaseOrderFormModal({
   mode = "create",
   request,
   existingOrders = [],
+  refunds = [],
+  toleranceRate,
   editingOrder = null,
   suppliers = [],
   warehouses = [],
@@ -68,33 +75,47 @@ export default function PurchaseOrderFormModal({
     setNote(editingOrder?.purchaseNote || "");
 
     const requestItems = request?.items || [];
+    const closedQuantities = getClosedUnfulfilledQuantities(refunds);
 
     setLines(
       requestItems.map((item) => {
         const picked = (editingOrder?.items || []).find(
-          (line) => line.purchaseRequestItemId === item.purchaseRequestItemId
+          (line) =>
+            String(line.purchaseRequestItemId).toLowerCase() ===
+            String(item.purchaseRequestItemId).toLowerCase()
         );
 
-        const remaining = getRemainingQuantity(
+        const availability = getLineAvailability(
           item,
           existingOrders,
-          editingOrder?.purchaseOrderId || ""
+          editingOrder?.purchaseOrderId || "",
+          closedQuantities
         );
+
+        /* Giá đã báo: số backend dùng khi lập đơn (dòng báo giá ACCEPTED); null = không có trong báo giá. */
+        const quotedUnitPrice =
+          item.quotedUnitPrice === null || item.quotedUnitPrice === undefined
+            ? null
+            : Number(item.quotedUnitPrice) || 0;
 
         return {
           purchaseRequestItemId: item.purchaseRequestItemId,
           productName: item.productName || item.name || "—",
           requestedQuantity: Number(item.quantity) || 0,
-          remaining,
-          quotedUnitPrice: Number(item.quotedUnitPrice ?? item.unitPrice) || 0,
-          quantity: picked ? Number(picked.quantity) || 0 : remaining,
+          remaining: availability.remaining,
+          takenBy: availability.takenBy,
+          closed: availability.closed,
+          inQuotation: availability.inQuotation,
+          quotedUnitPrice,
+          quantity: picked ? Number(picked.quantity) || 0 : availability.remaining,
+          /* Lập mới: gợi ý sẵn đơn giá = giá đã báo (VND) để Sale chỉ sửa dòng lệch. */
           unitPrice: picked
             ? Number(picked.unitPriceOriginal ?? picked.unitPrice) || 0
-            : Number(item.unitPrice) || 0,
+            : quotedUnitPrice ?? 0,
         };
       })
     );
-  }, [open, request, editingOrder, existingOrders]);
+  }, [open, request, editingOrder, existingOrders, refunds]);
 
   const linesWithVnd = useMemo(
     () =>
@@ -105,7 +126,10 @@ export default function PurchaseOrderFormModal({
     [lines, currency, exchangeRate]
   );
 
-  const tolerance = Number(editingOrder?.priceToleranceRate) || 5;
+  /* Ngưỡng backend trả trên mỗi đơn mua (`priceToleranceRate`); chưa có đơn nào thì mặc định 5%. */
+  const tolerance = Number.isFinite(Number(toleranceRate)) && toleranceRate !== null && toleranceRate !== undefined
+    ? Number(toleranceRate)
+    : DEFAULT_PRICE_TOLERANCE_RATE;
 
   const summary = useMemo(
     () => summarizePriceDifference(linesWithVnd, tolerance),
@@ -115,6 +139,10 @@ export default function PurchaseOrderFormModal({
   const chosenLines = linesWithVnd.filter((line) => line.quantity > 0);
 
   const overBooked = linesWithVnd.filter((line) => line.quantity > line.remaining);
+
+  const purchasableLines = linesWithVnd.filter((line) => line.remaining > 0);
+
+  const unquotedChosen = chosenLines.filter((line) => !(line.quotedUnitPrice > 0));
 
   const updateLine = (id, patch) =>
     setLines((previous) =>
@@ -137,12 +165,14 @@ export default function PurchaseOrderFormModal({
       })),
     });
 
-  const disabledReason = !supplierId
+  const disabledReason = !purchasableLines.length
+    ? "Yêu cầu này không còn sản phẩm nào mua được"
+    : !supplierId
     ? "Chọn nhà cung cấp"
     : !chosenLines.length
       ? "Chọn ít nhất một sản phẩm với số lượng > 0"
       : overBooked.length
-        ? "Có dòng mua vượt số lượng khách đặt"
+        ? "Có dòng mua vượt số lượng còn mua được"
         : currency !== "VND" && !(Number(exchangeRate) > 0)
           ? "Nhập tỷ giá quy đổi"
           : "";
@@ -156,21 +186,33 @@ export default function PurchaseOrderFormModal({
           <Text strong>{value}</Text>
           <div>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Khách đặt {row.requestedQuantity} · còn mua được {row.remaining}
+              Khách đặt {row.requestedQuantity}
+              {row.closed > 0 ? ` · đã đóng ${row.closed}` : ""} · còn mua được {row.remaining}
             </Text>
           </div>
+          {row.takenBy && (
+            <Tag color="default" style={{ marginTop: 4, whiteSpace: "normal" }}>
+              Đã nằm trong {row.takenBy}
+            </Tag>
+          )}
+          {!row.inQuotation && (
+            <Tag color="error" style={{ marginTop: 4 }}>
+              Không có trong báo giá đã chấp nhận
+            </Tag>
+          )}
         </div>
       ),
     },
     {
       title: "SL mua",
       dataIndex: "quantity",
-      width: 110,
+      width: 96,
       render: (value, row) => (
         <InputNumber
           min={0}
           max={row.remaining}
           value={value}
+          disabled={row.remaining <= 0}
           style={{ width: "100%" }}
           onChange={(next) =>
             updateLine(row.purchaseRequestItemId, { quantity: Number(next) || 0 })
@@ -181,11 +223,12 @@ export default function PurchaseOrderFormModal({
     {
       title: `Đơn giá mua (${currency})`,
       dataIndex: "unitPrice",
-      width: 160,
+      width: 150,
       render: (value, row) => (
         <InputNumber
           min={0}
           value={value}
+          disabled={row.remaining <= 0}
           style={{ width: "100%" }}
           formatter={(raw) => String(raw ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
           parser={(raw) => String(raw ?? "").replace(/\./g, "")}
@@ -199,36 +242,68 @@ export default function PurchaseOrderFormModal({
       title: "Giá đã báo khách",
       dataIndex: "quotedUnitPrice",
       width: 150,
-      render: (value, row) => {
-        const diff = row.unitPriceVnd - value;
-
-        return (
+      align: "right",
+      render: (value, row) =>
+        value === null ? (
+          <Text type="secondary">—</Text>
+        ) : (
           <div>
             <Text>{formatVnd(value)}</Text>
-            {value > 0 && Math.abs(diff) >= 1 && (
+            {row.quantity > 0 && (
               <div>
-                <Text type={diff > 0 ? "danger" : "success"} style={{ fontSize: 12 }}>
-                  {diff > 0 ? "+" : ""}
-                  {formatVnd(diff)}
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  × {row.quantity} = {formatVnd(value * row.quantity)}
                 </Text>
               </div>
             )}
           </div>
-        );
-      },
+        ),
     },
     {
       title: "Thành tiền",
       key: "lineTotal",
-      width: 140,
+      width: 130,
+      align: "right",
       render: (_, row) => <Text strong>{formatVnd(row.unitPriceVnd * row.quantity)}</Text>,
+    },
+    {
+      title: "Chênh",
+      key: "lineDiff",
+      width: 150,
+      align: "right",
+      render: (_, row) => {
+        if (!(row.quantity > 0)) return <Text type="secondary">—</Text>;
+
+        const info = getPriceDiffInfo({
+          actual: row.unitPriceVnd * row.quantity,
+          quoted: (row.quotedUnitPrice || 0) * row.quantity,
+          toleranceRate: tolerance,
+        });
+
+        if (!info.hasQuote) {
+          return <Tag color="default">Chưa có giá báo</Tag>;
+        }
+
+        return (
+          <div>
+            <Tag color={info.tone} style={{ marginInlineEnd: 0 }}>
+              {formatSignedPercent(info.rate)}
+            </Tag>
+            <div>
+              <Text style={{ fontSize: 12 }} type={info.direction === "over" ? "danger" : info.direction === "under" ? "success" : "secondary"}>
+                {formatSignedVnd(info.diff)}
+              </Text>
+            </div>
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <Modal
       open={open}
-      width={980}
+      width={1080}
       destroyOnClose
       title={mode === "edit" ? "Sửa đơn mua nhà cung cấp" : "Lập đơn mua nhà cung cấp"}
       onCancel={onCancel}
@@ -258,8 +333,28 @@ export default function PurchaseOrderFormModal({
               showIcon
               style={{ marginBottom: 14 }}
               message={`Yêu cầu ${request.purchaseCode || ""} · ${request.customerName || "—"}`}
-              description="Chỉ mua được phần khách đã trả trước. Một yêu cầu có thể chia cho nhiều nhà cung cấp; mỗi đơn mua sẽ sinh một đơn kho riêng."
+              description="Chỉ mua được phần khách đã trả trước. Một yêu cầu có thể chia cho nhiều nhà cung cấp (mỗi sản phẩm nằm trong một đơn mua); mỗi đơn mua sẽ sinh một đơn kho riêng."
             />
+
+            {request.quotationStatus && !request.quotationAccepted && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 14 }}
+                message="Báo giá mới nhất của yêu cầu chưa ở trạng thái khách chấp nhận"
+                description="Giá đã báo bên dưới lấy từ báo giá mới nhất; backend lập đơn theo báo giá khách đã chấp nhận nên số cuối cùng có thể khác."
+              />
+            )}
+
+            {mode === "create" && !purchasableLines.length && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 14 }}
+                message="Yêu cầu này không còn sản phẩm nào mua được"
+                description="Mọi sản phẩm đã nằm trong đơn mua khác còn hiệu lực hoặc đã đóng phần không mua được. Muốn đổi giá / NCC thì sửa đơn mua đang có."
+              />
+            )}
 
             <Row gutter={[12, 12]} style={{ marginBottom: 14 }}>
               <Col xs={24} md={8}>
@@ -349,7 +444,7 @@ export default function PurchaseOrderFormModal({
                 <div style={{ textAlign: "right" }}>
                   <div>
                     <Text type="secondary">Đã báo khách: </Text>
-                    <Text>{formatVnd(summary.quoted)}</Text>
+                    <Text>{summary.hasQuote ? formatVnd(summary.quoted) : "—"}</Text>
                   </div>
                   <div>
                     <Text type="secondary">Mua thực: </Text>
@@ -357,22 +452,60 @@ export default function PurchaseOrderFormModal({
                   </div>
                   <div>
                     <Text type="secondary">Chênh: </Text>
-                    <Tag color={summary.exceeded ? "error" : summary.diff > 0 ? "warning" : "success"}>
-                      {summary.diff > 0 ? "+" : ""}
-                      {formatVnd(summary.diff)} ({summary.rate.toFixed(1)}%)
-                    </Tag>
+                    {summary.hasQuote ? (
+                      <Tag color={summary.tone} style={{ marginInlineEnd: 0 }}>
+                        {formatSignedVnd(summary.diff)} ({formatSignedPercent(summary.rate)})
+                      </Tag>
+                    ) : (
+                      <Tag color="default" style={{ marginInlineEnd: 0 }}>—</Tag>
+                    )}
+                  </div>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Ngưỡng cho phép {tolerance}%
+                    </Text>
                   </div>
                 </div>
               </Col>
             </Row>
+
+            {chosenLines.length > 0 && !summary.hasQuote && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 12 }}
+                message="Chưa có giá đã báo khách để so"
+                description="Không tính được % chênh. Kiểm tra báo giá khách đã chấp nhận của yêu cầu trước khi gửi duyệt."
+              />
+            )}
+
+            {summary.hasQuote && unquotedChosen.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 12 }}
+                message="Có sản phẩm chưa có giá đã báo khách"
+                description={unquotedChosen.map((line) => line.productName).join(" · ")}
+              />
+            )}
 
             {summary.exceeded && (
               <Alert
                 type="warning"
                 showIcon
                 style={{ marginTop: 12 }}
-                message={`Giá mua thực vượt giá đã báo ${summary.rate.toFixed(1)}% (ngưỡng ${tolerance}%)`}
+                message={`Giá mua thực vượt giá đã báo ${formatSignedPercent(summary.rate)} (ngưỡng ${tolerance}%)`}
                 description="Gửi duyệt xong, đơn sẽ sang trạng thái chờ khách xem phần chênh. Khách đồng ý và trả xong thì Admin mới duyệt ngân sách được."
+              />
+            )}
+
+            {summary.hasQuote && summary.direction === "under" && (
+              <Alert
+                type="success"
+                showIcon
+                style={{ marginTop: 12 }}
+                message={`Mua rẻ hơn giá đã báo ${formatSignedVnd(summary.diff)} (${formatSignedPercent(summary.rate)})`}
+                description="Gửi duyệt xong, hệ thống lập khoản hoàn phần chênh cho khách (từ 1.000 ₫ trở lên)."
               />
             )}
 
@@ -381,7 +514,7 @@ export default function PurchaseOrderFormModal({
                 type="error"
                 showIcon
                 style={{ marginTop: 12 }}
-                message="Có dòng mua vượt số lượng khách đặt"
+                message="Có dòng mua vượt số lượng còn mua được"
                 description={overBooked
                   .map((line) => `${line.productName}: mua ${line.quantity}, còn ${line.remaining}`)
                   .join(" · ")}

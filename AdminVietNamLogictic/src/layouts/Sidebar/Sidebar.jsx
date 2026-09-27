@@ -258,6 +258,17 @@ const MENU_BY_ROLE = {
       label: "Giá và phụ phí",
       icon: <CalculatorOutlined />,
       children: [
+        /*
+          Đặt ĐẦU nhóm vì đây là chỗ Admin vào nhiều nhất: các con số điều khiển cách
+          tính tiền (tỷ lệ cọc, ngưỡng lệch giá mua hộ, phí huỷ, hệ số quy đổi, VAT).
+          "Quy tắc phụ phí" bên dưới là bảng danh mục thô, dùng khi cần thêm/xoá dòng.
+        */
+        {
+          key: "admin-system-parameters",
+          label: "Tham số vận hành",
+          icon: <SettingOutlined />,
+          path: "/admin/system-parameters",
+        },
         {
           key: "admin-service-pricings",
           label: "Bảng giá vận chuyển",
@@ -405,6 +416,8 @@ const MENU_BY_ROLE = {
     },
     {
       key: "sale-customers",
+      /* Chat CSKH là tab của mục này: hội thoại còn tin khách chưa đọc. */
+      badgeKey: SALE_BADGE_KEYS.support,
       label: "Khách hàng",
       icon: <TeamOutlined />,
       path: "/sale/customers",

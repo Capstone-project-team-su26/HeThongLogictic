@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Input, Modal, Select } from "antd";
 import {
   BankOutlined,
@@ -16,6 +16,7 @@ import {
 } from "@features/customer/api/customerService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import CustomerAddressSelector from "@shared/components/VietnamAddressSelector/VietnamAddressSelector";
+import { getAddressSelectionError } from "@shared/api/vietnamAddressService";
 import "./EditCustomerSale.css";
 
 const STATUS_OPTIONS = [
@@ -88,6 +89,8 @@ export default function EditCustomerSale({
 }) {
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
+  /* meta của ô địa chỉ GoShip — chưa chọn đủ 3 cấp thì Form chặn lưu. */
+  const addressMetaRef = useRef(null);
   const customerId = customer?.id || customer?.customerId || "";
 
   const initialValues = useMemo(
@@ -204,11 +207,27 @@ export default function EditCustomerSale({
             <Form.Item name="taxId" label="Mã số thuế">
               <Input prefix={<IdcardOutlined />} />
             </Form.Item>
-            <Form.Item name="address" label="Địa chỉ" className="is-full">
+            <Form.Item
+              name="address"
+              label="Địa chỉ"
+              className="is-full"
+              rules={[
+                {
+                  validator: () => {
+                    const message = getAddressSelectionError(addressMetaRef.current);
+                    return message ? Promise.reject(new Error(message)) : Promise.resolve();
+                  },
+                },
+              ]}
+            >
               <CustomerAddressSelector
                 key={displayValues.address}
                 initialAddress={displayValues.address}
-                onAddressChange={(address) => form.setFieldValue("address", address)}
+                onAddressChange={(address, meta) => {
+                  addressMetaRef.current = meta;
+                  form.setFieldValue("address", address);
+                  form.validateFields(["address"]).catch(() => {});
+                }}
               />
             </Form.Item>
           </div>

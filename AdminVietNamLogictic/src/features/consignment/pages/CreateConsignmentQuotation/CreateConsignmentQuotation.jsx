@@ -849,20 +849,34 @@ export default function CreateConsignmentQuotation() {
       draftQuotation?.additionalFees
     ).map((group) => {
       const fees = group.fees.map((fee) => {
-        const key = itemFeeKey(
-          group.orderItemId,
-          fee.feeId
+        /*
+         * Phí thùng (PACKING_FEE) không gắn quy tắc phí nên KHÔNG sửa được qua API —
+         * backend chỉ nhận cặp (orderItemId, feeId = PRICING_RULES.id) là dịch vụ khách
+         * đã chọn (QuotationService.Send.cs, vòng AdditionalFees). Hiển thị chỉ-đọc để
+         * Sale vẫn thấy khoản đó trong tổng tiền.
+         *
+         * KHÔNG dựa vào `feeId` thô của backend: nó rơi về ID DÒNG PHÍ khi dòng không có
+         * quy tắc, trước đây làm phí thùng thành "sửa được" rồi gửi ID dòng phí lên →
+         * 400 "Không tìm thấy quy định phí với ID". normalizeQuotationFee đã bóc về
+         * pricingRuleId thật (null nếu không có).
+         */
+        const ruleId = normalizeText(
+          fee.pricingRuleId
         );
 
-        const override =
-          itemFeeOverrides[key];
+        const editable =
+          Boolean(ruleId) &&
+          normalizeUpperText(fee.feeType) !==
+          "PACKING_FEE";
 
-        /*
-         * Phí thùng gỗ (PACKING_FEE) không gắn pricingRuleId nên KHÔNG sửa được
-         * qua API — backend chỉ nhận cặp (orderItemId, feeId) là dịch vụ khách
-         * đã chọn. Hiển thị chỉ-đọc để Sale vẫn thấy khoản đó trong tổng tiền.
-         */
-        const editable = Boolean(fee.feeId);
+        const key = itemFeeKey(
+          group.orderItemId,
+          ruleId || fee.id
+        );
+
+        const override = editable
+          ? itemFeeOverrides[key]
+          : undefined;
 
         const enabled = override
           ? override.enabled !== false
@@ -932,10 +946,17 @@ export default function CreateConsignmentQuotation() {
     () =>
       getOrderLevelFees(
         draftQuotation?.additionalFees
-      ).map((fee) => ({
-        ...fee,
-        amount: roundMoney(fee.amount),
-      })),
+      )
+        .map((fee) => ({
+          ...fee,
+          amount: roundMoney(fee.amount),
+        }))
+        /*
+         * Bỏ dòng 0đ. Đó là bản ghi lưu vết của quy tắc trong DB, không phải khoản tiền —
+         * in ra thì Sale (và khách khi nghe Sale đọc) thấy "VAT dịch vụ logistics 0đ"
+         * trong khi hoá đơn vẫn có VAT thật, vì hai dòng đó là hai bản ghi khác nhau.
+         */
+        .filter((fee) => fee.amount > 0),
     [draftQuotation?.additionalFees]
   );
 
@@ -969,7 +990,7 @@ export default function CreateConsignmentQuotation() {
     const itemFeeRuleIds = new Set(
       itemFeeGroups.flatMap((group) =>
         group.fees
-          .map((fee) => fee.feeId)
+          .map((fee) => fee.pricingRuleId)
           .filter(Boolean)
       )
     );
@@ -997,6 +1018,25 @@ export default function CreateConsignmentQuotation() {
           code !== PRICING_RULE_CODE.VAT &&
           code !==
           PRICING_RULE_CODE.IMPORT_TAX &&
+          /*
+           * Bỏ luôn THÙNG GỖ khỏi mục phụ phí cả đơn.
+           *
+           * Tiền thùng gỗ tính hoàn toàn theo cỡ thùng chọn cho TỪNG KIỆN
+           * (packageConfigurationId); dòng WOOD_CRATE trong bảng quy tắc chỉ để hiện tên
+           * dịch vụ cho khách tick chọn, `value` của nó không phải khoản thu. Để nó ở đây
+           * thì Sale thấy "Đóng thùng gỗ · bảng giá 35.000đ" và dễ cộng thêm một khoản mà
+           * hệ thống không hề thu — đúng chỗ đã làm màn xác nhận của khách báo dư 35.000đ.
+           */
+          !code.includes("WOOD") &&
+          !code.includes("CRATE") &&
+          /*
+           * Hệ số/ngưỡng tính cước (MIN_WEIGHT) và phí mua hộ (PURCHASE_FEE_*) không phải
+           * phụ phí đơn ký gửi: backend bỏ qua khi gửi, để ở đây Sale tưởng đã thu.
+           */
+          !code.includes("MIN_WEIGHT") &&
+          !code.startsWith("PURCHASE_FEE") &&
+          normalizeUpperText(rule?.ruleType) !==
+          "PURCHASE_FEE" &&
           !itemFeeRuleIds.has(
             normalizeText(rule?.id)
           )
@@ -1677,7 +1717,8 @@ export default function CreateConsignmentQuotation() {
                 fee.isOverridden
             )
             .map((fee) => ({
-              feeId: fee.feeId,
+              /* ID QUY TẮC PHÍ, không phải ID dòng phí (QUOTATION_FEES.id). */
+              feeId: fee.pricingRuleId,
               orderItemId:
                 group.orderItemId,
               code: fee.code,
@@ -1912,8 +1953,38 @@ export default function CreateConsignmentQuotation() {
 
         packageRows:
           selectedPackageRows,
+
+        /*
+         * ĐỦ THÔNG TIN TRƯỚC KHI GỬI: hộp xác nhận trước đây không có hàng của đơn, người
+         * nhận, và không báo trước báo giá sẽ phải chờ Admin duyệt giá. Thêm nguyên dữ liệu
+         * đã có (chi tiết đơn + cờ giá ngoại lệ đang tính trên màn), không tính lại gì.
+         */
+        items: Array.isArray(detail?.items)
+          ? detail.items
+          : [],
+        receiverName:
+          detail?.receiverName || "",
+        receiverPhone:
+          detail?.receiverPhone || "",
+        receiverAddress:
+          detail?.receiverAddress || "",
+        customerEmail:
+          detail?.customer?.email || "",
+        totalWeightKg,
+        outOfPriceList:
+          hasOutOfPriceListEdit,
+        overrideReason:
+          normalizeText(
+            watchedOverrideReason
+          ),
+        replacesPendingApproval:
+          pendingPriceApproval,
       };
     }, [
+      totalWeightKg,
+      hasOutOfPriceListEdit,
+      watchedOverrideReason,
+      pendingPriceApproval,
       detail,
       selectedWarehouse,
       selectedServicePricing,
@@ -2550,7 +2621,7 @@ export default function CreateConsignmentQuotation() {
 
                             {!fee.editable && (
                               <small>
-                                Phí thùng gỗ — hệ thống tính, không sửa được
+                                Phí đóng thùng — hệ thống tính theo cỡ thùng, không sửa được
                               </small>
                             )}
                           </div>

@@ -38,6 +38,15 @@ import {
 } from "@features/incident";
 import { getOrderPayments } from "@features/settlement";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+  ReviewMoney,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
+/* Khách (kèm mã) + hàng khai của đơn cho hai hộp xác nhận — hành trình không mang mấy thứ này. */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/operations/styles/OperationsPage.css";
 
 const { Text, Title } = Typography;
@@ -82,6 +91,15 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeNote, setCompleteNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  /*
+   * Hai hộp ghi của màn (bật / tắt giữ hàng, chốt đơn hoàn thành) trước đây chỉ có một câu
+   * mô tả, thậm chí không có mã đơn. Giờ hiện đủ: đơn, chặng, từng kiện bị ảnh hưởng, sự cố
+   * còn mở, tiền còn lại — phần lớn đã nạp sẵn trên màn — cộng khách + hàng khai của đơn.
+   */
+  const orderReview = useOrderReview(holdModal || completeOpen ? orderId : "", {
+    withPayments: false,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -141,6 +159,114 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
 
   const stageMeta = getStageMeta(tracking?.currentStage);
   const events = Array.isArray(tracking?.events) ? [...tracking.events].reverse() : [];
+
+
+  /* Dữ kiện chung của đơn cho hai hộp xác nhận. */
+  const renderActionReview = () => {
+    if (!tracking) return null;
+    const parcels = Array.isArray(tracking.parcels) ? tracking.parcels : [];
+    const openIncidents = incidents.filter(
+      (row) => String(row.status || "").toUpperCase() !== "RESOLVED",
+    );
+    const unpaidCompensation = incidents.filter(
+      (row) =>
+        String(row.resolution || "").toUpperCase() === "COMPENSATE" && !row.compensationPaidAt,
+    );
+    const paymentRows = Array.isArray(payments?.payments) ? payments.payments : [];
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
+        <ReviewFacts
+          items={[
+            { label: "Mã đơn", value: <Text strong>{tracking.consignmentCode || "—"}</Text> },
+            { label: "Trạng thái đơn", value: tracking.orderStatus },
+            {
+              label: "Chặng hiện tại",
+              value: `${tracking.currentStageText || getStageMeta(tracking.currentStage).label}${
+                tracking.isSplitAcrossStages ? " · kiện đi tách chuyến" : ""
+              }`,
+            },
+            {
+              label: "Giữ hàng hiện tại",
+              value: tracking.exportHold
+                ? `Đang giữ — ${tracking.exportHoldReason || "không ghi lý do"}`
+                : "Không",
+            },
+            {
+              label: "Kiện · chuyến",
+              value: `${parcels.length} kiện · ${(tracking.shipments || []).length} chuyến`,
+            },
+            {
+              label: "Sự cố còn mở",
+              value: openIncidents.length ? (
+                <Text type="danger">
+                  {openIncidents.length} sự cố ({openIncidents.map((row) => row.incidentCode).join(", ")})
+                </Text>
+              ) : (
+                "Không"
+              ),
+            },
+            {
+              label: "Bồi thường chưa chi",
+              value: unpaidCompensation.length ? (
+                <Text type="danger">{unpaidCompensation.length} khoản</Text>
+              ) : (
+                "Không"
+              ),
+            },
+          ]}
+        />
+        <ReviewItemsTable
+          title="Kiện của đơn"
+          items={parcels}
+          rowKey={(row, index) => row?.parcelId || index}
+          extra={`${parcels.length} kiện`}
+          columns={[
+            { title: "Mã kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
+            { title: "Hàng", dataIndex: "productName", render: (v) => v || "—" },
+            {
+              title: "Chặng",
+              dataIndex: "stage",
+              render: (v, row) => (
+                <Tag color={getStageMeta(v).color}>{row.stageText || getStageMeta(v).label}</Tag>
+              ),
+            },
+            { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => v || "—" },
+            { title: "Chuyến", dataIndex: "shipmentCode", render: (v) => v || "—" },
+          ]}
+        />
+        {payments ? (
+          <ReviewMoney
+            title="Thanh toán của đơn"
+            lines={[
+              { label: "Tổng hoá đơn", value: payments.totalBillAmount },
+              { label: "Khách đã trả", value: payments.totalPaid, tone: "success" },
+              {
+                label: "Còn lại",
+                value: payments.remaining,
+                strong: true,
+                tone: Number(payments.remaining) > 0 ? "warning" : undefined,
+              },
+              ...paymentRows.map((row, index) => ({
+                key: row.paymentId || `p-${index}`,
+                label: row.installmentType || "Khoản thanh toán",
+                hint: row.paidAt ? `trả lúc ${formatDateTime(row.paidAt)}` : "",
+                value: `${formatMoney(row.amount)} · ${getPaymentStatusMeta(row.paymentStatus).label}`,
+              })),
+            ]}
+          />
+        ) : (
+          <Alert type="warning" showIcon message="Chưa tải được các khoản thanh toán của đơn." />
+        )}
+        <OrderReviewPanel
+          review={orderReview}
+          fallback={{ orderCode: tracking.consignmentCode }}
+          showMoney={false}
+          errorHint="Bạn vẫn thao tác được; dữ kiện hành trình phía trên đã đủ."
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="ops-page">
@@ -351,14 +477,24 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
       </Spin>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={!!holdModal}
-        title={holdModal?.hold ? "Giữ hàng tại kho nguồn thay khách" : "Tắt giữ hàng"}
-        okText={holdModal?.hold ? "Bật giữ hàng" : "Tắt giữ hàng"}
+        title={`${holdModal?.hold ? "Giữ hàng tại kho nguồn thay khách" : "Tắt giữ hàng"} · ${
+          tracking?.consignmentCode || ""
+        }`}
+        okText={
+          orderReview.loading ? "Đang tải thông tin…" : holdModal?.hold ? "Bật giữ hàng" : "Tắt giữ hàng"
+        }
         cancelText="Huỷ"
-        okButtonProps={{ loading: submitting, danger: holdModal?.hold, disabled: holdModal?.hold && !holdReason.trim() }}
+        okButtonProps={{
+          loading: submitting,
+          danger: holdModal?.hold,
+          disabled: orderReview.loading || (holdModal?.hold && !holdReason.trim()),
+        }}
         onOk={submitHold}
         onCancel={() => setHoldModal(null)}
       >
+        {holdModal ? renderActionReview() : null}
         {holdModal?.hold ? (
           <>
             <Alert
@@ -381,14 +517,16 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
       </Modal>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={completeOpen}
         title={`Chốt đơn ${tracking?.consignmentCode || ""} hoàn thành`}
-        okText="Chốt đơn"
+        okText={orderReview.loading ? "Đang tải thông tin…" : "Chốt đơn"}
         cancelText="Huỷ"
-        okButtonProps={{ loading: submitting }}
+        okButtonProps={{ loading: submitting, disabled: orderReview.loading }}
         onOk={submitComplete}
         onCancel={() => setCompleteOpen(false)}
       >
+        {completeOpen ? renderActionReview() : null}
         <Alert
           type="warning"
           showIcon

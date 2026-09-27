@@ -48,13 +48,14 @@ import {
   markConversationAsReadApi,
   sendConversationMessageApi,
 } from "@features/chat/api/conversationApi";
+/* Upload ảnh THẬT (POST /api/uploads/images) qua lớp mỏng trên @shared/api/uploadImage. */
+import { uploadChatImages } from "@features/chat/api/chatImageUploadApi";
 import SalesAiAssistantPanel from "@features/chat/components/SalesAiAssistantPanel/SalesAiAssistantPanel";
 
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 
-import { uploadImages } from "@shared/api/uploadImage";
-
 import {
+  CONVERSATION_LIST_POLL_INTERVAL_MS,
   INITIAL_CREATE_FORM,
   INITIAL_MESSAGE_FORM,
   MAX_IMAGE_COUNT,
@@ -137,6 +138,7 @@ export default function CustomerServiceChat() {
 
   const messagesSignatureRef = useRef("");
   const isSilentRefreshingRef = useRef(false);
+  const isListPollingRef = useRef(false);
   const didInitGroupCollapseRef = useRef(false);
 
   const [conversations, setConversations] = useState([]);
@@ -375,11 +377,7 @@ export default function CustomerServiceChat() {
       return [];
     }
 
-    const uploadResponse = await uploadImages(
-      files,
-      undefined,
-      { showNotification: false },
-    );
+    const uploadResponse = await uploadChatImages(files);
 
     const uploadedUrls = extractUploadUrls(uploadResponse);
 
@@ -490,6 +488,86 @@ export default function CustomerServiceChat() {
       );
     } finally {
       setIsLoadingList(false);
+    }
+  };
+
+  /*
+   * Poll hộp thư (không spinner, không tự chọn hội thoại): hội thoại khách vừa mở và số tin
+   * chưa đọc của các hội thoại KHÁC hiện ra mà không phải bấm "Làm mới".
+   *
+   * Danh sách backend không kèm tin nhắn nên lastMessage chỉ là câu tóm tắt tình trạng. Hội
+   * thoại chưa có hoạt động mới (updatedAt không đổi) thì giữ nguyên dòng xem trước đã dựng
+   * từ chi tiết; hội thoại đang mở thì luôn 0 chưa đọc vì khung chat tự đánh dấu đã đọc.
+   */
+  const pollConversationsSilently = async () => {
+    if (
+      isListPollingRef.current ||
+      (typeof document !== "undefined" &&
+        document.visibilityState === "hidden")
+    ) {
+      return;
+    }
+
+    isListPollingRef.current = true;
+
+    try {
+      const response = await getConversationsApi();
+      const activeId = selectedConversationIdRef.current;
+      const incoming = normalizeConversationList(response).map(
+        normalizeConversationTime
+      );
+
+      setConversations((current) => {
+        const previousById = new Map(
+          current.map((item) => [getConversationId(item), item])
+        );
+
+        return incoming
+          .map((conversation) => {
+            const id = getConversationId(conversation);
+            const previous = previousById.get(id);
+            let next = conversation;
+
+            if (
+              previous &&
+              String(previous.updatedAt || "") ===
+                String(conversation.updatedAt || "")
+            ) {
+              next = {
+                ...conversation,
+                lastMessage: previous.lastMessage,
+                latestMessage: previous.latestMessage,
+                lastMessageAt: previous.lastMessageAt,
+                latestMessageAt: previous.latestMessageAt,
+                lastMessageAtUtc: previous.lastMessageAtUtc,
+                latestMessageAtUtc: previous.latestMessageAtUtc,
+              };
+            }
+
+            if (id && id === activeId) {
+              next = {
+                ...next,
+                unreadCount: 0,
+                unreadMessages: 0,
+                unread: 0,
+              };
+            }
+
+            return next;
+          })
+          .sort(
+            (firstConversation, secondConversation) =>
+              getTimeValue(secondConversation) -
+              getTimeValue(firstConversation)
+          );
+      });
+    } catch (error) {
+      console.debug(
+        "Silent conversation list refresh failed:",
+        error?.response?.data || error?.message
+      );
+    } finally {
+      isListPollingRef.current = false;
     }
   };
 
@@ -799,6 +877,16 @@ export default function CustomerServiceChat() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      pollConversationsSilently();
+    }, CONVERSATION_LIST_POLL_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   const handleOpenCreateModal = () => {
     setErrorMessage("");
@@ -1653,9 +1741,15 @@ export default function CustomerServiceChat() {
                       <div className="cskh-chat-title__status">
                         <span className="cskh-status-dot" />
                         <span className="cskh-status-text">
+                          {/* Liên kết đơn: mã đơn THẬT (relatedCode) backend trả về. */}
+                          {selectedConversation?.relatedType
+                            ? `${getConversationSubtitle(selectedConversation)} · `
+                            : ""}
                           {hasAssignedStaff(selectedConversation)
                             ? `Nhân viên: ${getStaffDisplayName(selectedConversation)}`
-                            : "Đang hỗ trợ trực tuyến"}
+                            : isSaleViewer
+                              ? "Chưa có nhân viên nhận — trả lời để nhận hội thoại"
+                              : "Đang hỗ trợ trực tuyến"}
                         </span>
                       </div>
                     </div>

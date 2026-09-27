@@ -6,7 +6,7 @@
  */
 import {
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
 
 import {
   apiToUtcIso,

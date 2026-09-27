@@ -28,7 +28,7 @@ import {
   mapStatusLabel,
   querySalesOrderStatus,
 } from "@features/chat/api/saleAiService";
-import { getConsignmentsApi } from "@features/consignment/api/consignmentService.mock";
+import { getConsignmentsApi } from "@features/consignment/api/consignmentService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "./SalesAiAssistantPanel.css";
 

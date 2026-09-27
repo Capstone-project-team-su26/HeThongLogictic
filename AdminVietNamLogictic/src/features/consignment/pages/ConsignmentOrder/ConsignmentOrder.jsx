@@ -21,6 +21,7 @@ import "@shared/styles/create-request.css";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import {
   createConsignmentApi,
+  previewConsignmentApi,
   validateConsignmentItemsApi,
 } from "@features/consignment/api/consignmentService";
 import {
@@ -35,18 +36,17 @@ import {
  * tạo hộ. Endpoint đúng là GET /api/customers/{customerId}/delivery-addresses.
  */
 import {
+  createCustomerDeliveryAddressApi,
   getCustomerDeliveryAddressesApi,
   searchCustomersApi,
 } from "@features/customer/api/customerLookupService";
-import {
-  getDistrictsByProvinceCode,
-  getFullAddressByCodes,
-  getProvinces,
-  getWardsByDistrictCode,
-} from "@shared/api/vietnamAddressService";
+/* Danh mục hành chính GoShip THẬT (GET /api/Goship/...) — ghép địa chỉ bằng đúng tên GoShip. */
+import { getFullAddressByCodes } from "@shared/api/vietnamAddressService";
+import AddressSelect from "@shared/components/AddressSelect/AddressSelect";
+import useAddressOptions from "@shared/components/AddressSelect/useAddressOptions";
 import { Tooltip } from "antd";
 import PackageOptionalServices from "@features/consignment/components/PackageOptionalServices/PackageOptionalServices";
-import pricingRuleService from "@features/pricing/api/pricingRuleService.mock";
+import pricingRuleService from "@features/pricing/api/pricingRuleService";
 import {
   ACCEPTED_IMAGE_TYPES,
   DESTINATION_HANDLING_OPTIONS,
@@ -84,6 +84,7 @@ import {
   getOrderTotals,
   getOrderTotalsError,
   FORM_FIELD_VALIDATORS,
+  MAX_PACKAGES_MESSAGE,
   ORDER_LIMITS,
   PACKAGE_LIMITS,
 } from "./ConsignmentOrder.helpers";
@@ -190,6 +191,32 @@ const SelectField = ({
   </div>
 );
 
+/* Ô chọn tỉnh/huyện/xã có tìm không dấu + lỗi tải "Thử lại" (AddressSelect dùng chung). */
+const AddressSelectField = ({ label, value, error, list, disabled, placeholder, onChange }) => (
+  <div className="input-field-group">
+    <label className="field-label required-label">
+      <EnvironmentOutlined />
+      {label}
+    </label>
+
+    <AddressSelect
+      value={value}
+      options={list.options}
+      loading={list.loading}
+      loadError={list.error}
+      onRetry={list.retry}
+      disabled={disabled}
+      placeholder={placeholder}
+      invalid={Boolean(error)}
+      errorClassName="input-has-error"
+      ariaLabel={label}
+      onChange={onChange}
+    />
+
+    <FieldError message={error} />
+  </div>
+);
+
 export default function ConsignmentOrder() {
   const navigate = useNavigate();
   const fileInputRefs = useRef({});
@@ -264,13 +291,15 @@ export default function ConsignmentOrder() {
   );
   const [newAddressError, setNewAddressError] = useState("");
 
-  const [provinceOptions, setProvinceOptions] = useState([]);
-  const [districtOptions, setDistrictOptions] = useState([]);
-  const [wardOptions, setWardOptions] = useState([]);
-
-  const [isLoadingProvinces, setIsLoadingProvinces] = useState(false);
-  const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
-  const [isLoadingWards, setIsLoadingWards] = useState(false);
+  /* Tỉnh → huyện → xã GoShip thật; huyện/xã tự về rỗng khi đổi mã cha. */
+  const addressLists = useAddressOptions({
+    provinceCode: newAddressForm.provinceCode,
+    districtCode: newAddressForm.districtCode,
+    enabled: isAddingAddress,
+  });
+  const provinceOptions = addressLists.provinces.options;
+  const districtOptions = addressLists.districts.options;
+  const wardOptions = addressLists.wards.options;
 
   const [activeLightboxImg, setActiveLightboxImg] = useState(null);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -300,6 +329,8 @@ export default function ConsignmentOrder() {
             packageConfigurationsResult,
           ] = await Promise.allSettled([
             pricingRuleService.getPricingRules({
+              /* Bỏ VAT / thuế nhập khẩu / phí mua hộ — xem chú thích ở PackageOptionalServices. */
+              orderType: "CONSIGNMENT",
               signal:
                 controller.signal,
               onlyActive: false,
@@ -564,8 +595,6 @@ export default function ConsignmentOrder() {
     setNewAddressForm(createEmptyAddressForm());
     setNewAddressErrors(createEmptyAddressErrors());
     setNewAddressError("");
-    setDistrictOptions([]);
-    setWardOptions([]);
   };
 
   const updateNewAddressForm = (field, value) => {
@@ -592,15 +621,6 @@ export default function ConsignmentOrder() {
         [field]: value,
       };
     });
-
-    if (field === "provinceCode") {
-      setDistrictOptions([]);
-      setWardOptions([]);
-    }
-
-    if (field === "districtCode") {
-      setWardOptions([]);
-    }
 
     setNewAddressErrors((previous) => ({
       ...previous,
@@ -824,116 +844,6 @@ export default function ConsignmentOrder() {
   }, [form.customerId, loadCustomerDeliveryAddresses, updateForm]);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    const loadProvinces = async () => {
-      try {
-        setIsLoadingProvinces(true);
-
-        const data = await getProvinces({
-          signal: controller.signal,
-        });
-
-        setProvinceOptions(data);
-      } catch (error) {
-        if (!isCanceledRequest(error)) {
-          AuthNotify.error(
-            "Không tải được địa chỉ",
-            getApiErrorMessage(
-              error,
-              "Không thể tải danh sách tỉnh/thành phố.",
-            ),
-          );
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingProvinces(false);
-        }
-      }
-    };
-
-    loadProvinces();
-
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadDistricts = async () => {
-      if (!newAddressForm.provinceCode) {
-        setDistrictOptions([]);
-        setWardOptions([]);
-        return;
-      }
-
-      try {
-        setIsLoadingDistricts(true);
-
-        const data = await getDistrictsByProvinceCode(
-          newAddressForm.provinceCode,
-          {
-            signal: controller.signal,
-          },
-        );
-
-        setDistrictOptions(data);
-      } catch (error) {
-        if (!isCanceledRequest(error)) {
-          AuthNotify.error(
-            "Không tải được quận/huyện",
-            getApiErrorMessage(error, "Không thể tải danh sách quận/huyện."),
-          );
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingDistricts(false);
-        }
-      }
-    };
-
-    loadDistricts();
-
-    return () => controller.abort();
-  }, [newAddressForm.provinceCode]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    const loadWards = async () => {
-      if (!newAddressForm.districtCode) {
-        setWardOptions([]);
-        return;
-      }
-
-      try {
-        setIsLoadingWards(true);
-
-        const data = await getWardsByDistrictCode(newAddressForm.districtCode, {
-          signal: controller.signal,
-        });
-
-        setWardOptions(data);
-      } catch (error) {
-        if (!isCanceledRequest(error)) {
-          AuthNotify.error(
-            "Không tải được phường/xã",
-            getApiErrorMessage(error, "Không thể tải danh sách phường/xã."),
-          );
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingWards(false);
-        }
-      }
-    };
-
-    loadWards();
-
-    return () => controller.abort();
-  }, [newAddressForm.districtCode]);
-
-  useEffect(() => {
     packagesRef.current = packages;
   }, [packages]);
 
@@ -952,6 +862,7 @@ export default function ConsignmentOrder() {
 
   /* Số liệu cộng dồn để vẽ thanh giới hạn — cập nhật theo từng phím gõ. */
   const orderTotals = useMemo(() => getOrderTotals(packages), [packages]);
+  const isPackageLimitReached = packages.length >= ORDER_LIMITS.maxPackages;
 
   const scrollToFirstError = () => {
     window.setTimeout(() => {
@@ -969,13 +880,16 @@ export default function ConsignmentOrder() {
   /* ================= ADDRESS ================= */
 
   /*
-   * "Dùng địa chỉ này" — KHÔNG gọi API.
+   * "Dùng địa chỉ này" — ghép tỉnh/huyện/xã + số nhà thành MỘT CHUỖI, LƯU vào sổ địa
+   * chỉ của khách rồi mới đưa vào ReceiverAddress của đơn.
    *
-   * Sale không có quyền ghi vào sổ địa chỉ của khách: POST|PUT|DELETE
-   * /api/delivery-addresses đều [Authorize(Roles = "Customer")], gọi bằng token Sale
-   * chỉ ăn 403. Nên phần này chỉ ghép tỉnh/huyện/xã + số nhà thành MỘT CHUỖI rồi đưa
-   * vào ReceiverAddress của đơn — đúng kiểu dữ liệu DTO nhận. Địa chỉ gõ tay không
-   * được lưu lại vào sổ của khách; muốn lưu thì khách phải tự thêm bên app khách.
+   * Trước đây phần này không gọi API nào: POST /api/delivery-addresses là
+   * [Authorize(Roles = "Customer")], token Sale chỉ ăn 403, nên địa chỉ gõ tay chỉ
+   * sống được đúng một đơn rồi mất — lần sau Sale phải gõ lại từ đầu.
+   *
+   * Nay có đường riêng cho nhân viên (POST /api/customers/{id}/delivery-addresses).
+   * Lưu HỎNG thì vẫn cho dùng địa chỉ đó cho đơn đang tạo và nói rõ là chưa lưu được:
+   * việc chính của màn này là tạo đơn, không phải quản lý sổ địa chỉ.
    */
   const handleUseManualAddress = async () => {
     if (isSubmitting) {
@@ -1031,6 +945,21 @@ export default function ConsignmentOrder() {
      * trên biến `form` của lần render hiện tại, mà địa chỉ vừa đặt chưa kịp vào state,
      * nên sẽ báo "chưa chọn địa chỉ" ngay sau khi vừa chọn. updateForm đã tự xoá lỗi.
      */
+    let savedToBook = false;
+
+    if (form.customerId) {
+      try {
+        await createCustomerDeliveryAddressApi(form.customerId, { address });
+        savedToBook = true;
+        await loadCustomerDeliveryAddresses(form.customerId);
+      } catch (error) {
+        console.error(
+          "[ConsignmentOrder] Không lưu được địa chỉ vào sổ của khách:",
+          error,
+        );
+      }
+    }
+
     updateForm("selectedDeliveryAddress", address);
     setTouchedFields((previous) => ({
       ...previous,
@@ -1040,10 +969,17 @@ export default function ConsignmentOrder() {
     resetNewAddressForm();
     setIsAddingAddress(false);
 
-    AuthNotify.success(
-      "Đã chọn địa chỉ giao hàng",
-      "Địa chỉ này chỉ dùng cho đơn đang tạo, không được lưu vào sổ địa chỉ của khách.",
-    );
+    if (savedToBook) {
+      AuthNotify.success(
+        "Đã chọn địa chỉ giao hàng",
+        "Địa chỉ đã được lưu vào sổ của khách, lần sau chọn lại không phải gõ.",
+      );
+    } else {
+      AuthNotify.warning(
+        "Đã chọn địa chỉ giao hàng",
+        "Chưa lưu được vào sổ địa chỉ của khách — địa chỉ này chỉ dùng cho đơn đang tạo.",
+      );
+    }
   };
 
   /* ================= PACKAGE ================= */
@@ -1429,7 +1365,7 @@ export default function ConsignmentOrder() {
   };
 
   const handleAddPackage = () => {
-    if (isSubmitting) {
+    if (isSubmitting || packages.length >= ORDER_LIMITS.maxPackages) {
       return;
     }
 
@@ -1816,12 +1752,82 @@ export default function ConsignmentOrder() {
     return result.isValid;
   };
 
+  /**
+   * Payload gửi backend — dùng cho CẢ ước tính lẫn tạo đơn thật.
+   *
+   * Ảnh kiện không ảnh hưởng tới tiền nên bản ước tính bỏ qua bước upload. Mọi trường
+   * còn lại giữ y hệt: lệch một trường là backend tính ra số khác, mà đúng cái cần ở đây
+   * là hai bên phải ra cùng một số.
+   */
+  const buildItemPayload = (pkg, referenceUrls = []) => ({
+    productName: pkg.productName.trim(),
+    productType: pkg.productType,
+    quantity: Number(pkg.quantity),
+    weight: Number(pkg.weight),
+    width: Number(pkg.width),
+    height: Number(pkg.height),
+    length: Number(pkg.length),
+    declaredValue: Number(pkg.declaredValue),
+    referenceUrls,
+    domesticTrackingCode: pkg.trackingCode.trim() || null,
+    packageConfigurationId:
+      form.optionalServices?.requiresWoodenCrate === true
+        ? normalizePackageConfigurationMap(
+            form.optionalServices?.packageConfigurationByPackageId,
+          )[pkg.id] || null
+        : null,
+  });
+
+  const buildRequestPayload = (items) => ({
+    /* Chủ đơn. Backend tra bằng đúng Customer.Id này (CustomerLookupHelper). */
+    customerId: form.customerId,
+    route: form.route,
+    shippingOption: form.shippingOption,
+    receiverName: form.receiverName.trim(),
+    receiverPhone: form.receiverPhone.trim(),
+    receiverAddress: form.selectedDeliveryAddress.trim(),
+    defaultDestinationHandling: form.defaultDestinationHandling,
+    note: form.note.trim(),
+    items,
+  });
+
+  /*
+   * Ước tính chi phí do BACKEND tính, lấy khi mở màn xác nhận. Màn này không tự cộng tiền:
+   * trình duyệt và backend tính bằng hai đoạn mã khác nhau thì số sớm muộn cũng lệch.
+   */
+  const [estimate, setEstimate] = useState(null);
+  const [estimateError, setEstimateError] = useState("");
+  const [isEstimating, setIsEstimating] = useState(false);
+
   const handleOpenConfirmation = () => {
     if (isSubmitting || !validateForm()) {
       return;
     }
 
     setIsConfirming(true);
+
+    /*
+     * Hỏi backend giá ngay khi mở màn xác nhận, để Sale đọc cho khách nghe đúng con số hệ
+     * thống sẽ phát hành. Hỏng thì màn vẫn mở và nói rõ là chưa lấy được ước tính.
+     */
+    setIsEstimating(true);
+    setEstimateError("");
+    setEstimate(null);
+
+    previewConsignmentApi(
+      buildRequestPayload(packages.map((pkg) => buildItemPayload(pkg))),
+    )
+      .then((result) => {
+        setEstimate(result || null);
+        setIsEstimating(false);
+      })
+      .catch((error) => {
+        setEstimate(null);
+        setEstimateError(
+          error?.message || "Chưa lấy được ước tính chi phí.",
+        );
+        setIsEstimating(false);
+      });
 
     window.setTimeout(() => {
       window.scrollTo({
@@ -1859,28 +1865,8 @@ export default function ConsignmentOrder() {
             .map((image) => uploadPackageImage(image.fileObj)),
         );
 
-        items.push({
-          productName: pkg.productName.trim(),
-          productType: pkg.productType,
-          quantity: Number(pkg.quantity),
-          weight: Number(pkg.weight),
-          width: Number(pkg.width),
-          height: Number(pkg.height),
-          length: Number(pkg.length),
-          declaredValue: Number(pkg.declaredValue),
-          referenceUrls,
-          domesticTrackingCode:
-            pkg.trackingCode.trim() || null,
-          packageConfigurationId:
-            form.optionalServices
-              ?.requiresWoodenCrate === true
-              ? normalizePackageConfigurationMap(
-                  form.optionalServices
-                    ?.packageConfigurationByPackageId,
-                )[pkg.id] || null
-              : null,
-
-        });
+        /* Cùng một hàm dựng với bản ước tính — khác đúng mỗi danh sách ảnh. */
+        items.push(buildItemPayload(pkg, referenceUrls));
       }
 
       setSubmitMessage("Đang kiểm tra thông tin kiện hàng...");
@@ -1975,6 +1961,9 @@ export default function ConsignmentOrder() {
         }
         isSubmitting={isSubmitting}
         submitMessage={submitMessage}
+        estimate={estimate}
+        estimateError={estimateError}
+        isEstimating={isEstimating}
         onBack={() => setIsConfirming(false)}
         onConfirm={handleCreateOrder}
       />
@@ -2308,9 +2297,9 @@ export default function ConsignmentOrder() {
                   <div className="route-select-helper">
                     <InfoCircleOutlined />
                     <span>
-                      Sổ địa chỉ do khách tự quản lý; nhân viên chỉ xem được.
-                      Địa chỉ nhập tay chỉ dùng cho đơn này, không lưu vào sổ
-                      của khách.
+                      Địa chỉ nhập tay sẽ được lưu vào sổ của khách để lần sau
+                      chọn lại, không phải gõ lại. Sửa và xoá vẫn do khách tự làm
+                      bên app khách.
                     </span>
                   </div>
 
@@ -2409,12 +2398,11 @@ export default function ConsignmentOrder() {
                 </>
               ) : (
                 <div className="add-address-inline-form">
-                  <SelectField
+                  <AddressSelectField
                     label="TỈNH / THÀNH PHỐ"
                     value={newAddressForm.provinceCode}
                     error={newAddressErrors.provinceCode}
-                    options={provinceOptions}
-                    loading={isLoadingProvinces}
+                    list={addressLists.provinces}
                     disabled={isSubmitting}
                     placeholder="-- Chọn tỉnh/thành phố --"
                     onChange={(value) =>
@@ -2422,32 +2410,26 @@ export default function ConsignmentOrder() {
                     }
                   />
 
-                  <SelectField
+                  <AddressSelectField
                     label="QUẬN / HUYỆN"
                     value={newAddressForm.districtCode}
                     error={newAddressErrors.districtCode}
-                    options={districtOptions}
-                    loading={isLoadingDistricts}
-                    disabled={
-                      isSubmitting ||
-                      !newAddressForm.provinceCode
-                    }
+                    list={addressLists.districts}
+                    disabled={isSubmitting ||
+                      !newAddressForm.provinceCode}
                     placeholder="-- Chọn quận/huyện --"
                     onChange={(value) =>
                       updateNewAddressForm("districtCode", value)
                     }
                   />
 
-                  <SelectField
+                  <AddressSelectField
                     label="PHƯỜNG / XÃ"
                     value={newAddressForm.wardCode}
                     error={newAddressErrors.wardCode}
-                    options={wardOptions}
-                    loading={isLoadingWards}
-                    disabled={
-                      isSubmitting ||
-                      !newAddressForm.districtCode
-                    }
+                    list={addressLists.wards}
+                    disabled={isSubmitting ||
+                      !newAddressForm.districtCode}
                     placeholder="-- Chọn phường/xã --"
                     onChange={(value) =>
                       updateNewAddressForm("wardCode", value)
@@ -2544,7 +2526,9 @@ export default function ConsignmentOrder() {
             <div className="order-limit-bar">
               <div className="order-limit-bar__item">
                 <span className="order-limit-bar__label">Số kiện</span>
-                <strong>{orderTotals.packageCount}</strong>
+                <strong>
+                  {orderTotals.packageCount} / {ORDER_LIMITS.maxPackages}
+                </strong>
               </div>
 
               <LimitMeter
@@ -2986,10 +2970,10 @@ export default function ConsignmentOrder() {
 
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isPackageLimitReached}
               className={[
                 "add-package-dashed-trigger",
-                isSubmitting && "add-package-disabled",
+                (isSubmitting || isPackageLimitReached) && "add-package-disabled",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -2998,6 +2982,10 @@ export default function ConsignmentOrder() {
               <PlusCircleOutlined className="plus-dashed-icon" />
               <span>THÊM KIỆN HÀNG MỚI</span>
             </button>
+
+            {isPackageLimitReached && (
+              <FieldError message={MAX_PACKAGES_MESSAGE} />
+            )}
 
             <div
               className="form-main-card consignment-general-note-card"

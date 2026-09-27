@@ -42,6 +42,11 @@ import {
   getDocumentTypeLabel,
 } from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 
 const { Text, Title } = Typography;
 
@@ -423,15 +428,20 @@ export default function ShipmentTimelineDrawer({
         />
       </Spin>
 
+      {/*
+        Ghi mốc = báo cho MỌI khách có đơn trong lô. Hộp trước đây không có cả mã lô; giờ hiện đủ
+        lô đang ở đâu, mốc cũ → mốc mới, và danh sách đơn / khách sẽ nhận thông báo (đã nạp sẵn
+        trên drawer, không gọi thêm).
+      */}
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={!!milestone}
-        title={`Ghi mốc: ${milestone?.text || milestone?.status || ""}`}
+        title={`Ghi mốc: ${milestone?.text || milestone?.status || ""} · lô ${summary.shipmentCode || ""}`}
         okText="Ghi mốc và báo khách"
         cancelText="Huỷ"
         okButtonProps={{ loading: submitting, disabled: noteRequired && !form.note.trim() }}
         onOk={submitMilestone}
         onCancel={() => setMilestone(null)}
-        width={620}
       >
         <Alert
           type="info"
@@ -439,6 +449,47 @@ export default function ShipmentTimelineDrawer({
           style={{ marginBottom: 12 }}
           message="Mỗi mốc gửi thông báo cho chủ của từng đơn trong lô. Không lùi được mốc — ghi sai thì ghi thêm mốc đúng kèm ghi chú."
         />
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
+          <ReviewFacts
+            items={[
+              { label: "Lô", value: <Text strong>{summary.shipmentCode || "—"}</Text> },
+              {
+                label: "Mốc hiện tại → mốc mới",
+                value: `${summary.statusText || statusMeta.label} → ${
+                  milestone?.text || getShipmentStatusMeta(milestone?.status).label
+                }`,
+              },
+              {
+                label: "Kho đi → kho đến",
+                value: `${summary.originWarehouseName || "—"} → ${summary.destinationWarehouseName || "—"}`,
+              },
+              { label: "Hãng vận chuyển", value: summary.carrierName },
+              {
+                label: "Quy mô",
+                value: `${timeline?.orderCount ?? "—"} đơn · ${
+                  timeline?.parcelCount ?? detail?.totalPackages ?? "—"
+                } kiện${
+                  detail?.totalWeight != null
+                    ? ` · ${Number(detail.totalWeight).toLocaleString("vi-VN")} kg`
+                    : ""
+                }`,
+              },
+              { label: "Cập nhật gần nhất", value: formatDateTime(timeline?.lastUpdateAt) },
+            ]}
+          />
+          <ReviewItemsTable
+            title="Đơn / khách sẽ nhận thông báo"
+            items={timeline?.orders || []}
+            rowKey={(row, index) => row?.orderId || index}
+            extra={`${(timeline?.orders || []).length} đơn`}
+            columns={[
+              { title: "Mã đơn", dataIndex: "consignmentCode", render: (v) => <Text code>{v || "—"}</Text> },
+              { title: "Khách hàng", dataIndex: "customerName", render: (v) => v || "—" },
+              { title: "Số kiện", dataIndex: "parcelCount", align: "center", width: 100 },
+            ]}
+            scrollX={500}
+          />
+        </div>
         <Space direction="vertical" style={{ width: "100%" }} size={10}>
           <div>
             <Text strong>Lời nhắn cho khách</Text>

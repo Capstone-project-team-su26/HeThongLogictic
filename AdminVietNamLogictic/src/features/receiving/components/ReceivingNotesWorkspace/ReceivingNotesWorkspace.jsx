@@ -26,25 +26,43 @@ import {
 import {
   approveReceivingNote,
   AWAITING_TAB_KEY,
+  canRejectAtStage,
   getApprovalStageMeta,
   getReceivingApiError,
   getReceivingNoteDetail,
   getReceivingStatusMeta,
+  getReceivingSummary,
+  isDiscrepancyStage,
   listReceivingNotes,
   RECEIVING_STATUS_TABS,
   rejectReceivingNote,
 } from "@features/receiving/api/receivingNoteService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import SubmitReview, {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import {
+  formatReviewDimensions,
+  formatReviewKg,
+  formatReviewNumber,
+  REVIEW_MODAL_PROPS,
+} from "@shared/components/SubmitReview/submitReviewFormat";
+import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
 import { toPublicReceiptUrl } from "@shared/utils/receiptUrl";
+/* Hàng đủ D×R×C + báo giá + tiền đã cọc của đơn gốc — phiếu nhập kho không mang mấy số này. */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 
 const { Text, Title } = Typography;
 
 /**
  * Màn phiếu nhập kho gốc — dùng chung cho quản lý kho / OM (hàng đợi duyệt) và Admin (tra cứu).
  *
- * Mỗi phiếu chờ quyết định ở một trong hai giai đoạn (`approvalStage`):
+ * Mỗi phiếu chờ quyết định ở một trong ba giai đoạn (`approvalStage`):
  *   - RECEIVE: Sale vừa lập, duyệt thì phiếu ACTIVE + có PDF để khách mang hàng tới;
- *   - DISCREPANCY: kho kiểm đếm bị lệch, duyệt thì chốt biên bản cho xếp kệ.
+ *   - DISCREPANCY: kho kiểm đếm lệch số lượng, chấp nhận thì chốt biên bản cho xếp kệ;
+ *   - DISCREPANCY_ACK: đủ số lượng nhưng lệch cân — phiếu đã tự chốt (xếp kệ được), quản lý
+ *     kho chỉ còn CHẤP NHẬN số thực tế (BE không cho từ chối ở bước này).
  *
  * Khác nhau giữa các màn truyền bằng prop:
  *   - `defaultStatus`: OM mở thẳng tab "Cần quyết định", Admin mở tab "Tất cả"
@@ -79,6 +97,201 @@ function DiffCell({ value, suffix = "" }) {
   );
 }
 
+const stageOf = (row) => String(row?.approvalStage || "").toUpperCase();
+
+/** Chữ trên nút / tiêu đề hộp quyết định theo giai đoạn. */
+const approveLabelOf = (row) => (isDiscrepancyStage(stageOf(row)) ? "Chấp nhận số thực tế" : "Duyệt phiếu");
+
+/** Hệ quả của nút duyệt, hiện trong hộp xác nhận. */
+const APPROVE_CONSEQUENCE = {
+  RECEIVE: "Duyệt nhận hàng: phiếu có PDF mã WRN-, khách nhận thông báo để mang hàng tới kho.",
+  DISCREPANCY:
+    "Chấp nhận số thực tế: biên bản lệch số lượng được chốt, kho xếp kiện lên kệ theo số đã kiểm đếm. Sale lập phiếu và khách nhận thông báo kèm các dòng lệch; phí tính theo số thực tế.",
+  DISCREPANCY_ACK:
+    "Chấp nhận số thực tế: phiếu đã tự chốt vì đủ số lượng (kiện xếp kệ được) nhưng cân lệch khai báo. Bấm để ghi nhận quyết định của bạn — Sale lập phiếu và khách nhận thông báo kèm các dòng lệch; phí tính theo số thực tế. Quyết một lần, không sửa lại được.",
+};
+
+/** Các dòng lệch khai báo ↔ thực tế, gom thành câu cho hộp xác nhận. */
+function describeDifferences(items = []) {
+  return items
+    .filter(
+      (row) =>
+        Number(row?.quantityDifference) !== 0 ||
+        (row?.weightDifference !== null &&
+          row?.weightDifference !== undefined &&
+          Number(row.weightDifference) !== 0),
+    )
+    .map((row) => {
+      const parts = [];
+      if (Number(row.quantityDifference) !== 0) {
+        parts.push(`SL khai ${formatNumber(row.declaredQuantity)} → thực ${formatNumber(row.actualQuantity)}`);
+      }
+      if (row.weightDifference !== null && row.weightDifference !== undefined && Number(row.weightDifference) !== 0) {
+        parts.push(`cân khai ${formatReviewKg(row.declaredWeight)} → thực ${formatReviewKg(row.actualWeight)}`);
+      }
+      return `${row.productName || "(không tên)"}: ${parts.join(", ")}`;
+    });
+}
+
+/** Kiện thật kho đã cân đo lúc nhận (chỉ có sau kiểm đếm). */
+const ACTUAL_PARCEL_COLUMNS = [
+  {
+    title: "Mã kiện",
+    dataIndex: "packageCode",
+    width: 170,
+    render: (value) => <Text code>{value || "—"}</Text>,
+  },
+  {
+    title: "Cân thực",
+    dataIndex: "actualWeight",
+    width: 110,
+    align: "right",
+    render: (value) => formatReviewKg(value),
+  },
+  {
+    title: "D × R × C",
+    key: "dimensions",
+    width: 160,
+    render: (_, row) => formatReviewDimensions(row?.length, row?.width, row?.height),
+  },
+  {
+    title: "Thể tích",
+    dataIndex: "volume",
+    width: 120,
+    align: "right",
+    render: (value) => (value ? `${formatReviewNumber(value, 0)} cm³` : "—"),
+  },
+  {
+    title: "Trạng thái",
+    key: "status",
+    render: (_, row) => row?.packageStatusText || row?.packageStatus || "—",
+  },
+  { title: "Ô kệ", dataIndex: "binCode", width: 110, render: (value) => value || "Chưa xếp" },
+];
+
+/**
+ * Toàn bộ thông tin một phiếu tiếp nhận, hiện trong hộp duyệt / từ chối.
+ *
+ * Người duyệt trước đây chỉ thấy một câu mô tả hệ quả, không thấy phiếu có gì — nhất là khi
+ * bấm "Duyệt" thẳng từ dòng bảng. Giờ hộp nạp lại chi tiết phiếu (GET phiếu) + chi tiết đơn
+ * gốc (hàng đủ kích thước, thùng / dịch vụ, báo giá, tiền đã cọc) rồi mới cho bấm.
+ */
+function ReceivingDecisionReview({ target, noteReview, orderReview, compareColumns }) {
+  const note = { ...target, ...(noteReview.data || {}) };
+  const stage = String(note.approvalStage || "").toUpperCase();
+  const compareItems = Array.isArray(note.items) ? note.items : [];
+  const parcels = Array.isArray(note.parcels) ? note.parcels : [];
+  const expectedItems = Array.isArray(note.expectedItems) ? note.expectedItems : [];
+  const differences = isDiscrepancyStage(stage) ? describeDifferences(compareItems) : [];
+
+  return (
+    <SubmitReview
+      loading={noteReview.loading}
+      loadingText="Đang tải đầy đủ thông tin phiếu…"
+      error={noteReview.error}
+      errorHint="Bên dưới chỉ còn thông tin trên dòng bảng — nên mở phiếu xem lại trước khi quyết định."
+    >
+      <ReviewFacts
+        items={[
+          { label: "Mã phiếu", value: <Text strong>{note.receivingNoteCode}</Text> },
+          {
+            label: "Đang chờ",
+            value: getApprovalStageMeta(stage)?.label || note.statusText || note.status,
+          },
+          { label: "Đơn ký gửi", value: <Text code>{note.consignmentCode || "—"}</Text> },
+          { label: "Tuyến", value: note.route },
+          { label: "Khách hàng", value: note.customerName },
+          { label: "Mã khách hàng", value: note.customerCode },
+          { label: "SĐT khách", value: note.customerPhone },
+          { label: "Kho tiếp nhận", value: note.warehouseName },
+          {
+            label: "Người lập phiếu",
+            value: note.createdByName
+              ? `${note.createdByName} · ${formatDateTime(note.createdAt)}`
+              : formatDateTime(note.createdAt),
+          },
+          {
+            label: "Người kiểm đếm",
+            value: note.receivedByName
+              ? `${note.receivedByName} · ${formatDateTime(note.receivedAt)}`
+              : "Chưa kiểm đếm",
+          },
+          {
+            label: "Đối chiếu",
+            value: `${formatNumber(note.checkedItemCount)} / ${formatNumber(
+              note.declaredItemCount,
+            )} dòng đã cân đếm${note.hasDiscrepancy ? " · CÓ CHÊNH LỆCH" : ""}`,
+            hidden: note.declaredItemCount === undefined,
+          },
+          {
+            label: "Chốt nhận hàng",
+            value: note.approvedByName
+              ? `${note.approvedByName} · ${formatDateTime(note.approvedAt)}`
+              : String(note.status || "").toUpperCase() === "APPROVED"
+                ? `Hệ thống tự chốt · ${formatDateTime(note.approvedAt)} (chưa ai quyết định lệch)`
+                : "",
+          },
+          { label: "Ghi chú duyệt", value: note.approvalNote, span: 2 },
+          { label: "Ghi chú cho kho", value: note.warehouseNote, span: 2 },
+        ]}
+      />
+
+      {differences.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          style={{ marginBottom: 12 }}
+          message={`${differences.length} dòng lệch khai báo — sẽ chốt theo số thực tế`}
+          description={
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {differences.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          }
+        />
+      )}
+
+      {compareItems.length > 0 && (
+        <ReviewItemsTable
+          title="Biên bản đối chiếu khai báo với thực tế"
+          items={compareItems}
+          columns={compareColumns}
+          extra={note.hasDiscrepancy ? "Có dòng lệch — xem cột Lệch SL / Lệch KG" : "Khớp khai báo"}
+          scrollX={900}
+        />
+      )}
+
+      {parcels.length > 0 && (
+        <ReviewItemsTable
+          title="Kiện thật kho đã nhận"
+          items={parcels}
+          columns={ACTUAL_PARCEL_COLUMNS}
+          rowKey={(row, index) => row?.parcelId || index}
+          extra={`${parcels.length} kiện · ${formatReviewKg(
+            parcels.reduce((sum, row) => sum + (Number(row?.actualWeight) || 0), 0),
+          )}`}
+        />
+      )}
+
+      {/* Hàng khai đủ kích thước + tiền lấy từ đơn gốc; lỗi thì lùi về danh sách hàng trên phiếu. */}
+      <OrderReviewPanel
+        review={orderReview}
+        fallback={note}
+        showFacts={false}
+        errorHint={
+          expectedItems.length ? "Bên dưới là hàng khai theo phiếu (không có kích thước)." : ""
+        }
+      />
+
+      {orderReview.detailError && expectedItems.length > 0 && stage !== "DISCREPANCY" ? (
+        <ReviewItemsTable title="Hàng khách khai (theo phiếu)" items={expectedItems} />
+      ) : null}
+    </SubmitReview>
+  );
+}
+
 export default function ReceivingNotesWorkspace({
   title = "Phiếu tiếp nhận kho gốc",
   subtitle = "Sale lập phiếu sau khi khách đặt cọc. Quản lý kho duyệt để khách mang hàng tới, và xem biên bản khi kho kiểm đếm bị lệch.",
@@ -92,6 +305,7 @@ export default function ReceivingNotesWorkspace({
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [statusTab, setStatusTab] = useState(defaultStatus);
+  const [summary, setSummary] = useState({ awaiting: 0, discrepancyAwaiting: 0, discrepancy: 0 });
   const [keyword, setKeyword] = useState("");
 
   const [detail, setDetail] = useState(null);
@@ -104,13 +318,28 @@ export default function ReceivingNotesWorkspace({
   const [approveTarget, setApproveTarget] = useState(null);
   const [approveReason, setApproveReason] = useState("");
 
+  /* Hộp duyệt hoặc từ chối đang mở (mỗi lúc chỉ một) → nạp đủ phiếu + đơn gốc để hiện. */
+  const decisionTarget = approveTarget || rejectTarget;
+  const noteReview = useSubmitReviewData(decisionTarget?.id, () =>
+    getReceivingNoteDetail(decisionTarget.id),
+  );
+  const orderReview = useOrderReview(decisionTarget?.consignmentOrderId, {
+    enabled: Boolean(decisionTarget),
+  });
+  const decisionLoading = noteReview.loading || orderReview.loading;
+
   const fetchRows = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
     try {
-      const result = await listReceivingNotes({ status: statusTab, search: keyword.trim() });
+      /* Số đếm đầu trang tính trên mọi phiếu, không theo tab — tab "Cần quyết định" rỗng không được kéo chip về 0. */
+      const [result, counts] = await Promise.all([
+        listReceivingNotes({ status: statusTab, search: keyword.trim() }),
+        getReceivingSummary({ search: keyword.trim() }).catch(() => null),
+      ]);
       setRows(result.items);
       setTotalCount(result.totalCount);
+      if (counts) setSummary(counts);
     } catch (error) {
       setErrorMessage(getReceivingApiError(error, "Không tải được danh sách phiếu tiếp nhận."));
     } finally {
@@ -122,11 +351,6 @@ export default function ReceivingNotesWorkspace({
     fetchRows();
   }, [fetchRows]);
 
-  const awaitingCount = useMemo(() => rows.filter((row) => row.awaitingApproval).length, [rows]);
-  const discrepancyCount = useMemo(
-    () => rows.filter((row) => row.hasDiscrepancy).length,
-    [rows],
-  );
 
   const openDetail = useCallback(async (row) => {
     setDetail({ ...row, items: [], expectedItems: [] });
@@ -157,13 +381,14 @@ export default function ReceivingNotesWorkspace({
       try {
         const updated = await approveReceivingNote(row.id, approveReason);
         const isReceiveStage =
-          String(row.approvalStage || "").toUpperCase() === "RECEIVE" ||
-          String(updated?.status || "").toUpperCase() === "ACTIVE";
+          stageOf(row) === "RECEIVE" || String(updated?.status || "").toUpperCase() === "ACTIVE";
         AuthNotify.success(
-          "Đã duyệt phiếu",
+          isReceiveStage ? "Đã duyệt phiếu" : "Đã chấp nhận số thực tế",
           isReceiveStage
             ? `Phiếu ${row.receivingNoteCode} đã duyệt, khách nhận được PDF để mang hàng tới kho.`
-            : `Đã chốt biên bản phiếu ${row.receivingNoteCode}. Kho xếp kiện lên kệ được rồi.`,
+            : stageOf(row) === "DISCREPANCY_ACK"
+              ? `Đã ghi nhận quyết định lệch của phiếu ${row.receivingNoteCode}. Sale và khách đã được báo.`
+              : `Đã chốt biên bản phiếu ${row.receivingNoteCode}. Kho xếp kiện lên kệ được rồi; Sale và khách đã được báo.`,
         );
         setApproveTarget(null);
         setApproveReason("");
@@ -174,6 +399,12 @@ export default function ReceivingNotesWorkspace({
           "Duyệt thất bại",
           getReceivingApiError(error, "Không duyệt được phiếu tiếp nhận."),
         );
+        /* 409: người khác vừa quyết rồi — tải lại để phiếu rời hàng đợi. */
+        if (error?.response?.status === 409) {
+          setApproveTarget(null);
+          setDetail(null);
+          fetchRows();
+        }
       } finally {
         setSubmitting(false);
       }
@@ -284,7 +515,7 @@ export default function ReceivingNotesWorkspace({
             {
               title: "Thao tác",
               key: "actions",
-              width: 190,
+              width: 230,
               fixed: "right",
               render: (_, row) => {
                 if (!row.awaitingApproval) {
@@ -295,26 +526,28 @@ export default function ReceivingNotesWorkspace({
                   );
                 }
                 return (
-                  <Space>
+                  <Space wrap>
                     <Button
                       type="primary"
                       size="small"
                       icon={<CheckOutlined />}
                       onClick={() => openApprove(row)}
                     >
-                      Duyệt
+                      {isDiscrepancyStage(stageOf(row)) ? "Chấp nhận số thực tế" : "Duyệt"}
                     </Button>
-                    <Button
-                      danger
-                      size="small"
-                      icon={<CloseOutlined />}
-                      onClick={() => {
-                        setRejectTarget(row);
-                        setRejectReason("");
-                      }}
-                    >
-                      Từ chối
-                    </Button>
+                    {canRejectAtStage(stageOf(row)) ? (
+                      <Button
+                        danger
+                        size="small"
+                        icon={<CloseOutlined />}
+                        onClick={() => {
+                          setRejectTarget(row);
+                          setRejectReason("");
+                        }}
+                      >
+                        Từ chối
+                      </Button>
+                    ) : null}
                   </Space>
                 );
               },
@@ -389,11 +622,15 @@ export default function ReceivingNotesWorkspace({
         <div className="ops-page__hero-actions">
           <div className="ops-page__weight-chip">
             <small>Chờ duyệt</small>
-            <strong>{awaitingCount} phiếu</strong>
+            <strong>{summary.awaiting} phiếu</strong>
+          </div>
+          <div className="ops-page__weight-chip">
+            <small>Lệch chờ quyết định</small>
+            <strong>{summary.discrepancyAwaiting} phiếu</strong>
           </div>
           <div className="ops-page__weight-chip">
             <small>Có chênh lệch</small>
-            <strong>{discrepancyCount} phiếu</strong>
+            <strong>{summary.discrepancy} phiếu</strong>
           </div>
           <Button
             type="primary"
@@ -470,22 +707,24 @@ export default function ReceivingNotesWorkspace({
         extra={
           canApprove && detail?.awaitingApproval ? (
             <Space>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => {
-                  setRejectTarget(detail);
-                  setRejectReason("");
-                }}
-              >
-                Từ chối
-              </Button>
+              {canRejectAtStage(stageOf(detail)) ? (
+                <Button
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={() => {
+                    setRejectTarget(detail);
+                    setRejectReason("");
+                  }}
+                >
+                  Từ chối
+                </Button>
+              ) : null}
               <Button
                 type="primary"
                 icon={<CheckOutlined />}
                 onClick={() => openApprove(detail)}
               >
-                Duyệt phiếu
+                {approveLabelOf(detail)}
               </Button>
             </Space>
           ) : null
@@ -517,6 +756,16 @@ export default function ReceivingNotesWorkspace({
                 </Tag>
               ) : null}
             </Space>
+
+            {detail.awaitingApproval && stageOf(detail) === "DISCREPANCY_ACK" ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 12 }}
+                message="Chờ quản lý kho quyết định lệch"
+                description="Kho đếm đủ số lượng nên phiếu đã tự chốt và kiện xếp kệ được, nhưng cân thực tế lệch khai báo. Xem bảng đối chiếu bên dưới rồi bấm “Chấp nhận số thực tế”. Hàng hư hỏng / sai lệch cần xử lý thêm thì mở sự cố cho kiện."
+              />
+            ) : null}
 
             <Descriptions bordered size="small" column={2}>
               <Descriptions.Item label="Đơn ký gửi">
@@ -551,7 +800,9 @@ export default function ReceivingNotesWorkspace({
               <Descriptions.Item label="Chốt nhận hàng">
                 {detail.approvedByName
                   ? `${detail.approvedByName} · ${formatDateTime(detail.approvedAt)}`
-                  : "—"}
+                  : String(detail.status || "").toUpperCase() === "APPROVED"
+                    ? `Hệ thống tự chốt · ${formatDateTime(detail.approvedAt)}`
+                    : "—"}
               </Descriptions.Item>
               {detail.approvalNote ? (
                 <Descriptions.Item label="Ghi chú duyệt" span={2}>
@@ -650,13 +901,20 @@ export default function ReceivingNotesWorkspace({
         ) : null}
       </Drawer>
 
+      {/*
+        Hộp duyệt hiện TOÀN BỘ phiếu (khách + mã khách, kho, người lập, hàng khai đủ kích thước,
+        thùng / dịch vụ, biên bản lệch, kiện thật, báo giá, tiền đã cọc). Đang tải thì khoá nút
+        duyệt. Tải lỗi không chặn cứng (quyền và điều kiện thật do server xét lại), nhưng hộp nói
+        rõ phần nào đang thiếu để người duyệt tự quyết có mở phiếu xem trước hay không.
+      */}
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={!!approveTarget}
-        title={`Duyệt phiếu ${approveTarget?.receivingNoteCode || ""}`}
-        okText="Duyệt phiếu"
+        title={`${approveLabelOf(approveTarget)} — phiếu ${approveTarget?.receivingNoteCode || ""}`}
+        okText={decisionLoading ? "Đang tải thông tin…" : approveLabelOf(approveTarget)}
         okButtonProps={{
           loading: submitting,
-          disabled: requireApproveReason && !approveReason.trim(),
+          disabled: decisionLoading || (requireApproveReason && !approveReason.trim()),
         }}
         cancelText="Huỷ"
         onOk={handleApprove}
@@ -669,12 +927,16 @@ export default function ReceivingNotesWorkspace({
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={
-            String(approveTarget?.approvalStage || "").toUpperCase() === "DISCREPANCY"
-              ? "Chốt biên bản lệch: kiện được xếp kệ theo số thực tế kho đã kiểm đếm."
-              : "Duyệt nhận hàng: phiếu có PDF mã WRN-, khách nhận thông báo để mang hàng tới kho."
-          }
+          message={APPROVE_CONSEQUENCE[stageOf(approveTarget)] || APPROVE_CONSEQUENCE.RECEIVE}
         />
+        {approveTarget ? (
+          <ReceivingDecisionReview
+            target={approveTarget}
+            noteReview={noteReview}
+            orderReview={orderReview}
+            compareColumns={compareColumns}
+          />
+        ) : null}
         <Input.TextArea
           rows={3}
           value={approveReason}
@@ -682,16 +944,23 @@ export default function ReceivingNotesWorkspace({
           placeholder={
             requireApproveReason
               ? "Bắt buộc khi Admin duyệt thay quản lý kho. Ví dụ: quản lý kho nghỉ phép, đã xác nhận qua điện thoại."
-              : "Ghi chú (không bắt buộc). Ví dụ: đã hẹn khách sáng thứ 6."
+              : isDiscrepancyStage(stageOf(approveTarget))
+                ? "Ghi chú quyết định (không bắt buộc, lưu vào phiếu). Ví dụ: đã gọi khách xác nhận cân thực tế."
+                : "Ghi chú (không bắt buộc). Ví dụ: đã hẹn khách sáng thứ 6."
           }
         />
       </Modal>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={!!rejectTarget}
         title={`Từ chối phiếu ${rejectTarget?.receivingNoteCode || ""}`}
-        okText="Từ chối phiếu"
-        okButtonProps={{ danger: true, loading: submitting, disabled: !rejectReason.trim() }}
+        okText={decisionLoading ? "Đang tải thông tin…" : "Từ chối phiếu"}
+        okButtonProps={{
+          danger: true,
+          loading: submitting,
+          disabled: decisionLoading || !rejectReason.trim(),
+        }}
         cancelText="Huỷ"
         onOk={handleReject}
         onCancel={() => {
@@ -705,11 +974,19 @@ export default function ReceivingNotesWorkspace({
           icon={<FileTextOutlined />}
           style={{ marginBottom: 12 }}
           message={
-            String(rejectTarget?.approvalStage || "").toUpperCase() === "DISCREPANCY"
+            stageOf(rejectTarget) === "DISCREPANCY"
               ? "Kho nhận thông báo kèm lý do; kiện của phiếu sẽ không được xếp kệ."
               : "Người lập phiếu nhận thông báo kèm lý do và lập lại phiếu khác."
           }
         />
+        {rejectTarget ? (
+          <ReceivingDecisionReview
+            target={rejectTarget}
+            noteReview={noteReview}
+            orderReview={orderReview}
+            compareColumns={compareColumns}
+          />
+        ) : null}
         <Input.TextArea
           rows={4}
           value={rejectReason}

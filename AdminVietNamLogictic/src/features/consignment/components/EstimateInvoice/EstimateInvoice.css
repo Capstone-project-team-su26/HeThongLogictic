@@ -1,0 +1,405 @@
+/* =========================================================
+   BẢNG KÊ CHI PHÍ DỰ KIẾN — dạng hoá đơn
+
+   Đọc từ trên xuống: cân tính cước (cơ sở của mọi con số) → ba nhóm chi phí, mỗi nhóm có
+   dòng cộng riêng → tổng cộng. Có dòng cộng từng nhóm để khách tự kiểm được rằng các dòng
+   cộng đúng bằng ô tổng, không phải tin suông.
+
+   Mỗi dòng ba cột: TÊN (co giãn) · CÁCH TÍNH (cố định) · SỐ TIỀN (cố định, canh phải).
+   Ở màn hẹp cách tính XUỐNG DÒNG dưới tên phí chứ không bị ẩn: đây là tờ hoá đơn khách
+   dùng để đối chiếu, mất cột "8%" hay "120.000đ/kg" là mất căn cứ của con số bên cạnh.
+
+   Bảng kê này luôn được đặt ở khu vực RỘNG của trang (cột trái màn xác nhận, thân thẻ
+   "Chi tiết chi phí" màn báo giá). Nhồi vào cột phụ ~300px thì tên phí vỡ dòng giữa chữ
+   và ghi chú dưới mỗi dòng phí tràn — chỗ gọi phải giữ đúng bố trí này.
+   ========================================================= */
+
+/*
+ * Đo theo BỀ NGANG CỦA CHÍNH BẢNG KÊ, không theo bề ngang cửa sổ: cùng một màn hình
+ * 1280px, bảng kê rộng ~830px ở cột trái màn xác nhận nhưng chỉ ~700px ở thẻ "Chi tiết
+ * chi phí" màn báo giá. Lấy mốc theo cửa sổ thì một trong hai màn luôn sai nhịp.
+ */
+.estimate-invoice {
+  container-type: inline-size;
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---- cân tính cước ---- */
+
+.estimate-invoice__weight {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed #c7d7ea;
+  background: #f8fbff;
+}
+
+.estimate-invoice__weight > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.estimate-invoice__weight span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.estimate-invoice__weight strong {
+  color: #0b1b2e;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.estimate-invoice__weight small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---- một nhóm chi phí ---- */
+
+.estimate-invoice__section {
+  border: 1px solid #e3eaf4;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.estimate-invoice__section > header {
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e3eaf4;
+}
+
+.estimate-invoice__section > header h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #334155;
+}
+
+.estimate-invoice__section > header p {
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.estimate-invoice__group {
+  padding: 4px 0;
+}
+
+.estimate-invoice__group + .estimate-invoice__group {
+  border-top: 1px dashed #eef2f7;
+}
+
+/* Nhãn kiện: cho biết mấy dòng dưới đây thuộc kiện nào. */
+.estimate-invoice__group-label {
+  display: block;
+  padding: 8px 14px 2px;
+
+  color: #6d28d9;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* ---- một dòng tiền ----
+   Số tiền từng dòng phí cố ý ĐỂ NHẠT hơn (600) số ở dòng "Cộng …": dòng phí là chi tiết để
+   đối chiếu, số chính cộng lại ra tổng là số ở dòng cộng nhóm. */
+
+.estimate-invoice__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 12px;
+
+  padding: 8px 14px;
+}
+
+.estimate-invoice__line-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  color: #1e293b;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.estimate-invoice__line-note {
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.estimate-invoice__line-rate {
+  min-width: 84px;
+  text-align: right;
+
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Loại phí không có cách tính (backend trả rỗng) thì đừng chiếm một dòng trống. */
+.estimate-invoice__line-rate:empty {
+  display: none;
+}
+
+.estimate-invoice__line-amount {
+  min-width: 96px;
+  text-align: right;
+
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- cộng nhóm ----
+   Đây là SỐ CHÍNH của mỗi nhóm — mấy số này cộng lại ra ô tổng, nên in đậm hẳn, to hơn số
+   dòng phí và mang màu của nhóm (cùng hệ màu bốn ô tổng phía trên: vận chuyển xanh dương,
+   dịch vụ cam, thuế tím). Nền đậm hơn dòng phí để tách khối. */
+
+.estimate-invoice__subtotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+
+  padding: 11px 14px;
+  border-top: 1px solid #dbe4f0;
+  background: #f1f5f9;
+}
+
+.estimate-invoice__subtotal span {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.estimate-invoice__subtotal strong {
+  margin-left: auto;
+
+  color: #0b1b2e;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.estimate-invoice__subtotal.is-shipping { background: #eff6ff; border-top-color: #bfdbfe; }
+.estimate-invoice__subtotal.is-shipping strong { color: #1d4ed8; }
+.estimate-invoice__subtotal.is-service { background: #fffbeb; border-top-color: #fde68a; }
+.estimate-invoice__subtotal.is-service strong { color: #b45309; }
+.estimate-invoice__subtotal.is-tax { background: #f5f3ff; border-top-color: #ddd6fe; }
+.estimate-invoice__subtotal.is-tax strong { color: #6d28d9; }
+
+/* ---- tổng cộng ---- */
+
+.estimate-invoice__total {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #86efac;
+  background: linear-gradient(135deg, #f0fdf4, #ffffff 70%);
+}
+
+.estimate-invoice__total > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.estimate-invoice__total > div > span {
+  color: #14532d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.estimate-invoice__total > div > strong {
+  color: #15803d;
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Phép cộng "20.000đ + 25.000đ + 3.200đ = 48.200đ": mỗi số cùng màu với dòng "Cộng …" của
+ * nhóm nó để khách dò ngược được. Mỗi vế (dấu + số) không bị ngắt giữa chừng, nhưng cả
+ * phép cộng được xuống dòng giữa các vế khi hẹp — không bao giờ tràn ngang.
+ */
+.estimate-invoice__formula {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 6px;
+
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.estimate-invoice__formula-term {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.estimate-invoice__formula-op {
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.estimate-invoice__formula b {
+  font-weight: 800;
+}
+
+.estimate-invoice__formula b.is-shipping { color: #1d4ed8; }
+.estimate-invoice__formula b.is-service { color: #b45309; }
+.estimate-invoice__formula b.is-tax { color: #6d28d9; }
+.estimate-invoice__formula b.is-total { color: #15803d; }
+
+.estimate-invoice__total small {
+  display: block;
+  margin-top: 6px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.estimate-invoice__total small b {
+  color: #b45309;
+}
+
+@container (max-width: 520px) {
+  /*
+   * Hẹp thì xếp DỌC, không ẩn: cách tính tụt xuống dưới tên phí, số tiền giữ nguyên cột
+   * phải và trải hai hàng. Trước đây cột cách tính bị display:none — khách mất luôn căn
+   * cứ "8%" / "120.000đ/kg" của con số ngay bên cạnh, đúng thứ họ cần để đối chiếu.
+   */
+  .estimate-invoice__line {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name amount"
+      "rate amount";
+    row-gap: 2px;
+  }
+
+  .estimate-invoice__line-name {
+    grid-area: name;
+  }
+
+  .estimate-invoice__line-rate {
+    grid-area: rate;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .estimate-invoice__line-amount {
+    grid-area: amount;
+    align-self: start;
+    min-width: 84px;
+  }
+
+  .estimate-invoice__total > div > strong {
+    font-size: 19px;
+  }
+}
+
+/* =========================================================
+   BỐN Ô TỔNG THEO NHÓM
+
+   Cùng nhãn, cùng thứ tự, cùng màu viền trên với khối "Chi tiết chi phí" ở màn chi tiết
+   đơn sau khi tạo. Hai màn phải nhìn ra cùng một hình — khác cách trình bày là khách
+   tưởng đang đọc hai bảng giá khác nhau.
+   ========================================================= */
+
+/*
+ * Nhãn dài nhất là "Cước vận chuyển quốc tế": ô hẹp dưới ~165px thì nó vỡ thành ba dòng,
+ * nên không bao giờ để ô nhỏ hơn thế — auto-fit tự giảm số cột theo chỗ thật sự có.
+ * Các mốc @container bên dưới chốt lại thành 4 / 2 / 1 để không ra hàng lẻ 3+1.
+ */
+.estimate-invoice__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 10px;
+}
+
+.estimate-invoice__summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  padding: 11px 13px;
+  border: 1px solid #e3eaf4;
+  border-top-width: 3px;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.estimate-invoice__summary-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.estimate-invoice__summary-card strong {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.estimate-invoice__summary-card small {
+  color: #94a3b8;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+/* Bốn màu lấy nguyên từ màn chi tiết đơn — đổi ở đây thì phải đổi cả bên kia. */
+.estimate-invoice__summary-card.is-freight { border-top-color: #2563eb; }
+.estimate-invoice__summary-card.is-domestic { border-top-color: #0d9488; }
+.estimate-invoice__summary-card.is-service { border-top-color: #d97706; }
+.estimate-invoice__summary-card.is-tax { border-top-color: #7c3aed; }
+
+/* Từ 680px trở lên chắc chắn đủ cho 4 ô ≥165px kể cả khe hở. */
+@container (min-width: 680px) {
+  .estimate-invoice__summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 679px) {
+  .estimate-invoice__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Hai ô cạnh nhau dưới 340px là ô chỉ còn ~160px — xếp dọc còn đọc được hơn. */
+@container (max-width: 339px) {
+  .estimate-invoice__summary {
+    grid-template-columns: 1fr;
+  }
+}

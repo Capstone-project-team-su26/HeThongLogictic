@@ -1327,6 +1327,31 @@ export const createConsignmentApi = async (payload = {}) => {
 };
 
 /**
+ * POST /api/staff/consignments/preview → { message, data: EstimateQuotationResponse }.
+ *
+ * Dùng CHUNG bộ chuẩn hoá payload với createConsignmentApi: lệch một trường là backend
+ * tính ra số khác, mà cái cần ở đây đúng là hai bên phải ra cùng một số.
+ */
+export const previewConsignmentApi = async (payload = {}) => {
+  const requestBody = normalizeCreateConsignmentPayload(payload);
+
+  try {
+    const response = await httpClient.post(
+      API_ENDPOINTS.consignments.previewByStaff,
+      buildStaffConsignmentBody(requestBody),
+      { signal: payload?.signal }
+    );
+
+    return getResponseData(response);
+  } catch (error) {
+    throwWithVietnameseMessage(
+      error,
+      "Chưa lấy được ước tính chi phí."
+    );
+  }
+};
+
+/**
  * POST /api/orders/consignments/validate-items → { message, data: { canCreate, results } }.
  *
  * Backend chỉ TRẢ VỀ kết quả chứ không ném lỗi khi có hàng cấm, nên chặn ở đây:

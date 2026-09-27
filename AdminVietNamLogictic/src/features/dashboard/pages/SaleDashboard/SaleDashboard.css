@@ -854,3 +854,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------
+   SỐ LIỆU THẬT (GET /api/staff/dashboard)
+--------------------------------------------------------- */
+.sale-dashboard-stats-grid .stat-card[class*="is-"] {
+  cursor: pointer;
+}
+
+.sale-dashboard-stats-grid .stat-card.is-approved {
+  cursor: default;
+}
+
+.bar-fill.is-other {
+  background: linear-gradient(90deg, #94a3b8, #64748b);
+}
+
+.chart-axis-label,
+.chart-point-label {
+  fill: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.chart-point-label {
+  fill: #0f172a;
+}

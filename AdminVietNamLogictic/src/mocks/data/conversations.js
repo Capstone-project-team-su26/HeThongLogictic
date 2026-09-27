@@ -530,7 +530,7 @@ export const conversations = [
       {
         from: "sale",
         content:
-          "Dạ hàng thường 26.000đ/kg, hàng cồng kềnh tính theo quy đổi 6000. Em gửi chị file chi tiết qua Zalo nhé.",
+          "Dạ hàng thường 26.000đ/kg, hàng cồng kềnh tính theo cân quy đổi thể tích. Em gửi chị file chi tiết qua Zalo nhé.",
         hoursAgo: 97,
       },
       {

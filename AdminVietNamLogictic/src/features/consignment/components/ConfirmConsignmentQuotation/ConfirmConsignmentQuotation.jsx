@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Modal,
 } from "antd";
@@ -10,6 +11,11 @@ import {
   SendOutlined,
   UserOutlined,
 } from "@ant-design/icons";
+
+import {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
 
 import "./ConfirmConsignmentQuotation.css";
 
@@ -32,7 +38,7 @@ export default function ConfirmConsignmentQuotation({
     <Modal
       open={open}
       onCancel={onCancel}
-      width={760}
+      width={960}
       centered
       destroyOnHidden
       mask={{ closable: !loading && !submitted }}
@@ -94,6 +100,54 @@ export default function ConfirmConsignmentQuotation({
               {data.route}
             </strong>
           </div>
+        </div>
+
+        {/* Phần xem lại thêm vào: cảnh báo duyệt giá, người nhận, hàng từng dòng. */}
+        <div className="quotation-confirm__review">
+          {/*
+            Báo giá có khoản ngoài bảng giá thì KHÔNG tới tay khách ngay: backend đặt
+            PENDING_PRICE_APPROVAL chờ Admin duyệt. Nói trước để Sale khỏi báo khách "đã gửi".
+          */}
+          {data.outOfPriceList && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Báo giá có khoản ngoài bảng giá — sẽ chờ Admin duyệt giá, khách CHƯA thấy ngay"
+              description={`Lý do ghi cho Admin: ${data.overrideReason || data.salesNote || "(chưa ghi)"}`}
+            />
+          )}
+
+          {data.replacesPendingApproval && (
+            <Alert
+              type="info"
+              showIcon
+              message="Đơn đang có một báo giá chờ Admin duyệt giá — bản này sẽ thay thế bản đó."
+            />
+          )}
+
+          <ReviewFacts
+            items={[
+              { label: "Email khách", value: data.customerEmail },
+              {
+                label: "Người nhận",
+                value: [data.receiverName, data.receiverPhone]
+                  .filter(Boolean)
+                  .join(" · "),
+              },
+              {
+                label: "Địa chỉ giao",
+                value: data.receiverAddress,
+                span: 2,
+              },
+            ]}
+          />
+
+          {Array.isArray(data.items) && (
+            <ReviewItemsTable
+              title="Hàng khách khai trên đơn"
+              items={data.items}
+            />
+          )}
         </div>
 
         <section className="quotation-confirm__section">
@@ -388,7 +442,9 @@ export default function ConfirmConsignmentQuotation({
           <span>
             {submitted
               ? "Báo giá chính thức đã được gửi thành công. Bạn không thể xác nhận hoặc gửi lại báo giá này."
-              : "Sau khi gửi, khách hàng sẽ nhận được báo giá chính thức để xem và xác nhận."}
+              : data.outOfPriceList
+                ? "Sau khi gửi, báo giá chờ Admin duyệt giá; Admin duyệt xong khách mới nhận được để xem và xác nhận."
+                : "Sau khi gửi, khách hàng sẽ nhận được báo giá chính thức để xem và xác nhận."}
           </span>
         </div>
 

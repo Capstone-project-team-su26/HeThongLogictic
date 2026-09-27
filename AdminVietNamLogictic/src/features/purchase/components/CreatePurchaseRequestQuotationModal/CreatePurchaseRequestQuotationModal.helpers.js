@@ -3,7 +3,7 @@
 // không đọc state/props/ref/context nên đứng riêng vẫn cho ra kết quả y hệt.
 import {
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
 
 export const normalizeText = (value) =>
   String(value ?? "").trim();
@@ -100,6 +100,15 @@ export const getRuleCode = (rule) =>
   normalizeUpperText(
     rule?.ruleCode
   );
+
+/*
+ * Quy tắc phí ship nội địa (NCC giao tới kho nguồn). Ở báo giá mua hộ, khoản này KHÔNG là
+ * phụ phí: ô "Ship nội địa từ NCC" (domesticShippingFee) là nguồn duy nhất — backend bỏ qua
+ * mọi phụ phí DOMESTIC_FEE khi ô đó > 0, nên gửi cả hai là tính hai lần.
+ */
+export const isDomesticFeeRule = (rule) =>
+  getRuleCode(rule) === PRICING_RULE_CODE.DOMESTIC_FEE ||
+  getRuleCode(rule) === "DOMESTIC_FEE";
 
 export const getCalculationType = (
   rule

@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { Checkbox, Modal, Tooltip } from "antd";
 
-import pricingRuleService from "@features/pricing/api/pricingRuleService.mock";
+import pricingRuleService from "@features/pricing/api/pricingRuleService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import { WOOD_CRATE_CODE } from "./PackageOptionalServices.constants";
 import {
@@ -144,9 +144,15 @@ export default function PackageOptionalServices({
         setPricingLoading(true);
         setPricingError("");
 
-        // Gọi đúng endpoint và lấy TOÀN BỘ dữ liệu thật từ API.
-        // Không truyền ruleCodes, không dùng mảng dữ liệu mẫu.
+        /*
+          orderType=CONSIGNMENT là BỘ LỌC CỦA BACKEND, không phải loại đơn:
+          nó bỏ đúng ba nhóm chỉ thuộc về tiền hàng mua hộ (PURCHASE_FEE, VAT,
+          IMPORT_TAX) và giữ lại các dịch vụ gắn theo KIỆN. Modal này chọn dịch
+          vụ theo kiện, nên cả ký gửi lẫn mua hộ đều cần đúng bộ đó. Gọi không
+          tham số sẽ kéo cả VAT và thuế nhập khẩu vào danh sách tick chọn.
+        */
         const result = await pricingRuleService.getPricingRules({
+          orderType: "CONSIGNMENT",
           signal: controller.signal,
         });
 
@@ -956,10 +962,21 @@ export default function PackageOptionalServices({
         };
       });
 
-      const woodCrateRule = activeSelectedRules.find(isWoodCrateRule);
-
-      // Phí rule đóng thùng được tính một lần cho toàn bộ đơn.
-      woodCrateOrderFee = Number(woodCrateRule?.value) || 0;
+      /*
+       * PHÍ THÙNG GỖ CHỈ TÍNH THEO CỠ THÙNG CỦA TỪNG KIỆN — KHÔNG cộng thêm
+       * giá trị của quy tắc WOOD_CRATE.
+       *
+       * Backend cố tình loại WOOD/CRATE khỏi danh sách dịch vụ chọn theo kiện
+       * (ItemServiceRules.IsSelectable) và chỉ tính tiền qua packageConfigurationId
+       * của kiện — chính lời báo lỗi của nó nói vậy: "Thùng gỗ chọn qua cấu hình
+       * thùng (packageConfigurationId) của kiện." Dòng WOOD_CRATE trong bảng quy tắc
+       * chỉ để hiện tên và mô tả dịch vụ trong danh sách cho khách chọn.
+       *
+       * Bản cũ cộng thêm `woodCrateRule.value` một lần cho cả đơn, nên màn xác nhận
+       * báo 60.000đ (35.000 + 25.000) trong khi hoá đơn thật chỉ có 25.000đ. Số trên
+       * màn hình trước khi tạo đơn phải bằng đúng số hệ thống sẽ thu.
+       */
+      woodCrateOrderFee = 0;
       woodCrateConfigurationFee = selectedPackageConfigurations.reduce(
         (total, configuration) =>
           total + (Number(configuration?.packageFee) || 0),

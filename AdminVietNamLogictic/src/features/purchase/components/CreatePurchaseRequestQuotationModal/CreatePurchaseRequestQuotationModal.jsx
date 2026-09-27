@@ -37,17 +37,19 @@ import {
 import {
   getActivePricingRulesApi,
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
+/* Tỷ giá THẬT (GET /api/exchange-rates?activeOnly=true). Không có tỷ giá mặc định: mã tiền
+   tệ của tuyến không có tỷ giá đang bật thì báo lỗi và chặn gửi báo giá. */
 import {
+  convertToVndWithRate,
+  findActiveExchangeRate,
   getExchangeRatesApi,
-  convertCurrencyApi,
 } from "@features/pricing/api/exchangeRateService";
 import {
   getServicePricingsApi,
-} from "@features/pricing/api/servicePricingService.mock";
+} from "@features/pricing/api/servicePricingService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import {
-  buildInitialPrices,
   calculateRuleAmountWithContext,
   formatCurrency,
   formatNumber,
@@ -58,6 +60,7 @@ import {
   getRuleId,
   getRuleScopeLabel,
   getRuleValueLabel,
+  isDomesticFeeRule,
   moneyFormatter,
   moneyParser,
   normalizeMoney,
@@ -115,7 +118,6 @@ export default function CreatePurchaseRequestQuotationModal({
         : [];
   }, [activeRules, pricingRules]);
 
-  const [itemPrices, setItemPrices] = useState({});
   const [purchaseFee, setPurchaseFee] = useState(0);
   const [shippingFee, setShippingFee] = useState(0);
 
@@ -130,7 +132,12 @@ export default function CreatePurchaseRequestQuotationModal({
    */
   const [feeOverrides, setFeeOverrides] = useState({});
 
-  const [domesticShippingFee, setDomesticShippingFee] = useState(0);
+  /*
+   * Ship nội địa từ NCC — nguồn DUY NHẤT của khoản này trong báo giá. null = Sale chưa sửa:
+   * ô tự đi theo số tính từ quy tắc DOMESTIC_FEE (xem suggestedDomesticShippingFee); Sale gõ
+   * số nào (kể cả 0) thì giữ đúng số đó.
+   */
+  const [domesticShippingFeeInput, setDomesticShippingFeeInput] = useState(null);
   const [freightRatePerKg, setFreightRatePerKg] = useState(0);
   const [estimatedWeight, setEstimatedWeight] = useState(0);
   const [note, setNote] = useState("");
@@ -157,8 +164,30 @@ export default function CreatePurchaseRequestQuotationModal({
   const defaultCurrency = routeCurrencyInfo.code;
 
   const [exchangeRates, setExchangeRates] = useState([]);
-  const [, setLoadingRates] = useState(false);
+  /* "loading" | "ready" | "error" — chỉ "ready" mới được nhập giá / gửi báo giá. */
+  const [ratesStatus, setRatesStatus] = useState("loading");
+  const [ratesError, setRatesError] = useState("");
+  const [ratesReloadKey, setRatesReloadKey] = useState(0);
   const [foreignInputs, setForeignInputs] = useState({});
+
+  /* Tỷ giá đang bật của đúng mã tiền tệ tuyến này; null = không được báo giá. */
+  const activeRate = useMemo(
+    () => findActiveExchangeRate(exchangeRates, defaultCurrency),
+    [exchangeRates, defaultCurrency]
+  );
+
+  const rateBlockingMessage = useMemo(() => {
+    if (ratesStatus === "loading") {
+      return `Đang tải tỷ giá ${defaultCurrency} từ hệ thống...`;
+    }
+    if (ratesStatus === "error") {
+      return `Không tải được tỷ giá ${defaultCurrency}: ${ratesError || "lỗi không xác định"}. Chưa thể lập báo giá.`;
+    }
+    if (!activeRate) {
+      return `Chưa có tỷ giá ${defaultCurrency} đang bật trong danh mục tỷ giá. Vui lòng nhờ Admin cấu hình tỷ giá ${defaultCurrency} rồi mở lại báo giá — hệ thống không dùng tỷ giá mặc định.`;
+    }
+    return "";
+  }, [activeRate, defaultCurrency, ratesError, ratesStatus]);
 
   const [servicePricings, setServicePricings] = useState([]);
   const [, setLoadingPricings] = useState(false);
@@ -167,20 +196,6 @@ export default function CreatePurchaseRequestQuotationModal({
     if (!open) {
       return;
     }
-
-    setLoadingRates(true);
-    getExchangeRatesApi({ activeOnly: true })
-      .then((list) => {
-        if (Array.isArray(list) && list.length > 0) {
-          setExchangeRates(list);
-        }
-      })
-      .catch((err) => {
-        console.error("GET EXCHANGE RATES ERROR:", err);
-      })
-      .finally(() => {
-        setLoadingRates(false);
-      });
 
     setLoadingPricings(true);
     getServicePricingsApi()
@@ -196,6 +211,33 @@ export default function CreatePurchaseRequestQuotationModal({
         setLoadingPricings(false);
       });
   }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    setRatesStatus("loading");
+    setRatesError("");
+    getExchangeRatesApi({ activeOnly: true, signal: controller.signal })
+      .then((list) => {
+        setExchangeRates(Array.isArray(list) ? list : []);
+        setRatesStatus("ready");
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        console.error("GET EXCHANGE RATES ERROR:", err);
+        setExchangeRates([]);
+        setRatesError(
+          err?.response?.data?.message || err?.message || "Không kết nối được máy chủ."
+        );
+        setRatesStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [open, ratesReloadKey]);
 
   const autoMatchedServicePricing = useMemo(() => {
     if (!Array.isArray(servicePricings) || servicePricings.length === 0) return null;
@@ -250,17 +292,12 @@ export default function CreatePurchaseRequestQuotationModal({
       return;
     }
 
-    setItemPrices(
-      buildInitialPrices(
-        items
-      )
-    );
-
-    const defaultPurchaseFee = Number(matchedPurchaseFeeRule?.value) || 50000;
+    /* Không có quy tắc PURCHASE_FEE đang bật thì để 0 cho Sale tự nhập — không đoán số. */
+    const defaultPurchaseFee = Number(matchedPurchaseFeeRule?.value) || 0;
     setPurchaseFee(defaultPurchaseFee);
     setShippingFee(0);
     setFeeOverrides({});
-    setDomesticShippingFee(0);
+    setDomesticShippingFeeInput(null);
     setFreightRatePerKg(0);
     setEstimatedWeight(0);
     setNote("");
@@ -285,60 +322,27 @@ export default function CreatePurchaseRequestQuotationModal({
     }
   }, [autoMatchedServicePricing, open, items]);
 
-  const handleConvertForeignPrice = async (itemId, currency, amount) => {
+  /*
+   * Quy đổi ngay tại chỗ bằng tỷ giá THẬT đã tải (không gọi API mỗi phím gõ). Con số VND chỉ để
+   * HIỂN THỊ: khi lưu, FE gửi currency + giá ngoại tệ và backend tự nhân với tỷ giá của nó
+   * (PurchaseRequestService: Math.Round(unitPrice × rate, AwayFromZero)), đóng băng vào báo giá.
+   */
+  const handleConvertForeignPrice = (itemId, currency, amount) => {
     if (!itemId) return;
 
-    const selectedCurr = currency || foreignInputs[itemId]?.currency || defaultCurrency;
+    const selectedCurr = currency || defaultCurrency;
     const numAmount = Number(amount);
-
-    if (amount === null || amount === undefined || amount === "" || !Number.isFinite(numAmount) || numAmount <= 0) {
-      handlePriceChange(itemId, 0);
-      setForeignInputs((prev) => ({
-        ...prev,
-        [itemId]: {
-          currency: selectedCurr,
-          amount: null,
-          convertedVnd: 0,
-          rate: 0,
-        },
-      }));
-      return;
-    }
-
-    try {
-      const convertRes = await convertCurrencyApi(selectedCurr, numAmount);
-      const vndVal = Math.round(Number(convertRes?.amountVnd) || 0);
-
-      handlePriceChange(itemId, vndVal);
-      setForeignInputs((prev) => ({
-        ...prev,
-        [itemId]: {
-          currency: selectedCurr,
-          amount: numAmount,
-          convertedVnd: vndVal,
-          rate: Number(convertRes?.exchangeRate) || 0,
-        },
-      }));
-    } catch (err) {
-      const rateObj = exchangeRates.find((r) => r.currencyCode === selectedCurr);
-      const rate = Number(rateObj?.rateToVnd) || 0;
-      if (rate > 0) {
-        const calculatedVnd = Math.round(numAmount * rate);
-        handlePriceChange(itemId, calculatedVnd);
-        setForeignInputs((prev) => ({
-          ...prev,
-          [itemId]: {
-            currency: selectedCurr,
-            amount: numAmount,
-            convertedVnd: calculatedVnd,
-            rate,
-          },
-        }));
-      } else {
-        handlePriceChange(itemId, 0);
-        AuthNotify.error("Quy đổi thất bại", err?.message || "Không thể lấy tỷ giá quy đổi.");
-      }
-    }
+    const hasAmount =
+      amount !== null && amount !== undefined && amount !== "" &&
+      Number.isFinite(numAmount) && numAmount > 0;
+    setForeignInputs((prev) => ({
+      ...prev,
+      [itemId]: {
+        currency: selectedCurr,
+        amount: hasAmount ? numAmount : null,
+      },
+    }));
+    setFormError("");
   };
 
   const itemBreakdown =
@@ -348,12 +352,11 @@ export default function CreatePurchaseRequestQuotationModal({
           const itemId =
             getItemId(item);
 
-          const unitPrice =
-            normalizeMoney(
-              itemPrices?.[
-              itemId
-              ]
-            );
+          /* Đơn giá VND chỉ để hiển thị: giá ngoại tệ × tỷ giá THẬT đang bật (0 nếu chưa có). */
+          const unitPrice = convertToVndWithRate(
+            foreignInputs?.[itemId]?.amount,
+            activeRate?.rateToVnd
+          );
 
           const quantity =
             Math.max(
@@ -376,7 +379,8 @@ export default function CreatePurchaseRequestQuotationModal({
           };
         }),
       [
-        itemPrices,
+        activeRate?.rateToVnd,
+        foreignInputs,
         items,
       ]
     );
@@ -411,6 +415,30 @@ export default function CreatePurchaseRequestQuotationModal({
     return 1;
   }, [items]);
 
+  /* Quy tắc DOMESTIC_FEE đang bật (nếu có) — chỉ dùng để điền sẵn ô "Ship nội địa từ NCC". */
+  const domesticFeeRule = useMemo(
+    () => effectiveRules.find(isDomesticFeeRule) || null,
+    [effectiveRules]
+  );
+
+  /* Cùng cách tính và cùng context như khi khoản này còn nằm trong danh sách phụ phí. */
+  const suggestedDomesticShippingFee = useMemo(
+    () =>
+      domesticFeeRule
+        ? calculateRuleAmountWithContext(domesticFeeRule, {
+          productSubtotal,
+          purchaseFee,
+          shippingFee,
+          packageCount,
+        })
+        : 0,
+    [domesticFeeRule, productSubtotal, purchaseFee, shippingFee, packageCount]
+  );
+
+  const domesticShippingFee = roundMoney(
+    domesticShippingFeeInput ?? suggestedDomesticShippingFee
+  );
+
   const additionalFeeBreakdown = useMemo(() => {
     const list = [];
     const processedRuleIds = new Set();
@@ -423,6 +451,11 @@ export default function CreatePurchaseRequestQuotationModal({
         return;
       }
 
+      /* Ship nội địa đi riêng qua ô domesticShippingFee — không phải phụ phí. */
+      if (isDomesticFeeRule(rule)) {
+        return;
+      }
+
       const isImportTax = ruleCode === PRICING_RULE_CODE.IMPORT_TAX;
       const isVat = ruleCode === PRICING_RULE_CODE.VAT;
       const isInsurance =
@@ -430,12 +463,9 @@ export default function CreatePurchaseRequestQuotationModal({
         ruleCode.includes("INSURANCE");
       const isWoodCrate = ruleCode === PRICING_RULE_CODE.WOOD_CRATE;
       const isInspection = ruleCode === PRICING_RULE_CODE.SUR_INSPECTION;
-      const isDomesticFee =
-        ruleCode === PRICING_RULE_CODE.DOMESTIC_FEE ||
-        ruleCode === "DOMESTIC_FEE";
 
       let isRequested = selectedRuleIds.has(ruleId);
-      if (isImportTax || isVat || isDomesticFee) {
+      if (isImportTax || isVat) {
         isRequested = true;
       } else if (isInsurance && purchaseRequest?.requiresInsurance) {
         isRequested = true;
@@ -510,7 +540,6 @@ export default function CreatePurchaseRequestQuotationModal({
         skipReason,
         isTaxOrVat: isImportTax || isVat,
         isInsurance,
-        isDomesticFee,
       });
     });
 
@@ -544,35 +573,24 @@ export default function CreatePurchaseRequestQuotationModal({
         productSubtotal +
         normalizeMoney(purchaseFee) +
         normalizeMoney(shippingFee) +
+        /* Ship nội địa cộng ĐÚNG MỘT LẦN — không còn nằm trong additionalFeeTotal. */
+        domesticShippingFee +
         additionalFeeTotal
       ),
     [
       additionalFeeTotal,
+      domesticShippingFee,
       productSubtotal,
       purchaseFee,
       shippingFee,
     ]
   );
 
-  const handlePriceChange = (
-    itemId,
-    value
-  ) => {
-    setItemPrices(
-      (current) => ({
-        ...current,
-
-        [itemId]:
-          normalizeMoney(
-            value
-          ),
-      })
-    );
-
-    setFormError("");
-  };
-
   const validateForm = () => {
+    if (rateBlockingMessage) {
+      return rateBlockingMessage;
+    }
+
     if (
       !normalizeText(
         purchaseRequest
@@ -601,6 +619,14 @@ export default function CreatePurchaseRequestQuotationModal({
         (current) =>
           current.unitPrice <= 0
       );
+
+    const missingForeignItem = itemBreakdown.find(
+      (current) => !(Number(foreignInputs?.[current.itemId]?.amount) > 0)
+    );
+
+    if (missingForeignItem) {
+      return `Vui lòng nhập giá ${defaultCurrency} lớn hơn 0 cho sản phẩm "${missingForeignItem?.item?.productName || "chưa xác định"}".`;
+    }
 
     if (invalidPriceItem) {
       return `Vui lòng nhập đơn giá lớn hơn 0 cho sản phẩm "${invalidPriceItem
@@ -632,6 +658,9 @@ export default function CreatePurchaseRequestQuotationModal({
       }
 
       const payload = {
+        /* Backend quy đổi Items[].unitPrice (ngoại tệ) sang VND bằng tỷ giá của nó. */
+        currency: defaultCurrency,
+
         purchaseFee:
           roundMoney(
             purchaseFee
@@ -642,11 +671,11 @@ export default function CreatePurchaseRequestQuotationModal({
             shippingFee
           ),
 
-        /* Luồng chuẩn: ship nội địa vào phần trả trước, hai ô còn lại để tạm tính cước. */
-        domesticShippingFee:
-          roundMoney(
-            domesticShippingFee
-          ),
+        /*
+         * Luồng chuẩn: ship nội địa vào phần trả trước, hai ô còn lại để tạm tính cước.
+         * Đây là nguồn duy nhất của ship nội địa — additionalFees không còn dòng DOMESTIC_FEE.
+         */
+        domesticShippingFee,
 
         freightRatePerKg:
           roundMoney(
@@ -665,16 +694,19 @@ export default function CreatePurchaseRequestQuotationModal({
               purchaseRequestItemId:
                 current.itemId,
 
+              /* Giá NGOẠI TỆ Sale nhập — không gửi số VND FE tự tính. */
               unitPrice:
-                roundMoney(
-                  current.unitPrice
-                ),
+                Number(foreignInputs?.[current.itemId]?.amount) || 0,
             })
           ),
 
         additionalFees:
           additionalFeeBreakdown
-            .filter((current) => !current.isSkipped && current.amount > 0)
+            /*
+             * Thuế NK (theo loại hàng, thu ở chặng VN) và VAT phần phí do backend tự tính khi lưu báo giá.
+             * Gửi kèm như phụ phí thì bị cộng hai lần và thuế NK rơi vào phần khách trả trước.
+             */
+            .filter((current) => !current.isSkipped && !current.isTaxOrVat && current.amount > 0)
             .map((current) => {
               const rule =
                 current.rule;
@@ -796,6 +828,32 @@ export default function CreatePurchaseRequestQuotationModal({
               phí vận chuyển và kiểm tra dịch vụ
               trước khi xác nhận.
             </p>
+
+            {/*
+              Báo giá lập cho khách nào: trước đây form không có tên khách / người nhận, Sale có thể
+              báo nhầm đơn. Lấy nguyên từ chi tiết yêu cầu đã nạp (GET /api/purchase-requests/{id}).
+            */}
+            <p style={{ marginTop: 4, fontWeight: 600 }}>
+              {[
+                purchaseRequest?.customerName
+                  ? `Khách: ${purchaseRequest.customerName}`
+                  : null,
+                purchaseRequest?.route
+                  ? `Tuyến: ${purchaseRequest.route}`
+                  : null,
+                purchaseRequest?.receiverName
+                  ? `Nhận: ${[
+                    purchaseRequest.receiverName,
+                    purchaseRequest.receiverPhone,
+                    purchaseRequest.receiverAddress,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join("  |  ") || "Chưa đọc được thông tin khách của yêu cầu."}
+            </p>
           </div>
         </div>
 
@@ -846,6 +904,23 @@ export default function CreatePurchaseRequestQuotationModal({
       </div>
 
       <div className="purchase-quotation-modal__body">
+        {rateBlockingMessage && ratesStatus !== "loading" && (
+          <Alert
+            type="error"
+            showIcon
+            message={`Không lập được báo giá: thiếu tỷ giá ${defaultCurrency}`}
+            description={rateBlockingMessage}
+            action={
+              ratesStatus === "error" ? (
+                <Button size="small" onClick={() => setRatesReloadKey((key) => key + 1)}>
+                  Thử lại
+                </Button>
+              ) : null
+            }
+            className="purchase-quotation-modal__alert"
+          />
+        )}
+
         {formError && (
           <Alert
             type="error"
@@ -958,15 +1033,21 @@ export default function CreatePurchaseRequestQuotationModal({
                           <InputNumber
                             value={currentForeign.amount ?? null}
                             placeholder={`Nhập số tiền (${routeCurrencyInfo.code})`}
+                            disabled={Boolean(rateBlockingMessage)}
                             min={0}
-                            precision={0}
+                            precision={2}
                             controls={false}
                             addonAfter={routeCurrencyInfo.code}
-                            formatter={(val) => (val ? `${val}`.replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "")}
-                            parser={(val) => (val ? val.replace(/[^0-9]/g, "") : "")}
+                            formatter={(val) => {
+                              if (val === undefined || val === null || val === "") return "";
+                              const [intPart, decPart] = `${val}`.split(".");
+                              const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                              return decPart !== undefined ? `${grouped},${decPart}` : grouped;
+                            }}
+                            parser={(val) => (val ? val.replace(/\./g, "").replace(",", ".").replace(/[^0-9.]/g, "") : "")}
                             onKeyDown={(e) => {
                               if (
-                                !/[0-9]/.test(e.key) &&
+                                !/[0-9,]/.test(e.key) &&
                                 !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Enter"].includes(e.key) &&
                                 !e.ctrlKey &&
                                 !e.metaKey
@@ -986,9 +1067,9 @@ export default function CreatePurchaseRequestQuotationModal({
                             <label className="pricing-field-label">
                               Đơn giá quy đổi (VNĐ)
                             </label>
-                            {currentForeign.convertedVnd > 0 && currentForeign.amount > 0 && (
+                            {current.unitPrice > 0 && currentForeign.amount > 0 && activeRate && (
                               <span className="rate-info-chip">
-                                💡 1 {currentForeign.currency} = {formatNumber(currentForeign.rate)} ₫
+                                💡 1 {activeRate.currencyCode} = {formatNumber(activeRate.rateToVnd)} ₫
                               </span>
                             )}
                           </div>
@@ -1129,14 +1210,37 @@ export default function CreatePurchaseRequestQuotationModal({
                 controls={false}
                 formatter={moneyFormatter}
                 parser={moneyParser}
-                onChange={(value) => setDomesticShippingFee(normalizeMoney(value))}
+                onChange={(value) => setDomesticShippingFeeInput(normalizeMoney(value))}
                 addonAfter="₫"
                 placeholder="Phí NCC giao tới kho nguồn"
               />
 
               <small>
                 Thuộc phần <b>TRẢ TRƯỚC</b> — khách trả ngay cùng tiền hàng và phí mua hộ.
+                Chỉ tính ở ô này, không cộng thêm ở phụ phí.
+                {domesticFeeRule && (
+                  <>
+                    {" "}
+                    {domesticShippingFeeInput === null
+                      ? `Điền sẵn theo quy tắc ${domesticFeeRule.ruleName || "DOMESTIC_FEE"}.`
+                      : `Mức theo quy tắc ${domesticFeeRule.ruleName || "DOMESTIC_FEE"}: ${formatCurrency(suggestedDomesticShippingFee)}.`}
+                  </>
+                )}
               </small>
+
+              {domesticFeeRule &&
+                domesticShippingFeeInput !== null &&
+                roundMoney(domesticShippingFeeInput) !==
+                roundMoney(suggestedDomesticShippingFee) && (
+                <button
+                  type="button"
+                  className="purchase-quotation-fee-edit__reset"
+                  onClick={() => setDomesticShippingFeeInput(null)}
+                >
+                  Khôi phục mức hệ thống (
+                  {formatCurrency(suggestedDomesticShippingFee)})
+                </button>
+              )}
             </div>
 
             <div className="purchase-quotation-field">
@@ -1252,8 +1356,6 @@ export default function CreatePurchaseRequestQuotationModal({
                       <div className="purchase-quotation-service-card__icon">
                         {isInsurance ? (
                           <SafetyCertificateOutlined />
-                        ) : current.isDomesticFee ? (
-                          <TruckOutlined />
                         ) : isTaxOrVat ? (
                           <DollarOutlined />
                         ) : (
@@ -1273,8 +1375,10 @@ export default function CreatePurchaseRequestQuotationModal({
                         <p>
                           {isSkipped
                             ? current.skipReason
-                            : rule?.description ||
-                            "Phụ phí được lấy từ cấu hình hệ thống."}
+                            : isTaxOrVat
+                              ? "Hệ thống tự tính khi lưu báo giá (VAT trên phí dịch vụ trả trước; thuế nhập khẩu theo loại hàng, thu khi hàng về VN). Số ở đây chỉ để tham khảo."
+                              : rule?.description ||
+                              "Phụ phí được lấy từ cấu hình hệ thống."}
                         </p>
 
                         <div>
@@ -1493,6 +1597,18 @@ export default function CreatePurchaseRequestQuotationModal({
             </strong>
           </div>
 
+          <div>
+            <span>
+              Ship nội địa
+            </span>
+
+            <strong>
+              {formatCurrency(
+                domesticShippingFee
+              )}
+            </strong>
+          </div>
+
           {(() => {
             const activeFees = additionalFeeBreakdown.filter((item) => !item.isSkipped);
             if (activeFees.length === 0) return null;
@@ -1568,7 +1684,8 @@ export default function CreatePurchaseRequestQuotationModal({
               loading={submitting}
               disabled={
                 submitting ||
-                quotationTotal <= 0
+                quotationTotal <= 0 ||
+                Boolean(rateBlockingMessage)
               }
               onClick={
                 handleSubmit

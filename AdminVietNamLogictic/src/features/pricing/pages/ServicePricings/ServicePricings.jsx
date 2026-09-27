@@ -32,22 +32,27 @@ import {
   ThunderboltOutlined,
 } from "@ant-design/icons";
 
+/*
+ * MỌI TAB ĐỌC API THẬT (27/09/2026): quy tắc tính phí (GET /api/pricing-rules), bảng giá dịch
+ * vụ (GET /api/service-pricings), cấu hình kiện (GET /api/package-configurations), tỷ giá
+ * (GET /api/exchange-rates?activeOnly=true). Không còn bản *.mock, không còn tỷ giá mặc định.
+ */
 import {
   getActivePricingRulesApi,
   getPricingRuleDetailApi,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
 import {
   formatVnd,
   getServicePricingDetailApi,
   getServicePricingsApi,
-} from "@features/pricing/api/servicePricingService.mock";
+} from "@features/pricing/api/servicePricingService";
 import {
   getExchangeRatesApi,
 } from "@features/pricing/api/exchangeRateService";
 
 import {
   getActivePackageConfigurationsApi,
-} from "@features/pricing/api/packageConfigurationService.mock";
+} from "@features/pricing/api/packageConfigurationService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 
 import {
@@ -57,6 +62,8 @@ import {
 } from "./ServicePricings.constants";
 import {
   formatRuleValue,
+  getRuleCalculationDisplay,
+  isSystemParameterRule,
   getForeignCurrencyEstimate,
   getPackageDimensionDisplay,
   getRuleCodeDisplayName,
@@ -135,23 +142,17 @@ export default function ServicePricings() {
         throw servicePricingResult.reason;
       }
 
-      const DEFAULT_RATES = [
-        { id: "cny", currencyCode: "CNY", currencyName: "Nhân dân tệ", rateToVnd: 3650, isActive: true },
-        { id: "jpy", currencyCode: "JPY", currencyName: "Yên Nhật", rateToVnd: 180, isActive: true },
-        { id: "krw", currencyCode: "KRW", currencyName: "Won Hàn Quốc", rateToVnd: 20, isActive: true },
-        { id: "usd", currencyCode: "USD", currencyName: "Đô la Mỹ", rateToVnd: 26000, isActive: true },
-      ];
-
+      /* Không có tỷ giá mặc định: lỗi thì để trống + cảnh báo, không bịa số. */
       if (exchangeRateResult.status === "fulfilled") {
         const val = exchangeRateResult.value;
-        const list = Array.isArray(val)
-          ? val
-          : Array.isArray(val?.items)
-          ? val.items
-          : [];
-        setExchangeRates(list.length > 0 ? list : DEFAULT_RATES);
+        setExchangeRates(Array.isArray(val) ? val : []);
       } else {
-        setExchangeRates(DEFAULT_RATES);
+        console.error("GET EXCHANGE RATES ERROR:", exchangeRateResult.reason);
+        setExchangeRates([]);
+        AuthNotify.warning(
+          "Thiếu một phần dữ liệu",
+          "Không tải được danh sách tỷ giá hối đoái."
+        );
       }
 
       if (
@@ -805,7 +806,7 @@ export default function ServicePricings() {
 
                       <div>
                         <span>Cách tính</span>
-                        <strong>{rule.calculationTypeDisplayName}</strong>
+                        <strong>{getRuleCalculationDisplay(rule)}</strong>
                       </div>
                     </div>
 
@@ -1069,9 +1070,9 @@ export default function ServicePricings() {
                 <article>
                   <span>Cách tính</span>
                   <strong>
-                    {
-                      selectedDetail.calculationTypeDisplayName
-                    }
+                    {getRuleCalculationDisplay(
+                      selectedDetail
+                    )}
                   </strong>
                 </article>
 
@@ -1088,6 +1089,10 @@ export default function ServicePricings() {
                   </strong>
                 </article>
 
+                {!isSystemParameterRule(
+                  selectedDetail
+                ) && (
+                <>
                 <article>
                   <span>Phí tối thiểu</span>
                   <strong>
@@ -1111,6 +1116,8 @@ export default function ServicePricings() {
                         )}
                   </strong>
                 </article>
+                </>
+                )}
 
                 <article className="is-full">
                   <span>Mô tả</span>

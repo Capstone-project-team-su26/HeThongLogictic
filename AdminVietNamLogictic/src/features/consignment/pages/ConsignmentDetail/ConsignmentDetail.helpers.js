@@ -728,21 +728,30 @@ export const calculateItemVolumeCm3 = (
   return length * width * height;
 };
 
-export const calculateItemDimKg = (
+/*
+ * Sai số chấp nhận khi so số API với số tự tính: backend làm tròn 4 chữ số thập phân.
+ */
+const DIM_API_TOLERANCE_KG = 0.001;
+
+/*
+ * DIM của một dòng hàng — LUÔN cùng hệ số với công thức đang hiện trên màn hình.
+ *
+ * - Có hệ số (rule VOLUMETRIC_DIVISOR — đúng số backend dùng để báo giá, sửa ở
+ *   "Tham số vận hành") và đủ kích thước dòng hàng → DIM = D×R×C ÷ hệ số đó.
+ * - Chưa có hệ số → dùng số API trả (item.volumetricWeight). Số này backend chi
+ *   tiết đơn tính từ KÍCH THƯỚC KHÁCH KHAI trên dòng hàng (không phải số kho cân đo)
+ *   và theo PricingSettings:VolumetricDivisor của appsettings, nên màn hình không ghi
+ *   công thức kèm hệ số cho nó.
+ *
+ * isApiMismatch: API trả số khác số tự tính → backend đang chia cho hệ số khác với
+ * hệ số cấu hình hiện hành; màn hình phải nói ra thay vì lặng lẽ chọn một số.
+ */
+export const resolveItemDim = (
   item,
   divisor
 ) => {
-  /*
-   * Ưu tiên khối lượng quy đổi đã có trong dữ liệu kiện hàng.
-   * Chỉ tự tính khi kiện hàng chưa có khối lượng quy đổi
-   * và hệ thống có hệ số quy đổi hợp lệ.
-   */
-  const apiDimWeight =
+  const apiDimKg =
     getItemApiDimWeight(item);
-
-  if (apiDimWeight !== null) {
-    return apiDimWeight;
-  }
 
   const volumeCm3 =
     calculateItemVolumeCm3(item);
@@ -751,14 +760,44 @@ export const calculateItemDimKg = (
     normalizePositiveNumber(divisor);
 
   if (
-    volumeCm3 <= 0 ||
-    divisorValue <= 0
+    volumeCm3 > 0 &&
+    divisorValue > 0
   ) {
-    return 0;
+    const dimKg =
+      volumeCm3 / divisorValue;
+
+    return {
+      dimKg,
+      source: "DIVISOR",
+      apiDimKg,
+      isApiMismatch:
+        apiDimKg !== null &&
+        Math.abs(apiDimKg - dimKg) >
+          DIM_API_TOLERANCE_KG,
+    };
   }
 
-  return volumeCm3 / divisorValue;
+  if (apiDimKg !== null) {
+    return {
+      dimKg: apiDimKg,
+      source: "API",
+      apiDimKg,
+      isApiMismatch: false,
+    };
+  }
+
+  return {
+    dimKg: 0,
+    source: "NONE",
+    apiDimKg,
+    isApiMismatch: false,
+  };
 };
+
+export const calculateItemDimKg = (
+  item,
+  divisor
+) => resolveItemDim(item, divisor).dimKg;
 
 export const getProductTypeId = (item) => {
   return normalizeText(

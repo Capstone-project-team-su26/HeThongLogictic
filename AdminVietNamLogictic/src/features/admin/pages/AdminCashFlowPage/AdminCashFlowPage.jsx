@@ -37,7 +37,8 @@ import {
   rejectAdminTransaction,
 } from "@features/admin/api/adminFinanceService";
 import { getAdminApiError } from "@features/admin/api/adminService";
-import { getOrderStatusLabel } from "@features/consignment";
+import { getOrderStatusLabel, OrderReviewPanel, useOrderReview } from "@features/consignment";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 import {
   getPaymentStatusMeta as getTransactionStatusMeta,
   isAwaitingManualReview,
@@ -172,6 +173,18 @@ export default function AdminCashFlowPage() {
   const [activeRow, setActiveRow] = useState(null);
   const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+
+  /*
+   * Duyệt / từ chối một khoản tiền là thao tác ghi sổ, nên hộp phải cho thấy đủ: khách (kèm
+   * mã), đơn, báo giá, tổng hoá đơn / đã trả / còn lại, các đợt đã có. Dòng ở tab "Giao dịch
+   * gần đây" còn không có tên khách và đợt — nên nạp chi tiết đơn + lịch sử thanh toán (API
+   * thật) khi hộp mở. Đơn mua hộ (source PURCHASE) không đi qua API đơn ký gửi nên bỏ qua.
+   */
+  const reviewOrderId =
+    (approveOpen || rejectOpen) && activeRow && activeRow.source !== "PURCHASE"
+      ? activeRow.orderId
+      : "";
+  const orderReview = useOrderReview(reviewOrderId);
   const [bankReference, setBankReference] = useState("");
   const [approveNote, setApproveNote] = useState("");
   const [receivedAmount, setReceivedAmount] = useState(null);
@@ -1020,9 +1033,11 @@ export default function AdminCashFlowPage() {
       </section>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={approveOpen}
         title="Xác nhận đã nhận được tiền"
-        okText="Ghi nhận đã thu"
+        okText={orderReview.loading ? "Đang tải thông tin…" : "Ghi nhận đã thu"}
+        okButtonProps={{ disabled: orderReview.loading }}
         cancelText="Huỷ"
         confirmLoading={submitting}
         onOk={handleApprove}
@@ -1048,7 +1063,29 @@ export default function AdminCashFlowPage() {
               <Descriptions.Item label="Nội dung CK">
                 {activeRow.orderCode ?? "—"}
               </Descriptions.Item>
+              <Descriptions.Item label="Phương thức · trạng thái">
+                {activeRow.paymentMethod || "—"} ·{" "}
+                {getTransactionStatusMeta(activeRow.status).label}
+              </Descriptions.Item>
+              <Descriptions.Item label="Tạo / trả lúc">
+                {formatDateTime(activeRow.createdAt || activeRow.paidAt)}
+                {activeRow.waitingDays ? ` · đã chờ ${activeRow.waitingDays} ngày` : ""}
+              </Descriptions.Item>
+              {activeRow.orderStatus ? (
+                <Descriptions.Item label="Trạng thái đơn">
+                  {formatOrderStatus(activeRow.orderStatus, activeRow.source)}
+                </Descriptions.Item>
+              ) : null}
             </Descriptions>
+
+            {/* Đang tải thì khoá nút; tải lỗi không chặn — số tiền sẽ ghi đã hiện ở trên. */}
+            {reviewOrderId ? (
+              <OrderReviewPanel
+                review={orderReview}
+                fallback={activeRow}
+                errorHint="Bạn vẫn ghi nhận được; số tiền và mã giao dịch sẽ ghi đã hiện ở trên."
+              />
+            ) : null}
 
             <div style={{ marginBottom: 12 }}>
               <div style={{ marginBottom: 4 }}>
@@ -1099,10 +1136,11 @@ export default function AdminCashFlowPage() {
       </Modal>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
         open={rejectOpen}
         title="Từ chối giao dịch"
-        okText="Từ chối"
-        okButtonProps={{ danger: true }}
+        okText={orderReview.loading ? "Đang tải thông tin…" : "Từ chối"}
+        okButtonProps={{ danger: true, disabled: orderReview.loading }}
         cancelText="Huỷ"
         confirmLoading={submitting}
         onOk={handleReject}
@@ -1115,6 +1153,24 @@ export default function AdminCashFlowPage() {
               <strong>{activeRow.consignmentCode || "—"}</strong>. Khoản này sẽ chuyển sang
               CANCELLED và khách phải tạo lại đợt thanh toán mới.
             </p>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Khách hàng">{activeRow.customerName || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Đợt">
+                {INSTALLMENT_LABELS[activeRow.installmentType] || activeRow.installmentType || "—"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Phương thức">{activeRow.paymentMethod || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Tạo / trả lúc">
+                {formatDateTime(activeRow.createdAt || activeRow.paidAt)}
+                {activeRow.waitingDays ? ` · đã chờ ${activeRow.waitingDays} ngày` : ""}
+              </Descriptions.Item>
+            </Descriptions>
+            {reviewOrderId ? (
+              <OrderReviewPanel
+                review={orderReview}
+                fallback={activeRow}
+                errorHint="Bạn vẫn từ chối được; khoản tiền sẽ bị huỷ đã hiện ở trên."
+              />
+            ) : null}
             <div style={{ marginBottom: 4 }}>Lý do (bắt buộc)</div>
             <Input.TextArea
               rows={3}

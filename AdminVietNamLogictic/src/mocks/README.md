@@ -114,7 +114,7 @@ các hàm `*AdditionalServiceFee*` của adminService đọc/ghi trên đó.
 | `productTypes` | **16** |
 | `packageConfigurations` | **20** (gồm 7 cỡ thùng gỗ `WOOD_CRATE_*`) |
 | `servicePricings` | **15** |
-| `pricingRules` | **25** (gồm `DEPOSIT_RATE` 30%, `VOLUMETRIC_DIVISOR` 6000, phụ phí gộp) |
+| `pricingRules` | **25** (gồm `DEPOSIT_RATE` 30%, `VOLUMETRIC_DIVISOR` 5000 khớp rule thật, phụ phí gộp) |
 | `suppliers` | **14** |
 | `shippingRoutes` | **14** (mỗi tuyến có 8 giới hạn khai báo `max*`) |
 | `warehouses` | **13** |
@@ -122,7 +122,7 @@ các hàm `*AdditionalServiceFee*` của adminService đọc/ghi trên đó.
 | `shippingMethods` | **13** |
 | `exchangeRates` | **12** |
 
-Cộng `catalogCollections` (object gom cả 12 mảng), `volumetricDivisor` = **6000** (đọc từ rule),
+Cộng `catalogCollections` (object gom cả 12 mảng), `volumetricDivisor` = **5000** (đọc từ rule),
 `volumetricDivisorRule`, và **25** hàm tra cứu `find*` (`find*ById`, `find*ByCode`, cùng
 `findProductTypeByName`, `findExchangeRateByCurrency` và helper chung `findIn`).
 
@@ -145,7 +145,7 @@ Bộ đơn **ký gửi** — nguồn duy nhất cho mọi mock liên quan.
 | `WAREHOUSES` | **4** kho |
 | `CONSIGNMENT_STATUSES` | **19 mã trạng thái đơn đích** theo thứ tự `ORDER_STATUS_ORDER` — là danh sách enum, **không phải** bản ghi |
 | `CONSIGNMENT_STATUS_LABELS` | nhãn của 19 mã (trùng `ORDER_STATUS_LABELS`, `verify:mocks` so khớp) |
-| `VOLUMETRIC_DIVISOR` | `6000` (đọc từ rule `VOLUMETRIC_DIVISOR` của catalog) |
+| `VOLUMETRIC_DIVISOR` | `5000` (đọc từ rule `VOLUMETRIC_DIVISOR` của catalog) |
 
 Ràng buộc: `totalVolume` tính bằng **cm³** (không phải m³) — trả m³ thì thể tích hiện ra bé
 đi một triệu lần.

@@ -12,8 +12,8 @@
    để tách TRẢ TRƯỚC và TẠM TÍNH. Nhờ vậy màn hình chạy được trên cả hai bản, không phải
    chờ deploy mới dùng được.
 
-   CÒN MOCK: không còn hàm nào. Bản mock giữ lại ở purchaseRequestService.mock.js cho
-   hằng số và hàm chuẩn hoá payload (thuần, không gọi mạng).
+   CÒN MOCK: không còn hàm nào. Hằng số + hàm chuẩn hoá payload (thuần) nằm ở
+   purchaseRequestShared.js; purchaseRequestService.mock.js chỉ còn là bản sao lưu.
 
    Giữ NGUYÊN bề mặt của bản mock: tên export, thứ tự tham số, hình dạng trả về
    { items, totalCount, pageNumber, pageSize, totalPages } — 10 nơi đang gọi không phải sửa.
@@ -22,12 +22,12 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getPagedData, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 
-/* Hằng và hàm thuần dùng chung — không phụ thuộc nguồn dữ liệu nên lấy thẳng từ bản mock. */
+/* Hằng và hàm thuần dùng chung — module thuần, không phải bản mock. */
 export {
   PURCHASE_REQUEST_STATUS,
   PURCHASE_SHIPPING_OPTION,
   normalizeCreatePurchaseRequestPayload,
-} from "./purchaseRequestService.mock";
+} from "./purchaseRequestShared";
 
 /* Các thao tác GHI chưa nối được — xem lý do ở đầu file. */
 /* Tạo yêu cầu hộ khách — API thật, xem hàm bên dưới. */
@@ -165,6 +165,13 @@ const toMoney = (value) => {
   return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
 };
 
+/* Giá ngoại tệ: giữ 2 chữ số lẻ, không âm. */
+const toForeignAmount = (value) => {
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0;
+};
+
 const toOptionalNumber = (value) => {
   const parsed = Number(value);
 
@@ -194,6 +201,9 @@ export const createPurchaseRequestQuotationApi = async (purchaseRequestId, paylo
     throw new Error("Báo giá phải có ít nhất một sản phẩm.");
   }
 
+  const currency = trimText(payload?.currency).toUpperCase();
+  const isForeignCurrency = Boolean(currency) && currency !== "VND";
+
   const body = {
     /* Trường cũ — bản backend nào cũng hiểu. */
     purchaseFee: toMoney(payload?.purchaseFee),
@@ -213,9 +223,13 @@ export const createPurchaseRequestQuotationApi = async (purchaseRequestId, paylo
       ? { servicePricingId: trimText(payload.servicePricingId) }
       : {}),
 
+    /*
+     * Có currency ngoại tệ thì unitPrice là GIÁ NGOẠI TỆ (được lẻ, vd 39,9 CNY) — backend tự
+     * nhân tỷ giá của nó rồi làm tròn về đồng. Làm tròn về số nguyên ở đây là sai tiền.
+     */
     items: items.map((item) => ({
       purchaseRequestItemId: trimText(item?.purchaseRequestItemId || item?.itemId),
-      unitPrice: toMoney(item?.unitPrice),
+      unitPrice: isForeignCurrency ? toForeignAmount(item?.unitPrice) : toMoney(item?.unitPrice),
     })),
 
     additionalFees: Array.isArray(payload?.additionalFees) ? payload.additionalFees : [],
@@ -230,7 +244,7 @@ export const createPurchaseRequestQuotationApi = async (purchaseRequestId, paylo
    DEFAULT EXPORT — giữ đúng bộ khoá của bản mock
 ========================================================= */
 
-import { normalizeCreatePurchaseRequestPayload as normalizePayload } from "./purchaseRequestService.mock";
+import { normalizeCreatePurchaseRequestPayload as normalizePayload } from "./purchaseRequestShared";
 
 const purchaseRequestService = {
   normalizeCreatePurchaseRequestPayload: normalizePayload,

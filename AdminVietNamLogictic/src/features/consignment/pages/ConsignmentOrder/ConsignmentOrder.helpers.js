@@ -515,7 +515,14 @@ export const PACKAGE_LIMITS = Object.freeze({
 export const ORDER_LIMITS = Object.freeze({
   maxTotalWeight: 5,
   maxTotalValue: 10000000,
+  /*
+   * Số kiện tối đa của MỘT đơn ký gửi — backend từ chối (400) đơn có hơn 50 kiện.
+   * Màn hình khoá nút "Thêm kiện" khi đủ, lúc gửi kiểm lại một lần nữa.
+   */
+  maxPackages: 50,
 });
+
+export const MAX_PACKAGES_MESSAGE = `Mỗi đơn ký gửi tối đa ${ORDER_LIMITS.maxPackages} kiện hàng. Cần gửi thêm thì tạo đơn mới.`;
 
 const toText = (value) => String(value ?? "").trim();
 
@@ -654,7 +661,11 @@ export const getOrderTotals = (packages = []) => ({
 
 /** Lỗi vượt trần của cả đơn; rỗng là chưa chạm trần. */
 export const getOrderTotalsError = (packages = []) => {
-  const { totalWeight, totalValue } = getOrderTotals(packages);
+  const { packageCount, totalWeight, totalValue } = getOrderTotals(packages);
+
+  if (packageCount > ORDER_LIMITS.maxPackages) {
+    return `Đơn đang có ${packageCount} kiện. ${MAX_PACKAGES_MESSAGE}`;
+  }
 
   if (totalValue > ORDER_LIMITS.maxTotalValue) {
     return `Tổng giá trị hàng hóa của đơn hàng (${formatVndNumber(

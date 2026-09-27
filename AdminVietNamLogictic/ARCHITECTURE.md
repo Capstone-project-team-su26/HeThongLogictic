@@ -122,8 +122,11 @@ mục ở đó.
   `VITE_API_BASE_URL`, Bearer token từ `sessionStorage`, quy tắc 401), `apiEnvelope.js`
   (bóc vỏ response của backend), `apiEndpoints.js` (bản đồ endpoint), cộng hai mock còn lại
   `uploadImage.js` và `vietnamAddressService.js`.
-- `components/` — 5 component: `AuthNotify` (toast), `FieldLabelTooltip`, `LoginLoader`,
-  `UserProfileModal`, `VietnamAddressSelector`.
+- `components/` — 6 component: `AuthNotify` (toast), `FieldLabelTooltip`, `LoginLoader`,
+  `UserProfileModal`, `VietnamAddressSelector`, và `SubmitReview` — khối "xem lại trước khi
+  gửi" cho mọi hộp xác nhận thao tác ghi (bảng dữ kiện, bảng hàng/kiện, bảng tiền, trạng thái
+  đang tải / lỗi, hook `useSubmitReviewData`). Chỉ trình bày, nhận dữ liệu qua props — phần nạp
+  chi tiết đơn nằm ở `@features/consignment` (`useOrderReview` + `OrderReviewPanel`).
 - `utils/` — `authSession.js` (đọc/xoá phiên, kiểm hạn token) và `timeUtc.js`.
 - `styles/` — `create-request.css` dùng chung cho các màn tạo đơn, và `legacy/` là hai
   file CSS template Vite **cố ý không được import ở đâu cả** (xem README mục 7).

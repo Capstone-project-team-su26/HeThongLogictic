@@ -8,7 +8,7 @@
  *     chuyển, cấu hình đóng gói, phí dịch vụ, bảng giá, quy tắc giá, tỷ giá,
  *     hàng hạn chế, loại hàng, đơn vị tính, nhà cung cấp) + màn tra cứu hàng
  *     cấm/hạn chế của Sale.
- *  3. Mock service hàng cấm/hạn chế, kèm hằng RESTRICTION_TYPE mà cả
+ *  3. Service hàng cấm/hạn chế (API THẬT /api/restricted-items), kèm hằng RESTRICTION_TYPE mà cả
  *     RestrictedItems và FieldLabelTooltip (ngoài feature) đang dùng.
  *
  * VỀ VA CHẠM TÊN GIỮA CÁC "export *": feature này chỉ có DUY NHẤT một module
@@ -46,7 +46,7 @@ export {
   WarehousesAdminPage,
 } from "./pages/AdminCatalogPages";
 
-/* Mock service hàng hạn chế: 6 named export (RESTRICTION_TYPE,
+/* Service hàng hạn chế (API thật): 6 named export (RESTRICTION_TYPE,
    normalizeRestrictedItem, getRestrictedItemsApi, getRestrictedItemListApi,
    getRestrictedItemDetailApi, getActiveRestrictedItemsApi). */
 export * from "./api/restrictedItemService";

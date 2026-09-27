@@ -27,6 +27,9 @@ export const ATTACHMENT_ENTITY = Object.freeze({
   SHIPMENT: "SHIPMENT",
   INCIDENT: "INCIDENT",
   DELIVERY_REQUEST: "DELIVERY_REQUEST",
+  PURCHASE_ORDER: "PURCHASE_ORDER",
+  /* Một KIỆN — dùng cho ảnh chụp kiện nằm trong ô kệ lúc xếp kệ. */
+  PARCEL: "PARCEL",
 });
 
 /* Nhãn tiếng Việt cho các loại giấy tờ web quản trị gặp. */
@@ -44,6 +47,9 @@ export const DOCUMENT_TYPE_LABELS = Object.freeze({
   INCIDENT_PHOTO: "Ảnh hiện trạng sự cố",
   COMPENSATION_RECEIPT: "Chứng từ chi bồi thường",
   DELIVERY_PROOF: "Ảnh ký nhận giao hàng",
+  PURCHASE_PROOF: "Chứng từ mua hộ",
+  PUT_AWAY_PROOF: "Ảnh kiện trong ô kệ",
+  WRO_APPROVAL_PROOF: "Ảnh hiện trạng lúc duyệt xuất",
   OTHER: "Giấy tờ khác",
 });
 

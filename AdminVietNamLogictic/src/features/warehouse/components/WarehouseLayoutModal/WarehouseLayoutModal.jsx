@@ -1,4 +1,4 @@
-import { Col, Form, Input, InputNumber, Modal, Row, Switch } from "antd";
+import { Alert, Col, Form, Input, InputNumber, Modal, Row, Switch } from "antd";
 
 export default function WarehouseLayoutModal({
   open,
@@ -23,9 +23,16 @@ export default function WarehouseLayoutModal({
       className="admin-editor-modal"
     >
       <Form layout="vertical">
-        <Form.Item label="Mã Khu Vực (Zone Code)" required>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Ô sơ đồ gắn vào khu đã có của kho."
+          description="Nhãn trùng mã ô kệ (hoặc mã kệ) trong khu thì ô sơ đồ gắn thẳng vào ô kệ/kệ đó. Sức chứa khai ở ô kệ, không khai ở ô sơ đồ."
+        />
+        <Form.Item label="Khu Vực (tên hoặc mã khu)" required>
           <Input
-            placeholder="VD: A, B, ZONE-01"
+            placeholder="VD: Khu A, KHO_NHAN"
             value={layoutForm.zoneCode}
             onChange={(e) => setLayoutForm((prev) => ({ ...prev, zoneCode: e.target.value }))}
           />
@@ -33,7 +40,7 @@ export default function WarehouseLayoutModal({
 
         <Form.Item label="Nhãn Hiển Thị (Label)" required>
           <Input
-            placeholder="VD: Kệ A-1, Ô B-02"
+            placeholder="VD: mã ô kệ B01, mã kệ S01"
             value={layoutForm.label}
             onChange={(e) => setLayoutForm((prev) => ({ ...prev, label: e.target.value }))}
           />
@@ -44,7 +51,7 @@ export default function WarehouseLayoutModal({
             <Form.Item label="Tọa độ Hàng (Grid Row)">
               <InputNumber
                 style={{ width: "100%" }}
-                min={1}
+                min={0}
                 value={layoutForm.gridRow}
                 onChange={(val) => setLayoutForm((prev) => ({ ...prev, gridRow: val }))}
               />
@@ -54,32 +61,9 @@ export default function WarehouseLayoutModal({
             <Form.Item label="Tọa độ Cột (Grid Column)">
               <InputNumber
                 style={{ width: "100%" }}
-                min={1}
+                min={0}
                 value={layoutForm.gridColumn}
                 onChange={(val) => setLayoutForm((prev) => ({ ...prev, gridColumn: val }))}
-              />
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item label="Dung tích tối đa (cm³)">
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                value={layoutForm.maxVolume}
-                onChange={(val) => setLayoutForm((prev) => ({ ...prev, maxVolume: val }))}
-              />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item label="Tải trọng tối đa (kg)">
-              <InputNumber
-                style={{ width: "100%" }}
-                min={0}
-                value={layoutForm.maxWeight}
-                onChange={(val) => setLayoutForm((prev) => ({ ...prev, maxWeight: val }))}
               />
             </Form.Item>
           </Col>

@@ -1,0 +1,107 @@
+/* Hộp "Gán kho" + ô "Kho phụ trách" của màn Quản lý người dùng. Tiền tố uwa- để không đụng
+   selector dùng chung của AdminPage.css (thứ tự nạp CSS có ý nghĩa — xem ARCHITECTURE.md mục 4). */
+
+.uwa-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.uwa-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.uwa-hint {
+  font-size: 12px;
+}
+
+.uwa-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.uwa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.uwa-option.ant-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+}
+
+.uwa-option.is-checked {
+  border-color: #91caff;
+  background: #f0f7ff;
+}
+
+.uwa-option > span:last-child {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.uwa-option__main,
+.uwa-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.uwa-option__main strong,
+.uwa-cell strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.uwa-option__main span,
+.uwa-cell span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.uwa-option__tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.uwa-option__tags .ant-tag {
+  margin: 0;
+}
+
+/* Ô "Kho phụ trách" trong bảng người dùng. */
+.uwa-assigned {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.uwa-assigned .ant-tag {
+  margin: 0;
+}
+
+.uwa-assigned .ant-btn {
+  padding: 0;
+  height: auto;
+}

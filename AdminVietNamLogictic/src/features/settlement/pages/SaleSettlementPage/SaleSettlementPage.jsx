@@ -15,7 +15,7 @@ import {
   Empty,
   Input,
   InputNumber,
-  Segmented,
+  Modal,
   Space,
   Spin,
   Table,
@@ -23,6 +23,7 @@ import {
   Typography,
 } from "antd";
 import {
+  CreditCardOutlined,
   DeleteOutlined,
   DollarOutlined,
   PlusOutlined,
@@ -32,7 +33,6 @@ import {
 
 import {
   createFinalPayment,
-  createPurchaseFinalPayment,
   getOrderPayments,
   getSettlementApiError,
   getSettlementPreview,
@@ -40,6 +40,21 @@ import {
   SETTLEMENT_BLOCKER_HINTS,
 } from "@features/settlement/api/settlementService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import SubmitReview, {
+  ReviewFacts,
+  ReviewItemsTable,
+  ReviewMoney,
+} from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
+/* Hàng khách khai (ký gửi) / sản phẩm (mua hộ) cho hộp xác nhận chốt phí — API thật. */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
+/*
+ * Cố ý đi đường sâu, KHÔNG qua barrel "@features/purchase": barrel đó kéo theo các trang mua
+ * hộ + CSS của chúng vào sớm hơn thứ tự gốc. Đã đo bằng build: import barrel làm đổi thứ tự
+ * rule trong file CSS gộp (xem ARCHITECTURE.md mục thứ tự nạp CSS); module api thì không.
+ */
+import { getPurchaseRequestDetailApi } from "@features/purchase/api/purchaseRequestService";
 import "./SaleSettlementPage.css";
 
 const { Title, Text } = Typography;
@@ -79,6 +94,25 @@ const PAYMENT_TYPE_LABELS = {
   REDELIVERY_FEE: "Phí giao lại",
 };
 
+/** Sản phẩm của yêu cầu mua hộ (GET /api/purchase-requests/{id} → items[]). */
+const PURCHASE_ITEM_COLUMNS = [
+  {
+    title: "Sản phẩm",
+    dataIndex: "productName",
+    render: (value, item) => (
+      <Space direction="vertical" size={0}>
+        <Text strong>{value || "—"}</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {[item?.productType, item?.sourceWebsite].filter(Boolean).join(" · ") || "Chưa phân loại"}
+        </Text>
+      </Space>
+    ),
+  },
+  { title: "SL", dataIndex: "quantity", width: 70, align: "center", render: (v) => v ?? "—" },
+  { title: "Thuộc tính", dataIndex: "attributes", width: 200, render: (v) => v || "—" },
+  { title: "Ghi chú", dataIndex: "note", width: 200, render: (v) => v || "—" },
+];
+
 const emptyFee = () => ({ key: `${Date.now()}-${Math.round(performance.now())}`, name: "", amount: null, note: "" });
 
 export default function SaleSettlementPage() {
@@ -91,11 +125,31 @@ export default function SaleSettlementPage() {
 
   const [target, setTarget] = useState(null);
   const [fees, setFees] = useState([]);
-  /* Production chỉ cấu hình SePay (chuyển khoản QR); gửi không kèm phương thức thì backend
-     mặc định PayOS và trả lỗi "Chưa cấu hình payOS". */
-  const [paymentMethod, setPaymentMethod] = useState("SEPAY");
+  /*
+   * Hệ thống chỉ cấu hình SePay (chuyển khoản QR). Vẫn giữ biến này vì payload gửi lên
+   * bắt buộc có phương thức: không gửi thì backend mặc định PayOS và trả lỗi
+   * "Chưa cấu hình payOS". Không còn ô cho người dùng đổi — xem chú thích ở phần hiển thị.
+   */
+  const [paymentMethod] = useState("SEPAY");
   const [submitting, setSubmitting] = useState(false);
   const [issued, setIssued] = useState(null);
+
+  /*
+   * Hộp xác nhận cuối trước khi phát hành đợt tất toán. Trước đây bấm nút là gửi ngay, và
+   * không chỗ nào cộng "dự kiến theo cân VN" với phí phát sinh Sale vừa nhập — Sale chốt tiền
+   * mà không thấy khách sẽ phải trả tổng bao nhiêu. Giờ hộp gom đủ: đơn, khách, hàng, kiện
+   * theo cân VN, từng khoản tiền, phí phát sinh và tổng dự kiến, rồi mới cho gửi.
+   */
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const isPurchase = target?.orderType === "PURCHASE";
+  const orderReview = useOrderReview(confirmOpen && !isPurchase ? target?.orderId : "", {
+    withPayments: false,
+  });
+  const purchaseReview = useSubmitReviewData(
+    confirmOpen && isPurchase ? target?.purchaseRequestId : "",
+    () => getPurchaseRequestDetailApi(target.purchaseRequestId),
+  );
+  const confirmLoading = orderReview.loading || purchaseReview.loading;
 
   /* Xem trước tất toán theo cân đo VN + các khoản đã thu — chỉ đơn ký gửi có API này. */
   const [preview, setPreview] = useState(null);
@@ -149,8 +203,9 @@ export default function SaleSettlementPage() {
   const openOrder = useCallback(
     (row) => {
       setTarget(row);
+      setConfirmOpen(false);
       setFees([]);
-      setPaymentMethod("SEPAY");
+      /* Không cần đặt lại phương thức: chỉ còn SePay, biến giữ cố định "SEPAY". */
       setIssued(null);
       loadPreview(row);
     },
@@ -162,12 +217,31 @@ export default function SaleSettlementPage() {
     [fees],
   );
 
+  const cleanFees = useCallback(
+    () =>
+      fees
+        .map((fee) => ({ name: fee.name.trim(), amount: Number(fee.amount) || 0, note: fee.note }))
+        .filter((fee) => fee.name && fee.amount > 0),
+    [fees],
+  );
+
+  /** Bấm nút chốt → kiểm dòng phí rồi mở hộp xác nhận (chưa gửi gì). */
+  const openConfirm = useCallback(() => {
+    if (!target) return;
+
+    // Dòng phí điền dở làm số tiền chốt cho khách sai, nên chặn tại đây thay vì lặng lẽ bỏ qua.
+    if (fees.length > 0 && cleanFees().length !== fees.length) {
+      AuthNotify.error("Phí phát sinh chưa hợp lệ", "Mỗi dòng phí phải có tên và số tiền lớn hơn 0.");
+      return;
+    }
+
+    setConfirmOpen(true);
+  }, [target, fees, cleanFees]);
+
   const submit = useCallback(async () => {
     if (!target) return;
 
-    const cleaned = fees
-      .map((fee) => ({ name: fee.name.trim(), amount: Number(fee.amount) || 0, note: fee.note }))
-      .filter((fee) => fee.name && fee.amount > 0);
+    const cleaned = cleanFees();
 
     // Dòng phí điền dở làm số tiền chốt cho khách sai, nên chặn tại đây thay vì lặng lẽ bỏ qua.
     if (fees.length > 0 && cleaned.length !== fees.length) {
@@ -177,12 +251,11 @@ export default function SaleSettlementPage() {
 
     setSubmitting(true);
     try {
-      const result =
-        target.orderType === "PURCHASE" && target.purchaseRequestId
-          ? await createPurchaseFinalPayment(target.purchaseRequestId, cleaned, paymentMethod)
-          : await createFinalPayment(target.orderId, cleaned, paymentMethod);
+      // Đơn mua hộ cũng tất toán trên đơn kho PUR (`target.orderId`), cùng đường với ký gửi.
+      const result = await createFinalPayment(target.orderId, cleaned, paymentMethod);
 
       setIssued(result);
+      setConfirmOpen(false);
       loadPreview(target);
       AuthNotify.success(
         "Đã chốt phí cuối",
@@ -194,7 +267,7 @@ export default function SaleSettlementPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [target, fees, paymentMethod, load, loadPreview]);
+  }, [target, fees, cleanFees, paymentMethod, load, loadPreview]);
 
   const columns = useMemo(
     () => [
@@ -308,7 +381,10 @@ export default function SaleSettlementPage() {
 
       <Drawer
         open={Boolean(target)}
-        onClose={() => setTarget(null)}
+        onClose={() => {
+          setTarget(null);
+          setConfirmOpen(false);
+        }}
         width={720}
         title={`Chốt tất toán · ${target?.orderCode || ""}`}
       >
@@ -431,6 +507,19 @@ export default function SaleSettlementPage() {
                       <Descriptions.Item label={`Điều chỉnh VAT (${formatNumber(preview.vatRatePercent)}%)`}>
                         {signedMoney(preview.vatAdjustment)}
                       </Descriptions.Item>
+                      {/*
+                        Mua hộ: thuế NK KHÔNG thu của phần hàng không tới tay khách (kiện huỷ / thất
+                        lạc, NCC giao thiếu) — luôn ≤ 0, server ghi dòng TAX_ADJUSTMENT khi phát hành
+                        và đã gồm trong "Dự kiến khách trả". Backend cũ không có trường → ẩn.
+                      */}
+                      {Number(preview.importTaxAdjustment) ? (
+                        <Descriptions.Item label="Điều chỉnh thuế NK" span={2}>
+                          {signedMoney(preview.importTaxAdjustment)}
+                          {preview.importTaxAdjustmentNote ? (
+                            <Text type="secondary"> — {preview.importTaxAdjustmentNote}</Text>
+                          ) : null}
+                        </Descriptions.Item>
+                      ) : null}
                       <Descriptions.Item label="Phí lưu kho">{formatMoney(preview.storageFee)}</Descriptions.Item>
                       <Descriptions.Item label="Hoá đơn trước điều chỉnh">
                         {formatMoney(preview.invoiceTotalBefore)}
@@ -576,15 +665,23 @@ export default function SaleSettlementPage() {
               <>
               <div style={{ marginTop: 16 }}>
                 <Text strong>Khách thanh toán qua</Text>
-                <div style={{ marginTop: 8 }}>
-                  <Segmented
-                    value={paymentMethod}
-                    onChange={setPaymentMethod}
-                    options={[
-                      { label: "Chuyển khoản SePay (QR)", value: "SEPAY" },
-                      { label: "PayOS", value: "PAYOS" },
-                    ]}
-                  />
+                {/*
+                  Chỉ còn SePay. Bỏ lựa chọn PayOS vì hệ thống KHÔNG cấu hình cổng đó:
+                  chọn vào là backend trả "Chưa cấu hình payOS" và Sale kẹt giữa chừng
+                  với khách. Thà không có nút còn hơn có nút bấm vào thì lỗi.
+
+                  Nhãn PAYOS vẫn còn trong bảng dịch tên phương thức, để các khoản thu cũ
+                  đã ghi PAYOS hiện đúng tên khi xem lại lịch sử.
+                */}
+                <div className="settlement-payment-method">
+                  <CreditCardOutlined />
+                  <span>
+                    <b>Chuyển khoản SePay (QR)</b>
+                    <small>
+                      Hệ thống mở trang mã QR, khách quét bằng app ngân hàng và tự động
+                      ghi nhận khi tiền về.
+                    </small>
+                  </span>
                 </div>
               </div>
               <Button
@@ -594,16 +691,190 @@ export default function SaleSettlementPage() {
                 icon={<DollarOutlined />}
                 loading={submitting}
                 disabled={Boolean(target.orderType !== "PURCHASE" && (previewLoading || (preview && !preview.canIssue)))}
-                onClick={submit}
+                onClick={openConfirm}
                 style={{ marginTop: 16 }}
               >
-                Chốt phí cuối và gửi khách tất toán
+                Xem lại và chốt phí cuối
               </Button>
               </>
             )}
           </>
         )}
       </Drawer>
+
+      {/*
+        XÁC NHẬN CHỐT PHÍ CUỐI. Đang tải hàng của đơn thì khoá nút gửi. Tải lỗi không chặn: số
+        tiền (phần quan trọng nhất) đã có từ xem trước tất toán, và server tự tính lại cước theo
+        cân VN khi phát hành — phần hàng chỉ để Sale đối chiếu.
+      */}
+      <Modal
+        {...REVIEW_MODAL_PROPS}
+        open={Boolean(confirmOpen && target)}
+        title={`Xác nhận chốt phí cuối · ${target?.orderCode || ""}`}
+        okText={confirmLoading ? "Đang tải thông tin…" : "Chốt phí và gửi khách tất toán"}
+        cancelText="Xem lại"
+        confirmLoading={submitting}
+        okButtonProps={{ disabled: confirmLoading }}
+        onOk={submit}
+        onCancel={() => setConfirmOpen(false)}
+      >
+        {target && (
+          <>
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 14 }}
+              message="Gửi xong hệ thống phát hành ngay đợt thanh toán cuối và gửi mã QR cho khách."
+              description="Số tiền cuối do server tính lại theo cân đo VN lúc phát hành; con số dưới đây là dự kiến từ bản xem trước cộng phí phát sinh bạn nhập."
+            />
+
+            <ReviewFacts
+              items={[
+                { label: "Mã đơn", value: <Text strong>{target.orderCode}</Text> },
+                { label: "Loại đơn", value: isPurchase ? "Mua hộ" : "Ký gửi" },
+                { label: "Khách hàng", value: target.customerName },
+                { label: "SĐT khách", value: target.customerPhone },
+                { label: "Tuyến", value: target.route },
+                {
+                  label: "Hàng về kho",
+                  value: `${target.parcelCount} kiện · ${formatNumber(target.totalWeight)} kg · ${formatDateTime(target.arrivedAt)}`,
+                },
+                {
+                  label: "Người nhận",
+                  value: [target.receiverName, target.receiverPhone].filter(Boolean).join(" · "),
+                },
+                {
+                  label: "Kiểm đếm",
+                  value:
+                    target.discrepancyParcelCount > 0 ? (
+                      <Text type="danger">{target.discrepancyParcelCount} kiện lệch</Text>
+                    ) : (
+                      "Khớp khai báo"
+                    ),
+                },
+                { label: "Địa chỉ giao", value: target.receiverAddress, span: 2 },
+                { label: "Thanh toán qua", value: "Chuyển khoản SePay (QR)", span: 2 },
+              ]}
+            />
+
+            <div style={{ height: 14 }} />
+
+            {!isPurchase && preview && (
+              <ReviewItemsTable
+                title="Kiện tính cước theo cân đo VN"
+                items={preview.parcels || []}
+                rowKey={(row, index) => row?.parcelId || index}
+                extra={`Cân tính cước ${formatNumber(preview.vnChargeableWeight)} kg · ${formatMoney(preview.freightRate)}/kg`}
+                columns={[
+                  {
+                    title: "Kiện",
+                    dataIndex: "packageCode",
+                    render: (value, row) => (
+                      <Space direction="vertical" size={0}>
+                        <Text code>{value}</Text>
+                        {row.isDisposed ? <Tag>Đã huỷ — không tính cước</Tag> : null}
+                      </Space>
+                    ),
+                  },
+                  { title: "Cân kho gốc", dataIndex: "originWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                  { title: "Cân VN", dataIndex: "vnWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                  {
+                    title: "Kích thước VN (cm)",
+                    key: "dims",
+                    render: (_, row) =>
+                      `${formatNumber(row.vnLength, 0)}×${formatNumber(row.vnWidth, 0)}×${formatNumber(row.vnHeight, 0)}`,
+                  },
+                  { title: "Cân quy đổi", dataIndex: "volumetricWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                  { title: "Cân tính cước", dataIndex: "chargeableWeight", align: "right", render: (v) => <Text strong>{formatNumber(v)} kg</Text> },
+                ]}
+              />
+            )}
+
+            {!isPurchase && (
+              <OrderReviewPanel
+                review={orderReview}
+                fallback={target}
+                showFacts={false}
+                showMoney={false}
+                errorHint="Phần tiền bên dưới không bị ảnh hưởng."
+              />
+            )}
+
+            {isPurchase && (
+              <SubmitReview
+                loading={purchaseReview.loading}
+                loadingText="Đang tải sản phẩm của yêu cầu mua hộ…"
+                error={purchaseReview.error}
+                errorHint="Phần tiền bên dưới không bị ảnh hưởng."
+              >
+                <ReviewItemsTable
+                  title="Sản phẩm của yêu cầu mua hộ"
+                  items={purchaseReview.data?.items || []}
+                  columns={PURCHASE_ITEM_COLUMNS}
+                  rowKey={(item, index) => item?.itemId || index}
+                  extra={`${(purchaseReview.data?.items || []).length} sản phẩm`}
+                />
+              </SubmitReview>
+            )}
+
+            <ReviewMoney
+              title="Tiền khách sẽ tất toán"
+              lines={[
+                ...(!isPurchase && preview
+                  ? [
+                      { label: "Hoá đơn trước điều chỉnh", value: preview.invoiceTotalBefore },
+                      {
+                        label: "Điều chỉnh cước theo cân VN",
+                        value: signedMoney(preview.freightAdjustment),
+                        hint: `Cước đã báo ${formatMoney(preview.quotedFreight)} → theo cân VN ${formatMoney(preview.vnFreight)}`,
+                      },
+                      {
+                        label: `Điều chỉnh VAT (${formatNumber(preview.vatRatePercent)}%)`,
+                        value: signedMoney(preview.vatAdjustment),
+                      },
+                      {
+                        label: "Điều chỉnh thuế NK (hàng không tới tay khách)",
+                        value: signedMoney(preview.importTaxAdjustment),
+                        hint: preview.importTaxAdjustmentNote || "",
+                        hidden: !Number(preview.importTaxAdjustment),
+                      },
+                      { label: "Phí lưu kho", value: preview.storageFee },
+                      { label: "Đã cọc", value: preview.depositPaid, tone: "success" },
+                      {
+                        label: "Dự kiến theo cân VN",
+                        value: preview.estimatedFinalAmount,
+                        hint: "chưa gồm phí phát sinh",
+                      },
+                    ]
+                  : []),
+                ...cleanFees().map((fee, index) => ({
+                  key: `fee-${index}`,
+                  label: `Phí phát sinh: ${fee.name}`,
+                  hint: fee.note || "",
+                  value: signedMoney(fee.amount),
+                })),
+                ...(fees.length === 0
+                  ? [{ label: "Phí phát sinh", value: "Không có" }]
+                  : [{ label: "Cộng phí phát sinh", value: feesTotal }]),
+                !isPurchase && preview
+                  ? {
+                      label: "Tổng dự kiến khách trả",
+                      value: (Number(preview.estimatedFinalAmount) || 0) + feesTotal,
+                      strong: true,
+                      hint: "server tính lại chính xác khi phát hành",
+                    }
+                  : {
+                      label: "Tổng khách trả",
+                      value: isPurchase
+                        ? "Hệ thống tính khi phát hành (đơn mua hộ không có bản xem trước)"
+                        : "Chưa có bản xem trước — hệ thống tính khi phát hành",
+                      strong: true,
+                    },
+              ]}
+            />
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

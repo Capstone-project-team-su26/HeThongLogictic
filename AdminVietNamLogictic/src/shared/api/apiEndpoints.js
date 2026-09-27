@@ -18,11 +18,24 @@ export const API_ENDPOINTS = Object.freeze({
      */
     deliveryAddresses: (customerId) =>
       `/api/customers/${encodeId(customerId)}/delivery-addresses`,
+    /*
+     * Nhân viên THÊM địa chỉ hộ khách — cùng đường dẫn, method POST
+     * (DeliveryAddressController.CreateForCustomer, role Admin/Sale/OperationsManager).
+     * Gửi lại đúng địa chỉ cũ thì backend trả lại dòng đã có, không nhân đôi sổ.
+     */
+    createDeliveryAddress: (customerId) =>
+      `/api/customers/${encodeId(customerId)}/delivery-addresses`,
   }),
   consignments: Object.freeze({
     list: "/api/orders/consignments",
     /* Sale tạo đơn ký gửi HỘ KHÁCH — OrderController.CreateConsignmentByStaff, role Sale. */
     createByStaff: "/api/staff/consignments",
+    /*
+     * Ước tính TRƯỚC khi tạo — cùng payload, cùng phép tính với createByStaff, nhưng
+     * không ghi gì xuống DB. Nhờ vậy con số Sale đọc cho khách nghe ở màn xác nhận
+     * bằng đúng con số trên báo giá hệ thống phát hành ngay sau đó.
+     */
+    previewByStaff: "/api/staff/consignments/preview",
     routes: "/api/orders/consignments/routes",
     shippingOptions: "/api/orders/consignments/shipping-options",
     validateItems: "/api/orders/consignments/validate-items",
@@ -55,6 +68,19 @@ export const API_ENDPOINTS = Object.freeze({
     /* Đơn mua nhà cung cấp của một yêu cầu (luồng mua hộ chuẩn). */
     purchaseOrders: (purchaseRequestId) =>
       `/api/purchase-requests/${encodeId(purchaseRequestId)}/purchase-orders`,
+
+    /*
+     * Tiền đi NGƯỢC của mua hộ (backend mới — hiện CHỈ có trên env test).
+     * closeUnfulfilled: Sale/Admin đóng phần không mua được + NCC giao thiếu → lập khoản hoàn.
+     * refunds: sổ hoàn của cả yêu cầu (tổng đã thu / đã hoàn / chờ hoàn + từng khoản, từng dòng).
+     * completeRefund: kế toán xác nhận đã chuyển MỘT khoản cụ thể (kể cả khoản không gắn đơn mua).
+     */
+    closeUnfulfilled: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/close-unfulfilled`,
+    refunds: (purchaseRequestId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/refunds`,
+    completeRefund: (purchaseRequestId, refundId) =>
+      `/api/purchase-requests/${encodeId(purchaseRequestId)}/refunds/${encodeId(refundId)}/complete`,
   }),
 
   /**
@@ -77,6 +103,9 @@ export const API_ENDPOINTS = Object.freeze({
       `/api/purchase-orders/${encodeId(purchaseOrderId)}/progress`,
     cancel: (purchaseOrderId) =>
       `/api/purchase-orders/${encodeId(purchaseOrderId)}/cancel`,
+    /* Kế toán xác nhận ĐÃ CHUYỂN TRẢ khách khoản hoàn (bắt buộc mã giao dịch). */
+    completeRefund: (purchaseOrderId) =>
+      `/api/purchase-orders/${encodeId(purchaseOrderId)}/refund/complete`,
   }),
   deliveryAddresses: Object.freeze({
     list: "/api/delivery-addresses",
@@ -91,6 +120,22 @@ export const API_ENDPOINTS = Object.freeze({
   warehouses: Object.freeze({
     list: "/api/warehouses",
     active: "/api/warehouses/active",
+    /* Nhân viên kho được gán vào kho (Admin/OperationsManager/Sale, chỉ đọc). */
+    staff: (warehouseId) => `/api/warehouses/${encodeId(warehouseId)}/staff`,
+  }),
+  /*
+   * Tài khoản nội bộ (màn Quản lý người dùng của Admin). Route cũ viết hoa `User`
+   * (UserController); route gán kho mới viết thường `users` — ASP.NET không phân biệt
+   * hoa thường nhưng giữ đúng chữ như backend khai.
+   */
+  users: Object.freeze({
+    list: "/api/User",
+    detail: (userId) => `/api/User/${encodeId(userId)}`,
+    role: (userId) => `/api/User/${encodeId(userId)}/role`,
+    lock: (userId) => `/api/User/${encodeId(userId)}/lock`,
+    unlock: (userId) => `/api/User/${encodeId(userId)}/unlock`,
+    /* GET (Admin/OM) xem kho phụ trách · PUT (Admin) thay TOÀN BỘ danh sách kho. */
+    warehouses: (userId) => `/api/users/${encodeId(userId)}/warehouses`,
   }),
   restrictedItems: Object.freeze({
     list: "/api/restricted-items",
@@ -112,6 +157,18 @@ export const API_ENDPOINTS = Object.freeze({
     list: "/api/pricing-rules",
     detail: (pricingRuleId) =>
       `/api/pricing-rules/${encodeId(pricingRuleId)}`,
+  }),
+  /*
+   * PHÍ DỊCH VỤ BỔ SUNG — bảng RIÊNG với pricing-rules, không gộp được.
+   *
+   * Backend đọc DEPOSIT_RATE, PURCHASE_PRICE_TOLERANCE_RATE và PURCHASE_CANCEL_FEE_RATE
+   * từ bảng NÀY (AdditionalServiceFee), còn hệ số quy đổi / VAT / thuế / phụ phí theo kiện
+   * thì đọc từ PRICING_RULES. Sửa nhầm bảng là số hiện trên màn hình đổi mà hệ thống vẫn
+   * chạy theo giá trị cũ. Ghi (POST/PUT/DELETE) chỉ role Admin.
+   */
+  additionalServiceFees: Object.freeze({
+    list: "/api/additional-service-fees",
+    detail: (feeId) => `/api/additional-service-fees/${encodeId(feeId)}`,
   }),
   exchangeRates: Object.freeze({
     list: "/api/exchange-rates",
@@ -178,8 +235,6 @@ export const API_ENDPOINTS = Object.freeze({
     exportHold: (orderId) => `/api/orders/consignments/${encodeId(orderId)}/export-hold`,
     complete: (orderId) => `/api/orders/consignments/${encodeId(orderId)}/complete`,
   }),
-  purchaseFinalPayment: (purchaseRequestId) =>
-    `/api/purchase-requests/${encodeId(purchaseRequestId)}/final-payment`,
   warehouseZones: Object.freeze({
     list: (warehouseId) => `/api/warehouses/${encodeId(warehouseId)}/zones`,
     update: (zoneId) => `/api/warehouse-zones/${encodeId(zoneId)}`,
@@ -195,6 +250,15 @@ export const API_ENDPOINTS = Object.freeze({
   shippingRoutes: Object.freeze({
     list: "/api/shipping-routes",
     detail: (id) => `/api/shipping-routes/${encodeId(id)}`,
+  }),
+  /*
+   * Bảng tổng quan theo vai trò (StaffDashboardController) — một lời gọi trả hết số liệu,
+   * backend tự đếm/cộng. Sale: Sale/OM/Admin · vận hành: OM/Admin · quản trị: chỉ Admin.
+   */
+  dashboards: Object.freeze({
+    sale: "/api/staff/dashboard",
+    operations: "/api/operations/dashboard",
+    admin: "/api/admin/dashboard",
   }),
 });
 

@@ -9,10 +9,13 @@
 
 import {
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
+import {
+  findActiveExchangeRate,
+} from "@features/pricing/api/exchangeRateService";
 import {
   formatVnd,
-} from "@features/pricing/api/servicePricingService.mock";
+} from "@features/pricing/api/servicePricingService";
 
 import {
   RULE_CODE_LABELS,
@@ -87,8 +90,45 @@ export const getPackageDimensionDisplay = (
   return `${length} × ${width} × ${height} cm`;
 };
 
-/* Quy tắc phần trăm và hệ số quy đổi không phải tiền, nên không format VNĐ. */
+/*
+ * Rule HỆ THỐNG: tham số tính cân, không phải khoản phí thu của khách. Backend nhận
+ * diện theo ruleCode HOẶC ruleType (QuotationService.Helpers.GetVolumetricDivisor /
+ * GetMinimumWeight), nên ở đây cũng xét cả hai. Sửa số ở màn "Tham số vận hành".
+ */
+const MIN_WEIGHT_CODE = "MIN_WEIGHT";
+
+const ruleKeys = (rule) => [
+  normalizeText(rule?.ruleCode).toUpperCase(),
+  normalizeText(rule?.ruleType).toUpperCase(),
+];
+
+export const isVolumetricDivisorRule = (rule) =>
+  ruleKeys(rule).includes(
+    PRICING_RULE_CODE.VOLUMETRIC_DIVISOR
+  );
+
+export const isMinimumWeightRule = (rule) =>
+  ruleKeys(rule).includes(MIN_WEIGHT_CODE);
+
+export const isSystemParameterRule = (rule) =>
+  isVolumetricDivisorRule(rule) ||
+  isMinimumWeightRule(rule);
+
+const formatPlainNumber = (value) =>
+  new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 3,
+  }).format(Number(value) || 0);
+
+/* Quy tắc phần trăm và tham số hệ thống không phải tiền, nên không format VNĐ. */
 export const formatRuleValue = (rule) => {
+  if (isVolumetricDivisorRule(rule)) {
+    return `${formatPlainNumber(rule?.value)} cm³/kg`;
+  }
+
+  if (isMinimumWeightRule(rule)) {
+    return `${formatPlainNumber(rule?.value)} kg`;
+  }
+
   if (
     rule?.calculationType ===
     "PERCENTAGE"
@@ -96,19 +136,18 @@ export const formatRuleValue = (rule) => {
     return `${rule.value}%`;
   }
 
-  if (
-    rule?.ruleCode ===
-    PRICING_RULE_CODE.VOLUMETRIC_DIVISOR
-  ) {
-    return new Intl.NumberFormat(
-      "vi-VN"
-    ).format(rule.value);
-  }
-
   return formatVnd(rule?.value);
 };
 
 export const getRuleValueUnit = (rule) => {
+  if (isVolumetricDivisorRule(rule)) {
+    return "Hệ số quy đổi";
+  }
+
+  if (isMinimumWeightRule(rule)) {
+    return "Cân tối thiểu";
+  }
+
   if (
     rule?.calculationType ===
     "PERCENTAGE"
@@ -116,14 +155,23 @@ export const getRuleValueUnit = (rule) => {
     return "Tỷ lệ";
   }
 
-  if (
-    rule?.ruleCode ===
-    PRICING_RULE_CODE.VOLUMETRIC_DIVISOR
-  ) {
-    return "Hệ số";
+  return "Mức phí";
+};
+
+/*
+ * calculationType FIXED của rule hệ thống chỉ là giá trị bắt buộc của bảng
+ * PRICING_RULES; hiện "Cố định" khiến hệ số trông như một khoản phí.
+ */
+export const getRuleCalculationDisplay = (rule) => {
+  if (isVolumetricDivisorRule(rule)) {
+    return "Tham số hệ thống: cân quy đổi = D×R×C (cm³) ÷ hệ số";
   }
 
-  return "Mức phí";
+  if (isMinimumWeightRule(rule)) {
+    return "Tham số hệ thống: cân tính cước không thấp hơn mức này";
+  }
+
+  return rule?.calculationTypeDisplayName || "—";
 };
 
 /* Đoán ngoại tệ theo tuyến rồi quy đổi; thiếu tỷ giá thì dùng mức mặc định. */
@@ -149,8 +197,11 @@ export const getForeignCurrencyEstimate = (vndPrice, origin, rates = []) => {
     flag = "🇺🇸";
   }
 
-  const foundRate = rates.find((r) => String(r.currencyCode || "").toUpperCase() === code);
-  const rateToVnd = foundRate?.rateToVnd || (code === "KRW" ? 20 : code === "JPY" ? 180 : code === "CNY" ? 3650 : 26000);
+  /* Chỉ quy đổi bằng tỷ giá THẬT đang bật; không có thì không hiện ước tính (không dùng số mặc định). */
+  const foundRate = findActiveExchangeRate(rates, code);
+  const rateToVnd = Number(foundRate?.rateToVnd) || 0;
+
+  if (rateToVnd <= 0) return null;
 
   const foreignAmount = (price / rateToVnd).toFixed(code === "KRW" || code === "JPY" ? 0 : 2);
   return {

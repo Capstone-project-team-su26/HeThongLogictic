@@ -1,7 +1,7 @@
 /**
  * Một nguồn đếm duy nhất cho cả Sidebar lẫn thanh tab.
  *
- * Nếu để mỗi nơi tự gọi API thì mở một trang sẽ bắn 7 request hai lần. Provider bọc quanh
+ * Nếu để mỗi nơi tự gọi API thì mở một trang sẽ bắn 8 request hai lần. Provider bọc quanh
  * layout: đếm một lượt khi vào, làm mới mỗi 60 giây, và đếm lại khi người dùng quay lại
  * tab trình duyệt (bỏ qua nếu vừa đếm chưa tới 20 giây).
  *

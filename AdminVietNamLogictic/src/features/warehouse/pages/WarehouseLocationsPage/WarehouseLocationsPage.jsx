@@ -32,7 +32,6 @@ import {
   updateWarehouseLayoutItem,
 } from "@features/admin/api/adminService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
-import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import WarehouseHeroHeader from "@features/warehouse/components/WarehouseHeroHeader/WarehouseHeroHeader";
 import WarehouseToolbar from "@features/warehouse/components/WarehouseToolbar/WarehouseToolbar";
 import WarehouseSummaryCard from "@features/warehouse/components/WarehouseSummaryCard/WarehouseSummaryCard";
@@ -49,6 +48,7 @@ const { Text, Title, Paragraph } = Typography;
 
 const INITIAL_LOCATION_FORM = {
   zoneName: "",
+  zoneType: "",
   shelfCode: "",
   binCode: "",
   maxVolume: null,
@@ -62,10 +62,7 @@ const INITIAL_LAYOUT_FORM = {
   label: "",
   gridRow: 1,
   gridColumn: 1,
-  maxVolume: null,
-  maxWeight: null,
   isActive: true,
-  note: "",
 };
 
 const getLocationId = (record) => record?.id || record?.locationId || "";
@@ -77,8 +74,11 @@ const formatNumber = (value, unit = "") => {
   return unit ? `${formatted} ${unit}` : formatted;
 };
 
-const buildLocationPayload = (form) => ({
+/* zoneType chỉ gửi cho KHU MỚI: backend bắt buộc khi tạo khu, và từ chối nếu gửi kèm cho
+   khu đã có mà khác loại (đổi loại khu ở màn "Khu kho & kiện sai khu"). */
+const buildLocationPayload = (form, isNewZone = false) => ({
   zoneName: form.zoneName.trim() || null,
+  ...(isNewZone && form.zoneType ? { zoneType: form.zoneType } : {}),
   shelfCode: form.shelfCode.trim() || null,
   binCode: form.binCode.trim() || null,
   maxVolume: form.maxVolume === "" || form.maxVolume == null ? null : Number(form.maxVolume),
@@ -87,23 +87,23 @@ const buildLocationPayload = (form) => ({
   note: form.note ? form.note.trim() : null,
 });
 
+/* Ô sơ đồ của backend không có sức chứa/ghi chú (sức chứa khai ở ô kệ) nên không gửi. */
 const buildLayoutPayload = (form) => ({
   zoneCode: form.zoneCode.trim() || null,
   label: form.label.trim() || null,
-  gridRow: form.gridRow ? Number(form.gridRow) : 1,
-  gridColumn: form.gridColumn ? Number(form.gridColumn) : 1,
-  maxVolume: form.maxVolume === "" || form.maxVolume == null ? null : Number(form.maxVolume),
-  maxWeight: form.maxWeight === "" || form.maxWeight == null ? null : Number(form.maxWeight),
+  gridRow: form.gridRow == null || form.gridRow === "" ? 1 : Number(form.gridRow),
+  gridColumn: form.gridColumn == null || form.gridColumn === "" ? 1 : Number(form.gridColumn),
   isActive: Boolean(form.isActive),
-  note: form.note ? form.note.trim() : null,
 });
 
 function groupLocations(locations = []) {
   const zones = new Map();
+  const zoneTypes = new Map();
   for (const loc of locations) {
     const zoneName = loc.zoneName || loc.zoneCode || "Chung";
     const shelfCode = loc.shelfCode || "Shelf A";
     if (!zones.has(zoneName)) zones.set(zoneName, new Map());
+    if (loc.zoneType && !zoneTypes.has(zoneName)) zoneTypes.set(zoneName, loc.zoneType);
     const shelves = zones.get(zoneName);
     if (!shelves.has(shelfCode)) shelves.set(shelfCode, []);
     shelves.get(shelfCode).push(loc);
@@ -113,6 +113,7 @@ function groupLocations(locations = []) {
     .sort(([a], [b]) => a.localeCompare(b, "vi"))
     .map(([zoneName, shelves]) => ({
       zoneName,
+      zoneType: zoneTypes.get(zoneName) || "",
       shelves: [...shelves.entries()]
         .sort(([a], [b]) => a.localeCompare(b, "vi"))
         .map(([shelfCode, bins]) => ({
@@ -135,7 +136,7 @@ export default function WarehouseLocationsPage() {
   // Data states
   const [locations, setLocations] = useState([]);
   const [layoutItems, setLayoutItems] = useState([]);
-  const [, setZoneData] = useState(null);
+  const [zoneData, setZoneData] = useState(null);
   const [statusData, setStatusData] = useState(null);
   const [inventories, setInventories] = useState([]);
 
@@ -275,13 +276,25 @@ export default function WarehouseLocationsPage() {
     return names.map((name) => ({ label: `Khu vực ${name}`, value: name }));
   }, [locations]);
 
-  const existingZones = useMemo(
-    () =>
-      groupLocations(locations)
-        .map((zone) => zone.zoneName)
-        .filter((name) => name !== "Chung"),
-    [locations]
-  );
+  /* Khu đã có của kho: khu có ô kệ + khu rỗng từ cây /layout/zones (backend tìm khu theo tên,
+     không phân biệt hoa thường — trùng tên thì dùng lại khu cũ, không cần loại khu). */
+  const existingZones = useMemo(() => {
+    const names = new Map();
+    const add = (name) => {
+      const text = String(name || "").trim();
+      if (text && text !== "Chung" && !names.has(text.toLocaleLowerCase("vi"))) {
+        names.set(text.toLocaleLowerCase("vi"), text);
+      }
+    };
+    groupLocations(locations).forEach((zone) => add(zone.zoneName));
+    (zoneData?.zones || []).forEach((zone) => add(zone.zoneName));
+    return [...names.values()];
+  }, [locations, zoneData]);
+
+  const isNewZone = useMemo(() => {
+    const name = String(locationForm.zoneName || "").trim().toLocaleLowerCase("vi");
+    return Boolean(name) && !existingZones.some((zone) => zone.toLocaleLowerCase("vi") === name);
+  }, [existingZones, locationForm.zoneName]);
 
   const selectedWarehouse = useMemo(
     () => warehouses.find((w) => w.id === warehouseId),
@@ -311,6 +324,7 @@ export default function WarehouseLocationsPage() {
     });
     setLocationForm({
       zoneName: record.zoneName || record.zoneCode || "",
+      zoneType: "",
       shelfCode: record.shelfCode || "",
       binCode: record.binCode || record.code || "",
       maxVolume: record.maxVolume ?? record.capacity ?? null,
@@ -342,10 +356,17 @@ export default function WarehouseLocationsPage() {
       );
       return;
     }
+    if (isNewZone && !locationForm.zoneType) {
+      AuthNotify.warning(
+        "Chưa chọn loại khu",
+        `Khu "${locationForm.zoneName.trim()}" chưa có trong kho — chọn loại khu (nhận, cách ly, lưu kho hoặc xuất) để tạo khu mới.`
+      );
+      return;
+    }
 
     setSaving(true);
     try {
-      const payload = buildLocationPayload(locationForm);
+      const payload = buildLocationPayload(locationForm, isNewZone);
       if (editingLocation) {
         await updateWarehouseLocation(getLocationId(editingLocation), payload);
         AuthNotify.success("Cập nhật thành công", `Đã cập nhật thông tin Ô chứa ${locationForm.binCode}.`);
@@ -377,7 +398,7 @@ export default function WarehouseLocationsPage() {
     setEditingLayout(null);
     setLayoutForm({
       ...INITIAL_LAYOUT_FORM,
-      zoneCode: existingZones[0] || "A",
+      zoneCode: existingZones[0] || "",
     });
     setLayoutEditorOpen(true);
   };
@@ -387,12 +408,9 @@ export default function WarehouseLocationsPage() {
     setLayoutForm({
       zoneCode: item.zoneCode || item.zoneName || "",
       label: item.label || item.code || "",
-      gridRow: item.gridRow || item.row || 1,
-      gridColumn: item.gridColumn || item.column || 1,
-      maxVolume: item.maxVolume ?? null,
-      maxWeight: item.maxWeight ?? null,
+      gridRow: item.gridRow ?? item.row ?? 1,
+      gridColumn: item.gridColumn ?? item.column ?? 1,
       isActive: item.isActive !== false,
-      note: item.note || "",
     });
     setLayoutEditorOpen(true);
   };
@@ -501,17 +519,6 @@ export default function WarehouseLocationsPage() {
       render: (text) => text || <Text type="secondary">—</Text>,
     },
     {
-      title: "Thời Gian Tạo (UTC+7)",
-      dataIndex: "createdAt",
-      key: "createdAt",
-      width: 170,
-      render: (val) => (
-        <Text style={{ fontSize: 12, color: "#475569" }}>
-          {formatVietnamDateTime(val)}
-        </Text>
-      ),
-    },
-    {
       title: "Thao Tác",
       key: "actions",
       width: 120,
@@ -616,6 +623,7 @@ export default function WarehouseLocationsPage() {
                   activeBins={activeBins}
                   tree={tree}
                   statusData={statusData}
+                  inventories={inventories}
                 />
               )}
 
@@ -655,6 +663,7 @@ export default function WarehouseLocationsPage() {
         locationForm={locationForm}
         setLocationForm={setLocationForm}
         existingZones={existingZones}
+        isNewZone={isNewZone}
         isZonePreset={locationPreset.isZonePreset}
         isShelfPreset={locationPreset.isShelfPreset}
         onSubmit={submitLocation}

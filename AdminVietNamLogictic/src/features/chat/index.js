@@ -1,18 +1,21 @@
 /**
  * BỀ MẶT CÔNG KHAI CỦA FEATURE "chat".
  *
- * Feature này sở hữu đúng bốn thứ:
+ * Feature này sở hữu đúng năm thứ:
  *
  *  1. CustomerServiceChat — màn chăm sóc khách hàng của khối Sale (hộp thư hội
  *     thoại bên trái, khung tin nhắn bên phải, đính kèm ảnh/file). Đây là màn
  *     duy nhất được gắn route, khai báo ở @app/router/saleRoutes.
  *  2. SalesAiAssistantPanel — panel trợ lý AI mở kèm bên trong màn trên: sale gõ
  *     câu hỏi, panel tra trạng thái đơn rồi dựng sẵn câu trả lời để gửi cho khách.
- *  3. conversationApi (MOCK) — hội thoại, tin nhắn, đánh dấu đã đọc.
- *  4. saleAiService (MOCK) — tra trạng thái đơn "bằng AI" và soạn câu trả lời.
+ *  3. conversationApi (API THẬT /api/conversations) — hội thoại, tin nhắn, đánh dấu
+ *     đã đọc. Bản mock cũ nằm ở conversationApi.mock.js, KHÔNG re-export ở đây.
+ *  4. chatImageUploadApi (API THẬT /api/uploads/images) — upload ảnh đính kèm chat.
+ *     Lớp mỏng trên @shared/api/uploadImage (đã là API thật từ 27/09/2026).
+ *  5. saleAiService (API THẬT POST /api/ai/sales/order-status-query) — tra trạng thái đơn
+ *     và soạn câu trả lời. Bản mock cũ ở saleAiService.mock.js, KHÔNG re-export.
  *
- * Feature này KHÔNG sở hữu: dữ liệu mẫu (@/mocks/data/conversations.js) và tiện
- * ích upload ảnh (@shared/api/uploadImage) mà màn chat đang mượn.
+ * Feature này KHÔNG sở hữu: dữ liệu mẫu (@/mocks/data/conversations.js).
  *
  * VÌ SAO panel nằm trong barrel dù hiện chỉ CustomerServiceChat dùng: nó được
  * đặt ở components/ cấp feature chứ không lồng trong thư mục của page, tức là
@@ -22,9 +25,10 @@
  *
  * VỀ NGUY CƠ VA CHẠM TÊN KHI DÙNG `export *` — đã kiểm trước khi viết:
  * hai module api của feature giao nhau BẰNG RỖNG. conversationApi có 5 tên, đều
- * mang cụm "Conversation" và hậu tố "Api"; saleAiService có 6 tên xoay quanh
+ * mang cụm "Conversation" và hậu tố "Api"; saleAiService có 8 tên xoay quanh
  * mapStatusLabel / normalizeSalesOrderStatusResponse / buildCustomerReply /
- * buildWarnings / getSalesAiError / querySalesOrderStatus. Không tên nào đụng
+ * buildWarnings / getSalesAiError / querySalesOrderStatus / buildSalesAiPayload /
+ * SALES_AI_ENDPOINT. Không tên nào đụng
  * nhau, nên hai dòng `export *` bên dưới an toàn và không cần alias.
  *
  * Quét thêm toàn bộ module api của mọi feature trong dự án: 11 tên trên KHÔNG
@@ -56,7 +60,7 @@ export { default as CustomerServiceChat } from "./pages/CustomerServiceChat/Cust
 export { default as SalesAiAssistantPanel } from "./components/SalesAiAssistantPanel/SalesAiAssistantPanel";
 
 /* ------------------------------------------------------------------ */
-/* API — MOCK                                                          */
+/* API                                                                 */
 /* ------------------------------------------------------------------ */
 
 /*
@@ -69,9 +73,13 @@ export { default as SalesAiAssistantPanel } from "./components/SalesAiAssistantP
 export * from "./api/conversationApi";
 export { default as conversationApi } from "./api/conversationApi";
 
+/* chatImageUploadApi.js: uploadChatImages, CHAT_IMAGE_MAX_SIZE_BYTES, chatUploadAxios —
+   không tên nào trùng hai module còn lại. Default chính là uploadChatImages. */
+export * from "./api/chatImageUploadApi";
+
 /*
- * saleAiService.js: 6 named export LẪN default. Lưu ý default ở đây chỉ gom 4
- * trong 6 hàm (thiếu normalizeSalesOrderStatusResponse và getSalesAiError), nên
+ * saleAiService.js: 8 named export LẪN default. Lưu ý default ở đây chỉ gom 4
+ * trong 8 tên (thiếu normalizeSalesOrderStatusResponse và getSalesAiError), nên
  * `export *` bên trên mới là bề mặt đầy đủ — đừng bỏ nó mà chỉ giữ default.
  */
 export * from "./api/saleAiService";

@@ -759,55 +759,22 @@ export const getPackageId = (
       `package-${index + 1}`,
   ).trim();
 
-export const getWoodCrateOrderFee = ({
-  optionalServices,
-  pricingRuleByCode,
-}) => {
-  const rule =
-    pricingRuleByCode instanceof Map
-      ? pricingRuleByCode.get(
-          "WOOD_CRATE",
-        ) || null
-      : null;
-
-  const savedConfigurations =
-    Array.isArray(
-      optionalServices
-        ?.selectedPackageConfigurations,
-    )
-      ? optionalServices
-          .selectedPackageConfigurations
-      : [];
-
-  /*
-   * Ưu tiên giá rule API.
-   * Các field cũ chỉ dùng làm fallback tương thích.
-   */
-  return (
-    Number(rule?.value) ||
-    Number(
-      optionalServices
-        ?.woodCrateOrderFee,
-    ) ||
-    Number(
-      savedConfigurations?.[0]
-        ?.woodCrateOrderFee,
-    ) ||
-    Number(
-      savedConfigurations?.[0]
-        ?.woodCrateBaseFee,
-    ) ||
-    Number(
-      optionalServices
-        ?.woodCrateBaseFeePerPackage,
-    ) ||
-    Number(
-      optionalServices
-        ?.woodCrateBaseFee,
-    ) ||
-    0
-  );
-};
+/**
+ * Phí đóng thùng gỗ tính MỘT LẦN cho cả đơn — hiện tại LUÔN bằng 0.
+ *
+ * Backend tính tiền thùng gỗ hoàn toàn theo cỡ thùng chọn cho TỪNG KIỆN
+ * (`packageConfigurationId` → `PackageConfiguration.PackageFee`) và cố tình loại
+ * WOOD/CRATE khỏi danh sách dịch vụ chọn theo kiện — lời báo lỗi của chính nó nói
+ * rõ: "Thùng gỗ chọn qua cấu hình thùng (packageConfigurationId) của kiện."
+ * Dòng WOOD_CRATE trong bảng quy tắc chỉ để hiện TÊN và MÔ TẢ dịch vụ cho khách tick
+ * chọn; `value` của nó không phải là một khoản thu.
+ *
+ * Bản cũ lấy thẳng `rule.value` (35.000đ) rồi cộng vào tổng, nên màn xác nhận báo
+ * 60.000đ trong khi hoá đơn sau khi tạo đơn chỉ có 25.000đ. Giữ hàm này thay vì xoá
+ * để chỗ gọi không phải sửa, và để khi nào thật sự có khoản phí cả đơn thì chỉ cần
+ * nối lại ở đúng một chỗ.
+ */
+export const getWoodCrateOrderFee = () => 0;
 
 export const calculateWoodCrateSummary = ({
   optionalServices,

@@ -8,7 +8,7 @@ import {
 } from "@ant-design/icons";
 import { Checkbox, Modal, Tooltip } from "antd";
 
-import pricingRuleService from "@features/pricing/api/pricingRuleService.mock";
+import pricingRuleService from "@features/pricing/api/pricingRuleService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import {
   areCodeArraysEqual,
@@ -236,9 +236,15 @@ export default function PackageOptionalServices({
         setPricingLoading(true);
         setPricingError("");
 
-        // Gọi đúng endpoint và lấy TOÀN BỘ dữ liệu thật từ API.
-        // Không truyền ruleCodes, không dùng mảng dữ liệu mẫu.
+        /*
+          orderType=CONSIGNMENT là BỘ LỌC CỦA BACKEND, không phải loại đơn:
+          nó bỏ đúng ba nhóm chỉ thuộc về tiền hàng mua hộ (PURCHASE_FEE, VAT,
+          IMPORT_TAX) và giữ lại các dịch vụ gắn theo KIỆN. Modal này chọn dịch
+          vụ theo kiện, nên cả ký gửi lẫn mua hộ đều cần đúng bộ đó. Gọi không
+          tham số sẽ kéo cả VAT và thuế nhập khẩu vào danh sách tick chọn.
+        */
         const result = await pricingRuleService.getPricingRules({
+          orderType: "CONSIGNMENT",
           signal: controller.signal,
         });
 

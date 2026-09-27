@@ -1,19 +1,39 @@
 import { Card, Col, Progress, Row, Space, Tag, Typography } from "antd";
 import {
-  CheckCircleOutlined,
   DashboardOutlined,
   HddOutlined,
 } from "@ant-design/icons";
 
 const { Text, Title } = Typography;
 
+/* Kiện còn nằm trên kệ (RELEASED đã xuất khỏi kho, service đã bỏ sẵn). */
+const ON_SHELF_STATUSES = new Set(["AVAILABLE", "RESERVED", "PICKED"]);
+
 export default function WarehouseOccupancyStatusView({
   totalBins,
   activeBins,
   tree = [],
+  statusData = null,
+  inventories = [],
 }) {
   const inactiveBins = totalBins - activeBins;
   const occupancyPercent = totalBins ? Math.round((activeBins / totalBins) * 100) : 0;
+
+  /* Số liệu THẬT: ô đang có hàng đếm từ GET /api/inventories của kho; ô đầy / tỷ lệ lấp
+     đầy lớn nhất lấy từ GET /layout/status (chỉ có với ô sơ đồ đã gắn ô kệ). */
+  const onShelf = inventories.filter((inv) => ON_SHELF_STATUSES.has(String(inv.status || "").toUpperCase()));
+  const occupiedBins = new Set(onShelf.map((inv) => inv.binId || inv.binCode).filter(Boolean)).size;
+  const fullBins = statusData?.fullBins ?? 0;
+  const maxUtilization = statusData?.maxUtilizationRate;
+  const maxUtilizationPercent = maxUtilization == null ? null : Math.round(Number(maxUtilization) * 100);
+  const hasLayoutStatus = (statusData?.binLayoutItems ?? 0) > 0;
+  const capacityTag = !hasLayoutStatus
+    ? { color: "default", text: "Chưa có ô sơ đồ gắn ô kệ" }
+    : fullBins > 0
+      ? { color: "error", text: `${fullBins} ô đã đầy` }
+      : maxUtilizationPercent != null && maxUtilizationPercent >= 80
+        ? { color: "warning", text: `Ô đầy nhất ${maxUtilizationPercent}%` }
+        : { color: "processing", text: `An toàn (ô đầy nhất ${maxUtilizationPercent ?? 0}%)` };
 
   return (
     <div className="admin-warehouse-status-view">
@@ -101,19 +121,17 @@ export default function WarehouseOccupancyStatusView({
           </Col>
           <Col xs={24} sm={12} md={6}>
             <div className="user-kpi-box">
-              <Text type="secondary">Trạng Thái Kết Nối API Kho</Text>
-              <div style={{ marginTop: 6 }}>
-                <Tag icon={<CheckCircleOutlined />} color="success">
-                  Trực tuyến 100%
-                </Tag>
-              </div>
+              <Text type="secondary">Ô Đang Có Hàng</Text>
+              <Title level={3} style={{ margin: "4px 0 0", color: "#1e3a8a" }}>
+                {occupiedBins} ô · {onShelf.length} kiện
+              </Title>
             </div>
           </Col>
           <Col xs={24} sm={12} md={6}>
             <div className="user-kpi-box">
               <Text type="secondary">Cảnh Báo Sức Chứa</Text>
               <div style={{ marginTop: 6 }}>
-                <Tag color="processing">An toàn (Dưới 80%)</Tag>
+                <Tag color={capacityTag.color}>{capacityTag.text}</Tag>
               </div>
             </div>
           </Col>

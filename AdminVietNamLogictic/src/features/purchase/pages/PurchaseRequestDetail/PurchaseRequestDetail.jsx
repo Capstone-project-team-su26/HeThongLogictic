@@ -26,6 +26,7 @@ import {
   InboxOutlined,
   LinkOutlined,
   ReloadOutlined,
+  RollbackOutlined,
   SafetyCertificateOutlined,
   ShoppingOutlined,
   SyncOutlined,
@@ -49,11 +50,11 @@ import {
 import {
   getActivePricingRulesApi,
   PRICING_RULE_CODE,
-} from "@features/pricing/api/pricingRuleService.mock";
+} from "@features/pricing/api/pricingRuleService";
 import {
   getActiveWarehousesApi,
   getWarehousesApi,
-} from "@features/warehouse/api/warehouseService.mock";
+} from "@features/warehouse/api/warehouseService";
 import { getWarehouses } from "@features/admin/api/adminService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import ShipmentJourney from "@features/shipment/components/ShipmentJourney/ShipmentJourney";
@@ -63,8 +64,11 @@ import {
 } from "@features/shipment/components/ShipmentJourney/journeySummary";
 
 import CreatePurchaseRequestQuotationModal from "@features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal";
+import CloseUnfulfilledModal from "@features/purchase/components/PurchaseRefunds/CloseUnfulfilledModal";
+import PurchaseRefundsPanel from "@features/purchase/components/PurchaseRefunds/PurchaseRefundsPanel";
 
 import {
+  CLOSE_UNFULFILLED_STATUSES,
   CREATE_QUOTATION_STATUSES,
   HIDDEN_SERVICE_RULE_CODES,
 } from "./PurchaseRequestDetail.constants";
@@ -910,6 +914,14 @@ export default function PurchaseRequestDetail() {
 
   const [, setSystemWarehouses] = useState([]);
 
+  /*
+   * Hoàn tiền mua hộ: mở hộp "đóng phần không mua được" (key mới mỗi lần mở để ô nhập trắng) và
+   * báo khối sổ hoàn tải lại sau khi lập khoản.
+   */
+  const [closeUnfulfilledSeq, setCloseUnfulfilledSeq] = useState(0);
+  const [closeUnfulfilledOpen, setCloseUnfulfilledOpen] = useState(false);
+  const [refundReloadKey, setRefundReloadKey] = useState(0);
+
   const loadDetail =
     useCallback(async () => {
       if (!purchaseRequestId) {
@@ -1318,6 +1330,17 @@ export default function PurchaseRequestDetail() {
     );
   }, [detail?.quotation, detail?.status, items.length]);
 
+
+  /*
+   * Đóng phần không mua được chỉ có nghĩa khi khách ĐÃ trả trước (backend chặn trường hợp chưa trả)
+   * và yêu cầu chưa kết thúc bằng huỷ. Ẩn nút ở các trạng thái khác cho đỡ bấm nhầm rồi nhận 400.
+   */
+  const canCloseUnfulfilled = useMemo(
+    () =>
+      Boolean(detail?.quotation) &&
+      CLOSE_UNFULFILLED_STATUSES.has(normalizeUpperText(detail?.status)),
+    [detail?.quotation, detail?.status]
+  );
 
   const handleQuotationCreated =
     useCallback(async () => {
@@ -2252,6 +2275,46 @@ export default function PurchaseRequestDetail() {
           )}
         </section>
 
+        {/*
+          HOÀN TIỀN MUA HỘ — mọi khoản trả lại khách của yêu cầu (không chỉ khoản mới nhất), tổng
+          đã thu / đã hoàn / chờ hoàn / còn có thể hoàn, và nút đóng phần không mua được. Chưa có
+          báo giá thì chưa thể có đồng nào để hoàn nên ẩn cả khối.
+        */}
+        {detail?.quotation ? (
+          <section className="purchase-detail-card">
+            <div className="purchase-detail-section-heading">
+              <RollbackOutlined />
+
+              <div>
+                <span>TIỀN ĐI NGƯỢC</span>
+                <h2>Hoàn tiền mua hộ</h2>
+              </div>
+            </div>
+
+            <PurchaseRefundsPanel
+              purchaseRequestId={purchaseRequestId}
+              purchaseCode={detail?.purchaseCode}
+              canComplete
+              reloadKey={refundReloadKey}
+              extra={
+                canCloseUnfulfilled ? (
+                  <Button
+                    type="primary"
+                    danger
+                    ghost
+                    onClick={() => {
+                      setCloseUnfulfilledSeq((value) => value + 1);
+                      setCloseUnfulfilledOpen(true);
+                    }}
+                  >
+                    Đóng phần không mua được
+                  </Button>
+                ) : null
+              }
+            />
+          </section>
+        ) : null}
+
         <section className="purchase-detail-card purchase-detail-quotation-section">
           <div className="purchase-detail-section-heading">
             <TagsOutlined />
@@ -2291,6 +2354,18 @@ export default function PurchaseRequestDetail() {
         pricingRules={
           pricingRules
         }
+      />
+
+      <CloseUnfulfilledModal
+        key={closeUnfulfilledSeq}
+        open={closeUnfulfilledOpen}
+        purchaseRequestId={purchaseRequestId}
+        onClose={() => setCloseUnfulfilledOpen(false)}
+        onDone={() => {
+          setRefundReloadKey((value) => value + 1);
+          /* Đóng hết sản phẩm thì yêu cầu có thể chuyển CANCELLED — tải lại để nhãn trạng thái đúng. */
+          loadDetail();
+        }}
       />
 
     </main>

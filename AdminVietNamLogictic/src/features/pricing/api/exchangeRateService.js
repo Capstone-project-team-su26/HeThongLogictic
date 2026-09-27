@@ -1,24 +1,24 @@
 /**
- * MOCK tỷ giá hối đoái — bản chỉ-giao-diện.
+ * Tỷ giá hối đoái — API THẬT (ExchangeRateController).
  *
- * Tầng HTTP đã bị gỡ: không axiosInstance, không API_ENDPOINTS, không token.
- * Dữ liệu lấy từ bộ mẫu `exchangeRates` trong @/mocks/data/catalog — CÙNG MỘT
- * mảng mà mock adminService đang CRUD, nên tỷ giá admin vừa sửa/thêm sẽ hiện
- * ngay ở SaleDashboard, ServicePricings và modal báo giá mua hộ.
+ *   GET /api/exchange-rates?activeOnly=true  → MẢNG TRẦN ExchangeRateDto
+ *       { id, currencyCode, currencyName, rateToVnd, isActive, note, createdAt, updatedAt }
+ *   GET /api/exchange-rates/convert?currency=&amount=  (Admin/Sale/OM)
+ *       → { currency, exchangeRate, amountOriginal, amountVnd } — amountVnd làm tròn về đồng
+ *         (MidpointRounding.AwayFromZero); 404 { message } khi chưa cấu hình mã,
+ *         400 { message } khi tỷ giá đang tắt / ≤ 0.
  *
- * Hai bộ chuẩn hoá `normalizeExchangeRateItem` / `normalizeConvertResult` giữ
- * nguyên từng dòng của bản thật, vì chúng cũng là export công khai và là thứ
- * quyết định hình dạng bản ghi mà component destructure
- * (currencyCode, currencyName, rateToVnd, isActive, id / amountVnd, exchangeRate).
+ * Danh sách đọc lại qua catalogAdminService.getExchangeRates (cùng hàm trang danh mục tỷ giá
+ * đang dùng) rồi chuẩn hoá về đúng hình dạng cũ mà ServicePricings và modal báo giá mua hộ
+ * destructure. Bản mock cũ (fixture @/mocks/data/catalog) nằm ở exchangeRateService.mock.js.
  *
- * CẮM API THẬT TRỞ LẠI: mỗi hàm bên dưới có khối "// [API THẬT]" ghi rõ endpoint
- * và tham số cũ. Chỉ cần thay phần đọc `exchangeRateFixtures` bằng lời gọi
- * axiosInstance rồi đẩy kết quả qua đúng normalize* đang có là xong — phần
- * validate tham số và lọc activeOnly phía dưới dùng lại được nguyên vẹn.
+ * TIỀN: không có tỷ giá mặc định nào ở đây. Mã không có tỷ giá đang bật thì
+ * findActiveExchangeRate trả null / convertCurrencyApi ném lỗi — màn hình phải chặn gửi.
  */
-
-import { exchangeRates as exchangeRateFixtures } from "@/mocks/data/catalog";
-import { createApiError, deepClone, delay } from "@/mocks/mockUtils";
+import httpClient from "@shared/api/httpClient";
+import API_ENDPOINTS from "@shared/api/apiEndpoints";
+import { getResponseData } from "@shared/api/apiEnvelope";
+import { getExchangeRates } from "@features/catalog/api/catalogAdminService";
 
 /* =========================================================
    CONSTANTS
@@ -32,6 +32,7 @@ export const CURRENCY_CODES = {
   VND: "VND",
 };
 
+/* Chỉ để hiện tên khi backend không gửi currencyName — không dính tới số tiền. */
 export const CURRENCY_NAMES = {
   CNY: "Nhân dân tệ",
   JPY: "Yên Nhật",
@@ -53,13 +54,6 @@ const normalizeNumber = (value, fallback = 0) => {
   return Number.isFinite(number) ? number : fallback;
 };
 
-/*
- * VND không có phần thập phân, nên số tiền quy đổi làm tròn về đồng.
- * Bản thật cũng trả số nguyên; nếu để lẻ thì ô "Giá VND" của modal báo giá
- * hiện số rác kiểu 38.799999999999997.
- */
-const roundVnd = (value) => Math.round(normalizeNumber(value, 0));
-
 /* =========================================================
    NORMALIZERS
 ========================================================= */
@@ -73,7 +67,7 @@ export const normalizeExchangeRateItem = (item = {}) => {
     currencyName:
       item?.currencyName || CURRENCY_NAMES[currencyCode] || currencyCode,
     rateToVnd: normalizeNumber(item?.rateToVnd ?? item?.exchangeRate, 0),
-    isActive: Boolean(item?.isActive ?? true),
+    isActive: item?.isActive !== false,
     note: item?.note ?? "",
     createdAt: item?.createdAt ?? null,
     updatedAt: item?.updatedAt ?? null,
@@ -98,42 +92,69 @@ export const normalizeConvertResult = (data = {}) => {
   };
 };
 
+/**
+ * Tìm tỷ giá ĐANG BẬT, > 0 của một mã trong danh sách đã tải. Không có → null
+ * (không bao giờ trả số mặc định).
+ */
+export const findActiveExchangeRate = (rates, currencyCode) => {
+  const code = normalizeUpperText(currencyCode);
+
+  if (!code || !Array.isArray(rates)) return null;
+
+  const found = rates.find(
+    (rate) => normalizeUpperText(rate?.currencyCode) === code
+  );
+
+  if (!found || found.isActive === false || !(Number(found.rateToVnd) > 0)) {
+    return null;
+  }
+
+  return found;
+};
+
+/**
+ * Quy đổi ngoại tệ → VND đúng cách backend làm khi lưu báo giá
+ * (Math.Round(amount × rate, 0, AwayFromZero) — với số dương trùng Math.round).
+ * Chỉ để HIỂN THỊ; backend tự quy đổi lại từ tỷ giá của nó.
+ */
+export const convertToVndWithRate = (amount, rateToVnd) => {
+  const value = Number(amount);
+  const rate = Number(rateToVnd);
+
+  if (!Number.isFinite(value) || !Number.isFinite(rate) || value <= 0 || rate <= 0) {
+    return 0;
+  }
+
+  return Math.round(value * rate);
+};
+
 /* =========================================================
    API METHODS
 ========================================================= */
 
 /**
-  * Lấy danh sách tỷ giá hối đoái.
-  *
-  * @param {Object} options
-  * @param {boolean} [options.activeOnly=true] Chỉ lấy các tỷ giá đang hoạt động
-  * @returns {Promise<Array>} mảng trần đã chuẩn hoá (không bọc { items })
-  */
+ * Lấy danh sách tỷ giá hối đoái (API thật).
+ *
+ * @param {{ activeOnly?: boolean, signal?: AbortSignal }} [options] activeOnly mặc định true
+ * @returns {Promise<Array>} mảng trần đã chuẩn hoá
+ */
 export const getExchangeRatesApi = async (options = {}) => {
   const activeOnly = options?.activeOnly !== false;
 
-  // [API THẬT] GET API_ENDPOINTS.exchangeRates.list?activeOnly=<activeOnly>
-  await delay(200, options?.signal);
+  const rows = await getExchangeRates({ activeOnly, signal: options?.signal });
 
-  /*
-   * Bộ mẫu cố tình có cả tỷ giá đã tắt (THB, GBP, AUD, MYR) để nhánh
-   * activeOnly có tác dụng thấy được: thẻ tỷ giá ở ServicePricings đều gắn
-   * Tag "Active" nên chỉ được đổ về bản ghi đang bật.
-   */
-  const rows = activeOnly
-    ? exchangeRateFixtures.filter((rate) => rate?.isActive !== false)
-    : exchangeRateFixtures;
-
-  return deepClone(rows).map(normalizeExchangeRateItem);
+  return rows
+    .map(normalizeExchangeRateItem)
+    .filter((rate) => (activeOnly ? rate.isActive : true));
 };
 
 /**
-  * Quy đổi số tiền từ ngoại tệ sang Việt Nam Đồng (VND).
-  *
-  * @param {string|Object} currencyOrParams Mã tiền tệ (KRW, USD, CNY, JPY) hoặc object { currency, amount }
-  * @param {number} [amountValue] Số lượng ngoại tệ cần quy đổi
-  * @returns {Promise<Object>} { currency, currencyName, exchangeRate, amountOriginal, amountVnd }
-  */
+ * Quy đổi số tiền từ ngoại tệ sang VND (API thật GET /api/exchange-rates/convert).
+ *
+ * @param {string|Object} currencyOrParams Mã tiền tệ hoặc { currency, amount }
+ * @param {number} [amountValue]
+ * @returns {Promise<Object>} { currency, currencyName, exchangeRate, amountOriginal, amountVnd }
+ */
 export const convertCurrencyApi = async (currencyOrParams, amountValue) => {
   let currency;
   let amount;
@@ -154,31 +175,16 @@ export const convertCurrencyApi = async (currencyOrParams, amountValue) => {
     throw new Error("Số tiền cần quy đổi phải lớn hơn 0.");
   }
 
-  // [API THẬT] GET API_ENDPOINTS.exchangeRates.convert?currency=<currency>&amount=<amount>
-  await delay(220);
+  const response = await httpClient.get(API_ENDPOINTS.exchangeRates.convert, {
+    params: { currency, amount },
+    signal: currencyOrParams?.signal,
+  });
 
-  const found = exchangeRateFixtures.find(
-    (rate) => normalizeUpperText(rate?.currencyCode) === currency
-  );
+  const result = normalizeConvertResult(getResponseData(response));
 
-  const exchangeRate = normalizeNumber(found?.rateToVnd, 0);
-
-  /*
-   * Tiền tệ chưa có trong bảng (hoặc đã tắt) thì bản thật trả lỗi. Giữ đúng
-   * việc ném lỗi để nhánh catch của SaleDashboard và modal báo giá — nhánh tự
-   * nhân tay bằng rateToVnd lấy từ danh sách đã tải — vẫn còn đường chạy.
-   */
-  if (!found || found?.isActive === false || exchangeRate <= 0) {
-    throw createApiError(
-      404,
-      `Không thể quy đổi số tiền cho tiền tệ ${currency}.`
-    );
+  if (!(result.exchangeRate > 0)) {
+    throw new Error(`Không thể quy đổi số tiền cho tiền tệ ${currency}.`);
   }
 
-  return normalizeConvertResult({
-    currency,
-    exchangeRate,
-    amountOriginal: amount,
-    amountVnd: roundVnd(amount * exchangeRate),
-  });
+  return result;
 };

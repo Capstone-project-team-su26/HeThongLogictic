@@ -12,6 +12,13 @@
  *
  * Backend chỉ nhận người có vai trò quản lý kho (OperationsManager) đang hoạt động.
  * Phiếu đang chờ duyệt tự chuyển quyền duyệt sang quản lý mới.
+ *
+ *   GET /api/warehouses/{warehouseId}/staff   (Admin, OperationsManager, Sale — CHỈ ĐỌC)
+ *       → { data: { warehouseId, warehouseCode, warehouseName, region,
+ *                   staff: [{ userId, fullName, email, role, region, status,
+ *                             assignedAt, assignedByName, note }] } }
+ *       Nhân viên kho được Admin gán vào kho (gán ở màn Quản lý người dùng). Kho chưa gán
+ *       ai thì nhân viên kho CÙNG VÙNG vẫn thao tác được như cũ.
  */
 
 import httpClient from "@shared/api/httpClient";
@@ -80,8 +87,41 @@ export const getWarehouseManagerCandidates = async (options = {}) => {
     );
 };
 
+/** Nhân viên kho được gán vào một kho (chỉ đọc). */
+export const getWarehouseStaff = async (warehouseId, options = {}) => {
+  const id = requireId(warehouseId, "Thiếu mã kho.");
+  const response = await httpClient.get(
+    `/api/warehouses/${encodeURIComponent(id)}/staff`,
+    { signal: options?.signal },
+  );
+
+  const data = getResponseData(response) || {};
+  const staff = Array.isArray(data.staff) ? data.staff : [];
+
+  return {
+    warehouseId: data.warehouseId ?? id,
+    warehouseCode: data.warehouseCode ?? "",
+    warehouseName: data.warehouseName ?? "",
+    region: data.region ?? "",
+    staff: staff
+      .filter((member) => member && member.userId)
+      .map((member) => ({
+        userId: member.userId,
+        fullName: member.fullName ?? "",
+        email: member.email ?? "",
+        role: member.role ?? "",
+        region: member.region ?? "",
+        status: member.status ?? "",
+        assignedAt: member.assignedAt ?? null,
+        assignedByName: member.assignedByName ?? "",
+        note: member.note ?? null,
+      })),
+  };
+};
+
 export default {
   getWarehouseManager,
   assignWarehouseManager,
   getWarehouseManagerCandidates,
+  getWarehouseStaff,
 };

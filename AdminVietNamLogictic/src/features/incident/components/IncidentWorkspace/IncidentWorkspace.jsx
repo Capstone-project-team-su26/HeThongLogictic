@@ -7,6 +7,7 @@ import {
   Empty,
   Input,
   InputNumber,
+  Modal,
   Radio,
   Space,
   Spin,
@@ -33,6 +34,13 @@ import {
 } from "@features/incident/api/parcelIncidentService";
 import { ATTACHMENT_ENTITY, AttachmentList, AttachmentUploadButton } from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import { ReviewFacts } from "@shared/components/SubmitReview/SubmitReview";
+import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+/*
+ * Căn cứ cho quyết định / khoản chi: kiện bị sự cố cân bao nhiêu, kho đếm ra sao, hàng khai
+ * giá bao nhiêu, đơn đã trả bao nhiêu — sự cố không mang mấy số này, lấy từ chi tiết đơn.
+ */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/operations/styles/OperationsPage.css";
 
 const { Text, Title } = Typography;
@@ -94,6 +102,14 @@ export default function IncidentWorkspace({
 
   const [resolveForm, setResolveForm] = useState({ resolution: "", amount: null, note: "" });
   const [payForm, setPayForm] = useState({ reference: "", note: "" });
+
+  /*
+   * "Ghi quyết định" (báo khách, có thể huỷ kiện) và "Ghi nhận đã chi" (tiền ra) trước đây bấm
+   * là gửi. Giờ qua hộp xác nhận hiện đủ sự cố + quyết định sắp ghi + căn cứ từ đơn.
+   * `confirmAction`: "resolve" | "pay" | null.
+   */
+  const [confirmAction, setConfirmAction] = useState(null);
+  const orderReview = useOrderReview(confirmAction ? detail?.orderId : "");
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -170,6 +186,7 @@ export default function IncidentWorkspace({
         "Đã quyết định sự cố",
         `${detail.incidentCode || ""}: ${getResolutionLabel(resolveForm.resolution)} — khách đã nhận thông báo.`,
       );
+      setConfirmAction(null);
       setDetail(null);
       fetchRows();
     } catch (error) {
@@ -188,6 +205,7 @@ export default function IncidentWorkspace({
         "Đã ghi nhận chi bồi thường",
         `${detail.incidentCode || ""}: ${formatMoney(detail.compensationAmount)} — khách đã nhận thông báo.`,
       );
+      setConfirmAction(null);
       setDetail(null);
       fetchRows();
     } catch (error) {
@@ -334,7 +352,10 @@ export default function IncidentWorkspace({
       <Drawer
         open={!!detail}
         width={880}
-        onClose={() => setDetail(null)}
+        onClose={() => {
+          setDetail(null);
+          setConfirmAction(null);
+        }}
         title={detail ? `Sự cố ${detail.incidentCode || ""}` : "Chi tiết sự cố"}
       >
         {detail ? (
@@ -467,9 +488,9 @@ export default function IncidentWorkspace({
                       (needsChoiceNote && !resolveForm.note.trim()) ||
                       (resolveForm.resolution === "COMPENSATE" && !(Number(resolveForm.amount) > 0))
                     }
-                    onClick={submitResolve}
+                    onClick={() => setConfirmAction("resolve")}
                   >
-                    Ghi quyết định
+                    Xem lại và ghi quyết định
                   </Button>
                 </Space>
               </>
@@ -509,9 +530,9 @@ export default function IncidentWorkspace({
                     icon={<DollarOutlined />}
                     loading={submitting}
                     disabled={!hasReceipt || !payForm.reference.trim()}
-                    onClick={submitPaid}
+                    onClick={() => setConfirmAction("pay")}
                   >
-                    Ghi nhận đã chi
+                    Xem lại và ghi nhận đã chi
                   </Button>
                 </Space>
               </>
@@ -519,6 +540,121 @@ export default function IncidentWorkspace({
           </Spin>
         ) : null}
       </Drawer>
+
+      {/*
+        XÁC NHẬN TRƯỚC KHI GHI. Đang tải chi tiết đơn thì khoá nút; tải lỗi không chặn vì quyết
+        định sắp ghi đã hiện đủ ở đây, phần đơn chỉ là căn cứ tham khảo.
+      */}
+      <Modal
+        {...REVIEW_MODAL_PROPS}
+        open={Boolean(confirmAction && detail)}
+        title={
+          confirmAction === "pay"
+            ? `Xác nhận đã chi bồi thường · ${detail?.incidentCode || ""}`
+            : `Xác nhận quyết định sự cố · ${detail?.incidentCode || ""}`
+        }
+        okText={
+          orderReview.loading
+            ? "Đang tải thông tin…"
+            : confirmAction === "pay"
+              ? "Ghi nhận đã chi"
+              : "Ghi quyết định"
+        }
+        okButtonProps={{
+          danger: confirmAction === "resolve" && resolveForm.resolution === "DISPOSE",
+          disabled: orderReview.loading,
+        }}
+        cancelText="Xem lại"
+        confirmLoading={submitting}
+        onOk={confirmAction === "pay" ? submitPaid : submitResolve}
+        onCancel={() => setConfirmAction(null)}
+      >
+        {detail && confirmAction ? (
+          <>
+            <Alert
+              type={confirmAction === "resolve" && resolveForm.resolution === "DISPOSE" ? "error" : "warning"}
+              showIcon
+              style={{ marginBottom: 14 }}
+              message={
+                confirmAction === "pay"
+                  ? `Ghi nhận công ty đã chi ${formatMoney(detail.compensationAmount)} cho khách — khách nhận thông báo, sự cố đóng khoản bồi thường.`
+                  : resolveForm.resolution === "DISPOSE"
+                    ? "Huỷ hàng: kiện chuyển DISPOSED — không tính cước, không giao, nhả ô kệ. Khách nhận thông báo."
+                    : `Quyết định "${getResolutionLabel(resolveForm.resolution)}" sẽ được ghi và báo cho khách.`
+              }
+            />
+            <ReviewFacts
+              items={[
+                { label: "Sự cố", value: <Text strong>{detail.incidentCode}</Text> },
+                {
+                  label: "Loại · chặng",
+                  value: `${detail.incidentTypeText || getIncidentTypeLabel(detail.incidentType)} · ${
+                    detail.stage === "AFTER_DELIVERY" ? "Sau khi giao" : "Lúc tiếp nhận"
+                  }`,
+                },
+                { label: "Kiện", value: <Text code>{detail.packageCode || "—"}</Text> },
+                { label: "Đơn", value: detail.consignmentCode },
+                { label: "Khách hàng", value: detail.customerName },
+                {
+                  label: "Người lập",
+                  value: `${detail.reportedByName || "—"} · ${formatDateTime(detail.reportedAt)}`,
+                },
+                { label: "Mô tả", value: detail.description, span: 2 },
+                {
+                  label: "Khách chọn",
+                  value: detail.customerChoice
+                    ? `${getResolutionLabel(detail.customerChoice)} · ${formatDateTime(detail.customerRespondedAt)}`
+                    : "Khách chưa chọn",
+                },
+                { label: "Lời khách", value: detail.customerNote },
+                {
+                  label: "Ảnh / chứng từ",
+                  value: `${(detail.attachments || []).length} tệp`,
+                },
+                ...(confirmAction === "resolve"
+                  ? [
+                      {
+                        label: "Quyết định (sẽ ghi)",
+                        value: <Text strong>{getResolutionLabel(resolveForm.resolution)}</Text>,
+                      },
+                      {
+                        label: "Tiền bồi thường (sẽ ghi)",
+                        value: formatMoney(resolveForm.amount),
+                        hidden: resolveForm.resolution !== "COMPENSATE",
+                      },
+                      { label: "Ghi chú quyết định (sẽ ghi)", value: resolveForm.note, span: 2 },
+                    ]
+                  : [
+                      { label: "Quyết định", value: getResolutionLabel(detail.resolution) },
+                      {
+                        label: "Người quyết",
+                        value: detail.resolvedByName
+                          ? `${detail.resolvedByName} · ${formatDateTime(detail.resolvedAt)}`
+                          : null,
+                      },
+                      {
+                        label: "Tiền bồi thường",
+                        value: <Text strong>{formatMoney(detail.compensationAmount)}</Text>,
+                      },
+                      { label: "Mã giao dịch (sẽ ghi)", value: <Text strong>{payForm.reference}</Text> },
+                      { label: "Ghi chú quyết định", value: detail.resolutionNote, span: 2 },
+                      { label: "Ghi chú chi (sẽ ghi)", value: payForm.note, span: 2 },
+                    ]),
+              ]}
+            />
+            <div style={{ height: 14 }} />
+            {detail.orderId ? (
+              <OrderReviewPanel
+                review={orderReview}
+                fallback={detail}
+                parcelIds={detail.parcelId ? [detail.parcelId] : undefined}
+                parcelTitle="Kiện bị sự cố (cân và kiểm đếm theo đơn)"
+                errorHint="Bạn vẫn ghi được; quyết định sắp ghi đã hiện đủ ở trên."
+              />
+            ) : null}
+          </>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -4264,3 +4264,97 @@ box-shadow: none;
   border-color: #d97706;
   color: #92400e;
 }
+
+/* =========================================================
+   CÔNG THỨC DIMS — hiện phép tính bằng chính số của đơn.
+
+   Trước đây màn chi tiết chỉ in kết quả quy đổi và một dòng "÷ 5000" trơ trọi,
+   nên khi khách hỏi "sao ra con số này" Sale phải tự nhân tay. Ba khối dưới đây
+   in thẳng phép tính ra: dòng công thức trong ô quy đổi, nhãn cân nào đang tính
+   cước, và ví dụ tổng ở đầu bảng kiện hàng.
+
+   Đặt ở CUỐI FILE vì file này có hai vùng cỡ chữ (mặc định và vùng ghi đè cho
+   màn rộng ở khoảng dòng 1400). Nằm cuối thì không bị vùng sau ghi đè ngược.
+   ========================================================= */
+
+.consignment-dim-value .consignment-dim-formula-line {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+
+/* Nhãn "Tính cước N kg" — viền trái đổi màu theo bên nào thắng. */
+.consignment-dim-billed {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+
+  margin-top: 2px;
+  padding: 2px 7px;
+
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.consignment-dim-billed small {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+/* Quy đổi thắng: hàng cồng kềnh, đây là ca khách hay thắc mắc nhất. */
+.consignment-dim-billed.is-dim {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-left-color: #7c3aed;
+}
+
+/* Cân thực thắng: hàng nặng, không có gì phải giải thích. */
+.consignment-dim-billed.is-actual {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-left-color: #14b8a6;
+}
+
+/* Dòng max(...) dưới thẻ "Khối lượng tính cước". */
+.consignment-chargeable-formula {
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+
+/* Ví dụ tổng trong khung "CÁCH TÍNH KHỐI LƯỢNG QUY ĐỔI". */
+.consignment-dim-formula__example {
+  display: block;
+  margin-top: 8px;
+  padding: 7px 10px;
+
+  color: #334155;
+  background: #ffffff;
+  border: 1px dashed #c4b5fd;
+  border-radius: 8px;
+
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.consignment-dim-formula__example b {
+  color: #6d28d9;
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .consignment-dim-formula__example {
+    font-size: 11px;
+  }
+}

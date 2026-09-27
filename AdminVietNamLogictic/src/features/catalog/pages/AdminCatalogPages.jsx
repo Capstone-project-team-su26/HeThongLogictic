@@ -21,7 +21,11 @@ import {
   updateShippingMethod, updateSupplier, updateUnitOfMeasure,
   updateWarehouse,
 } from "@features/admin/api/adminService";
-/* Hãng + tuyến vận chuyển đã nối API thật; các danh mục khác ở đây vẫn đọc adminService (mock). */
+/*
+ * Mọi danh mục ở đây đều đọc/ghi API THẬT: adminService re-export từ
+ * @features/catalog/api/catalogAdminService (và warehouseAdminService cho kho); hãng + tuyến
+ * vận chuyển gọi thẳng transportCatalogService.
+ */
 import {
   createCarrierApi, createShippingRouteApi, deleteCarrierApi, deleteShippingRouteApi,
   getCarrierDetailApi, getCarriersApi, getShippingRouteDetailApi, getShippingRoutesApi,
@@ -42,7 +46,7 @@ export const WarehousesAdminPage = () => page({
   title: "Quản lý kho", singular: "kho", description: "Dữ liệu kho được đồng bộ trực tiếp từ hệ thống.",
   searchFields: ["name", "code", "address", "region"], api: warehouseApi,
   columns: [{ name: "name", label: "Tên kho" }, { name: "code", label: "Mã kho" }, { name: "region", label: "Khu vực", filterable: true }, { name: "warehouseType", label: "Loại kho", type: "tag" }, { ...boolField, type: "active" }],
-  fields: [{ name: "name", label: "Tên kho", required: true }, { name: "code", label: "Mã kho", required: true }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2, required: true }, { name: "region", label: "Khu vực" }, { name: "warehouseType", label: "Loại kho", type: "select", required: true, options: ["ORIGIN", "DESTINATION", "TRANSIT"].map(value => ({ value, label: value })) }, boolField],
+  fields: [{ name: "name", label: "Tên kho", required: true }, { name: "code", label: "Mã kho", required: true }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2, required: true }, { name: "region", label: "Mã vùng (CN, VN, KR, JP…)" }, { name: "warehouseType", label: "Loại kho", type: "select", required: true, options: ["ORIGIN", "DESTINATION", "DOMESTIC", "TRANSIT"].map(value => ({ value, label: value })) }, boolField],
 });
 
 const carrierApi = { list: getCarriersApi, detail: getCarrierDetailApi, create: createCarrierApi, update: updateCarrierApi, remove: deleteCarrierApi };
@@ -61,9 +65,9 @@ export const ShippingMethodsAdminPage = () => page({
 
 const packageApi = { list: getPackageConfigurations, detail: getPackageConfigurationDetail, create: createPackageConfiguration, update: updatePackageConfiguration, remove: deletePackageConfiguration };
 export const PackageConfigurationsAdminPage = () => page({
-  title: "Cấu hình đóng gói", singular: "cấu hình đóng gói", description: "Quản lý kích thước, tải trọng và phí đóng gói.", searchFields: ["configName", "configCode", "status"], api: packageApi,
+  title: "Cấu hình đóng gói", singular: "cấu hình đóng gói", description: "Quản lý kích thước, tải trọng và phí đóng gói. Backend chỉ trả thùng đang hoạt động: xoá (hoặc chuyển Ngừng hoạt động) là thùng rời khỏi danh sách và chưa có màn nào bật lại.", searchFields: ["configName", "configCode", "status"], api: packageApi,
   columns: [{ name: "configName", label: "Tên cấu hình" }, { name: "configCode", label: "Mã" }, { name: "dimensions", label: "Kích thước", type: "dimensions" }, { name: "maxWeight", label: "Tải trọng", type: "weight" }, { name: "packageFee", label: "Phí", type: "money" }, { ...statusField, type: "status" }],
-  fields: [{ name: "configName", label: "Tên cấu hình", required: true }, { name: "configCode", label: "Mã cấu hình", required: true }, ...["length", "width", "height", "maxWeight", "packageFee"].map(name => ({ name, label: ({ length: "Dài (cm)", width: "Rộng (cm)", height: "Cao (cm)", maxWeight: "Tải trọng (kg)", packageFee: "Phí đóng gói" })[name], type: "number", min: 0 })), statusField],
+  fields: [{ name: "configName", label: "Tên cấu hình", required: true }, { name: "configCode", label: "Mã cấu hình", required: true }, ...["length", "width", "height", "maxWeight", "packageFee"].map(name => ({ name, label: ({ length: "Dài (cm)", width: "Rộng (cm)", height: "Cao (cm)", maxWeight: "Tải trọng (kg)", packageFee: "Phí đóng gói" })[name], type: "number", min: 0, required: true })), statusField],
 });
 
 /* Không còn route/menu: phí đã gộp vào Quy tắc tính giá (/admin/additional-service-fees chuyển hướng sang /admin/pricing-rules). Giữ export để barrel không đổi; api đọc/ghi trên pricingRules. */
@@ -78,18 +82,19 @@ const pricingApi = { list: getServicePricings, detail: getServicePricingDetail, 
 export const ServicePricingsAdminPage = () => page({
   title: "Bảng giá vận chuyển", singular: "bảng giá", description: "Đơn giá theo tuyến và loại dịch vụ từ backend.", searchFields: ["serviceType", "originCountry", "destinationCountry", "carrierId"], api: pricingApi,
   columns: [{ name: "serviceType", label: "Dịch vụ", filterable: true }, { name: "route", label: "Tuyến", type: "route" }, { name: "unitType", label: "Đơn vị", type: "tag" }, { name: "price", label: "Đơn giá", type: "money" }, { name: "effectiveDate", label: "Hiệu lực", type: "date" }],
-  fields: [{ name: "carrierId", label: "Mã đơn vị vận chuyển", required: true }, { name: "serviceType", label: "Loại dịch vụ", required: true }, { name: "originCountry", label: "Nước đi", required: true }, { name: "destinationCountry", label: "Nước đến", required: true }, { name: "unitType", label: "Đơn vị tính", required: true }, { name: "price", label: "Đơn giá", type: "number", min: 0, required: true }, { name: "currency", label: "Tiền tệ", defaultValue: "VND", required: true }, { name: "effectiveDate", label: "Ngày hiệu lực", type: "datetime-local", required: true }],
+  fields: [{ name: "carrierId", label: "Đơn vị vận chuyển", type: "select", optionsApi: getCarriersApi, mapOption: (carrier) => ({ value: carrier.id || carrier.carrierId, label: carrier.carrierName || carrier.carrierCode }) }, { name: "serviceType", label: "Loại dịch vụ", required: true }, { name: "originCountry", label: "Nước đi", required: true }, { name: "destinationCountry", label: "Nước đến", required: true }, { name: "unitType", label: "Đơn vị tính", required: true }, { name: "price", label: "Đơn giá", type: "number", min: 0, required: true }, { name: "currency", label: "Tiền tệ", defaultValue: "VND", required: true }, { name: "effectiveDate", label: "Ngày hiệu lực", type: "datetime-local", required: true }],
 });
 
 const ruleApi = { list: getPricingRules, detail: getPricingRuleDetail, create: createPricingRule, update: updatePricingRule, remove: deletePricingRule };
 export const PricingRulesAdminPage = () => page({
   title: "Quy tắc tính giá", singular: "quy tắc tính giá", description: "Quản lý điều kiện và công thức phụ phí.", searchFields: ["ruleName", "ruleCode", "ruleType", "status"], api: ruleApi,
   columns: [{ name: "ruleName", label: "Tên quy tắc" }, { name: "ruleCode", label: "Mã" }, { name: "ruleType", label: "Loại", type: "tag" }, { name: "calculationType", label: "Cách tính", type: "tag" }, { name: "value", label: "Giá trị", type: "number" }, { ...statusField, type: "status" }],
-  fields: [{ name: "servicePricingId", label: "Mã bảng giá", required: true }, { name: "ruleName", label: "Tên quy tắc", required: true }, { name: "ruleCode", label: "Mã quy tắc", required: true }, { name: "ruleType", label: "Loại quy tắc", required: true }, { name: "conditionType", label: "Loại điều kiện" }, { name: "conditionValue", label: "Giá trị điều kiện" }, { name: "calculationType", label: "Cách tính", required: true }, ...["value", "minAmount", "maxAmount"].map(name => ({ name, label: ({ value: "Giá trị", minAmount: "Tối thiểu", maxAmount: "Tối đa" })[name], type: "number", min: 0 })), { name: "isRequired", label: "Bắt buộc", type: "switch" }, statusField, { name: "description", label: "Mô tả", type: "textarea", span: 2 }],
+  fields: [{ name: "servicePricingId", label: "Bảng giá áp dụng", type: "select", optionsApi: getServicePricings, mapOption: (pricing) => ({ value: pricing.id, label: `${pricing.serviceType || "?"} · ${pricing.originCountry || "?"} → ${pricing.destinationCountry || "?"} · ${pricing.unitType || "?"}` }) }, { name: "ruleName", label: "Tên quy tắc", required: true }, { name: "ruleCode", label: "Mã quy tắc", required: true }, { name: "ruleType", label: "Loại quy tắc", required: true }, { name: "conditionType", label: "Loại điều kiện" }, { name: "conditionValue", label: "Giá trị điều kiện" }, { name: "calculationType", label: "Cách tính", type: "select", required: true, options: ["FIXED", "PERCENTAGE", "PER_KG", "PER_CBM", "PER_PRODUCT"].map(value => ({ value, label: value })) }, ...["value", "minAmount", "maxAmount"].map(name => ({ name, label: ({ value: "Giá trị", minAmount: "Tối thiểu", maxAmount: "Tối đa" })[name], type: "number", min: 0, required: name === "value" })), { name: "isRequired", label: "Bắt buộc", type: "switch" }, statusField, { name: "description", label: "Mô tả", type: "textarea", span: 2 }],
 });
 
 const exchangeRateApi = {
-  list: () => getExchangeRates({ activeOnly: true }),
+  /* Lấy CẢ tỷ giá đang tắt: Admin phải thấy để bật lại. */
+  list: () => getExchangeRates(),
   detail: getExchangeRateDetail,
   create: createExchangeRate,
   update: updateExchangeRate,
@@ -112,14 +117,11 @@ export const ExchangeRatesAdminPage = () => page({
     {
       name: "currencyCode",
       label: "Mã tiền tệ",
-      type: "select",
       required: true,
-      options: [
-        { value: "CNY", label: "CNY — Nhân dân tệ" },
-        { value: "JPY", label: "JPY — Yên Nhật" },
-        { value: "KRW", label: "KRW — Won Hàn Quốc" },
-        { value: "USD", label: "USD — Đô la Mỹ" },
-      ],
+      placeholder: "VD: CNY, JPY, KRW, USD",
+      /* PUT /api/exchange-rates/{id} không nhận mã tiền tệ — khoá khi sửa. */
+      disabledOnEdit: true,
+      hint: "Mỗi mã tiền tệ chỉ một dòng; không đổi được mã sau khi tạo.",
     },
     { name: "currencyName", label: "Tên tiền tệ" },
     { name: "rateToVnd", label: "Tỷ giá quy đổi sang VND", type: "number", min: 0, required: true },
@@ -153,7 +155,7 @@ const supplierApi = { list: getSuppliers, detail: getSupplierDetail, create: cre
 export const SuppliersAdminPage = () => page({
   title: "Nhà cung cấp", singular: "nhà cung cấp", description: "Danh mục đối tác trung chuyển và lấy hàng.", searchFields: ["supplierName", "supplierCode", "supplierType", "country", "email"], api: supplierApi,
   columns: [{ name: "supplierName", label: "Tên nhà cung cấp" }, { name: "supplierCode", label: "Mã" }, { name: "supplierType", label: "Loại", type: "tag" }, { name: "country", label: "Quốc gia", filterable: true }, { ...boolField, type: "active" }],
-  fields: [{ name: "supplierName", label: "Tên nhà cung cấp", required: true }, { name: "supplierCode", label: "Mã nhà cung cấp", required: true }, { name: "supplierType", label: "Loại nhà cung cấp", required: true }, { name: "country", label: "Quốc gia" }, { name: "contactPerson", label: "Người liên hệ" }, { name: "phone", label: "Điện thoại" }, { name: "email", label: "Email", type: "email" }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2 }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
+  fields: [{ name: "supplierName", label: "Tên nhà cung cấp", required: true }, { name: "supplierCode", label: "Mã nhà cung cấp", required: true }, { name: "supplierType", label: "Loại nhà cung cấp", type: "select", required: true, options: ["TRANSIT", "PICKUP", "GOODS", "SERVICE"].map(value => ({ value, label: value })) }, { name: "country", label: "Quốc gia" }, { name: "contactPerson", label: "Người liên hệ" }, { name: "phone", label: "Điện thoại" }, { name: "email", label: "Email", type: "email", required: true, hint: "Backend kiểm tra định dạng email, không nhận để trống." }, { name: "address", label: "Địa chỉ", type: "textarea", span: 2 }, { name: "note", label: "Ghi chú", type: "textarea", span: 2 }, boolField],
 });
 
 const shippingRouteApi = { list: getShippingRoutesApi, detail: getShippingRouteDetailApi, create: createShippingRouteApi, update: updateShippingRouteApi, remove: deleteShippingRouteApi };

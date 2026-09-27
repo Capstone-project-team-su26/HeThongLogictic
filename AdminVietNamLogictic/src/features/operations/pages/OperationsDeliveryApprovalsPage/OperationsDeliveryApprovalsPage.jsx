@@ -30,6 +30,18 @@ import {
   rejectDeliveryRequest,
 } from "@features/operations/api/destinationApprovalService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import SubmitReview, {
+  ReviewFacts,
+  ReviewItemsTable,
+} from "@shared/components/SubmitReview/SubmitReview";
+import {
+  formatReviewMoney,
+  REVIEW_MODAL_PROPS,
+} from "@shared/components/SubmitReview/submitReviewFormat";
+import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
+import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
+/* Cân từng kiện, hàng khai trên đơn, tiền đã trả — phiếu giao không mang các số này. */
+import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/operations/styles/OperationsPage.css";
 // Thẻ KPI dùng class wro-kpi-* khai bên trang WRO. Import thẳng thay vì trông chờ trang khác
 // đã kéo file này vào bundle giúp.
@@ -52,6 +64,130 @@ const formatDateTime = (value) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
 };
 
+/** Cột kiện của phiếu giao — dùng chung cho drawer chi tiết và hộp duyệt / từ chối. */
+const DELIVERY_PARCEL_COLUMNS = [
+  { title: "Mã kiện", dataIndex: "packageCode" },
+  { title: "Trạng thái", dataIndex: "packageStatus" },
+  {
+    /*
+     * Khách khai muốn gửi lại kho mà lại có yêu cầu giao — có thể khách gọi đổi ý,
+     * cũng có thể nhầm đơn. Tô cảnh báo để OM xác nhận trước khi duyệt cho book xe.
+     */
+    title: "Ý khách",
+    dataIndex: "customerIntent",
+    render: (value, row) => {
+      if (!value) return <Tag>Chưa chọn</Tag>;
+
+      return value === "STORE_AT_VN" ? (
+        <Tag color="warning" title={row.customerIntentText}>
+          Muốn gửi kho
+        </Tag>
+      ) : (
+        <Tag color="success" title={row.customerIntentText}>
+          Muốn giao ngay
+        </Tag>
+      );
+    },
+  },
+  {
+    title: "Lấy từ",
+    dataIndex: "pickSource",
+    render: (value) =>
+      value === "FROM_SHELF" ? <Tag color="processing">Trên kệ</Tag> : <Tag>Khu tạm</Tag>,
+  },
+  { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "—" },
+];
+
+/**
+ * Đủ thông tin một yêu cầu giao hàng trong hộp duyệt / từ chối: người nhận, địa chỉ, hẹn giao,
+ * phí giao lại, từng kiện (mã, trạng thái, ý khách, lấy từ đâu, ô kệ) + cân từng kiện, hàng
+ * khai và tiền của đơn (khách đã tất toán chưa) lấy từ chi tiết đơn.
+ */
+function DeliveryDecisionReview({ target, review, orderReview }) {
+  const data = { ...target, ...(review.data || {}) };
+  const parcels = Array.isArray(data.parcels) ? data.parcels : [];
+  const conflicting = parcels.filter((row) => row.customerIntent === "STORE_AT_VN").length;
+
+  return (
+    <SubmitReview
+      loading={review.loading}
+      loadingText="Đang tải đầy đủ yêu cầu giao hàng…"
+      error={review.error}
+      errorHint="Chưa xem được danh sách kiện — nên mở phiếu kiểm tra trước khi quyết định."
+    >
+      <ReviewFacts
+        items={[
+          { label: "Mã phiếu", value: <Text strong>{data.deliveryCode}</Text> },
+          { label: "Đơn", value: data.orderCode },
+          { label: "Khách hàng", value: data.customerName },
+          {
+            label: "Người nhận",
+            value: [data.receiverName, data.receiverPhone].filter(Boolean).join(" · "),
+          },
+          {
+            label: "Địa chỉ giao",
+            value:
+              data.fullAddress ||
+              [data.addressDetail, data.ward, data.district, data.province]
+                .filter(Boolean)
+                .join(", "),
+            span: 2,
+          },
+          {
+            label: "Ngày khách hẹn",
+            value: data.scheduledDate ? formatDateTime(data.scheduledDate) : "Không hẹn",
+          },
+          {
+            label: "Lấy hàng từ",
+            value: data.hasShelfPick ? "Có kiện phải xuống kệ nhặt" : "Khu tạm",
+          },
+          {
+            label: "Người lập",
+            value: `${data.createdByName || "—"} · ${formatDateTime(data.createdAt)}`,
+          },
+          {
+            label: "Phí giao lại",
+            value: data.redeliveryFee
+              ? `${formatReviewMoney(data.redeliveryFee)}${
+                  data.redeliveryFeePaymentStatus
+                    ? ` · ${getPaymentStatusMeta(data.redeliveryFeePaymentStatus).label}`
+                    : ""
+                }`
+              : null,
+            hidden: !data.redeliveryFee,
+          },
+          { label: "Ghi chú", value: data.note, span: 2 },
+        ]}
+      />
+      {conflicting > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`${conflicting} kiện có khách yêu cầu gửi lại kho VN`}
+          description="Những kiện này đang được đề nghị giao, ngược với nguyện vọng khách khai lúc đặt đơn."
+        />
+      )}
+      <ReviewItemsTable
+        title="Kiện đem giao"
+        items={parcels}
+        columns={DELIVERY_PARCEL_COLUMNS}
+        rowKey={(row, index) => row?.parcelId || index}
+        extra={`${data.totalParcels ?? parcels.length} kiện`}
+        emptyText={review.error ? "Chưa đọc được danh sách kiện." : "Phiếu chưa có kiện nào."}
+      />
+      {data.orderId ? (
+        <OrderReviewPanel
+          review={orderReview}
+          fallback={data}
+          showFacts={false}
+          parcelIds={parcels.map((row) => row.parcelId)}
+          parcelTitle="Cân và kết quả kiểm đếm của các kiện này (theo đơn)"
+        />
+      ) : null}
+    </SubmitReview>
+  );
+}
+
 export default function OperationsDeliveryApprovalsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +200,21 @@ export default function OperationsDeliveryApprovalsPage() {
 
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [approveTarget, setApproveTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  /*
+   * Trước đây nút "Duyệt" trên dòng bảng gửi lệnh ngay. Duyệt giao = cho kho book xe, nên giờ
+   * cả duyệt lẫn từ chối đều qua hộp xác nhận nạp lại chi tiết phiếu + chi tiết đơn để hiện đủ.
+   */
+  const decisionTarget = approveTarget || rejectTarget;
+  const decisionId = decisionTarget ? decisionTarget.deliveryRequestId || decisionTarget.id : "";
+  const decisionReview = useSubmitReviewData(decisionId, () =>
+    getDeliveryRequestDetail(decisionId),
+  );
+  const decisionOrderId = decisionReview.data?.orderId || decisionTarget?.orderId || "";
+  const orderReview = useOrderReview(decisionOrderId, { enabled: Boolean(decisionTarget) });
+  const decisionLoading = decisionReview.loading || orderReview.loading;
 
   const fetchRows = useCallback(async () => {
     setLoading(true);
@@ -124,6 +274,7 @@ export default function OperationsDeliveryApprovalsPage() {
       try {
         await approveDeliveryRequest(row.deliveryRequestId || row.id);
         AuthNotify.success(`Đã duyệt phiếu ${row.deliveryCode}. Kho có thể đặt đơn vị giao.`);
+        setApproveTarget(null);
         setDetail(null);
         await fetchRows();
       } catch (error) {
@@ -211,8 +362,7 @@ export default function OperationsDeliveryApprovalsPage() {
                 type="primary"
                 size="small"
                 icon={<CheckOutlined />}
-                loading={submitting}
-                onClick={() => handleApprove(row)}
+                onClick={() => setApproveTarget(row)}
               >
                 Duyệt
               </Button>
@@ -232,7 +382,7 @@ export default function OperationsDeliveryApprovalsPage() {
         },
       },
     ],
-    [openDetail, handleApprove, submitting],
+    [openDetail],
   );
 
   return (
@@ -437,38 +587,7 @@ export default function OperationsDeliveryApprovalsPage() {
               size="small"
               pagination={false}
               dataSource={detail.parcels || []}
-              columns={[
-                { title: "Mã kiện", dataIndex: "packageCode" },
-                { title: "Trạng thái", dataIndex: "packageStatus" },
-                {
-                  /*
-                   * Khách khai muốn gửi lại kho mà lại có yêu cầu giao — có thể khách gọi đổi ý,
-                   * cũng có thể nhầm đơn. Tô cảnh báo để OM xác nhận trước khi duyệt cho book xe.
-                   */
-                  title: "Ý khách",
-                  dataIndex: "customerIntent",
-                  render: (value, row) => {
-                    if (!value) return <Tag>Chưa chọn</Tag>;
-
-                    return value === "STORE_AT_VN" ? (
-                      <Tag color="warning" title={row.customerIntentText}>
-                        Muốn gửi kho
-                      </Tag>
-                    ) : (
-                      <Tag color="success" title={row.customerIntentText}>
-                        Muốn giao ngay
-                      </Tag>
-                    );
-                  },
-                },
-                {
-                  title: "Lấy từ",
-                  dataIndex: "pickSource",
-                  render: (value) =>
-                    value === "FROM_SHELF" ? <Tag color="processing">Trên kệ</Tag> : <Tag>Khu tạm</Tag>,
-                },
-                { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "—" },
-              ]}
+              columns={DELIVERY_PARCEL_COLUMNS}
               locale={{ emptyText: "Phiếu chưa có kiện nào." }}
             />
 
@@ -477,8 +596,7 @@ export default function OperationsDeliveryApprovalsPage() {
                 <Button
                   type="primary"
                   icon={<CheckOutlined />}
-                  loading={submitting}
-                  onClick={() => handleApprove(detail)}
+                  onClick={() => setApproveTarget(detail)}
                 >
                   Duyệt yêu cầu
                 </Button>
@@ -499,14 +617,47 @@ export default function OperationsDeliveryApprovalsPage() {
       </Drawer>
 
       <Modal
+        {...REVIEW_MODAL_PROPS}
+        open={Boolean(approveTarget)}
+        title={`Duyệt yêu cầu giao hàng ${approveTarget?.deliveryCode || ""}`}
+        okText={decisionLoading ? "Đang tải thông tin…" : "Duyệt yêu cầu"}
+        cancelText="Huỷ"
+        okButtonProps={{ loading: submitting, disabled: decisionLoading }}
+        onOk={() => handleApprove(approveTarget)}
+        onCancel={() => setApproveTarget(null)}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Duyệt xong kho nhặt đúng các kiện dưới đây và đặt đơn vị giao tới địa chỉ này."
+        />
+        {approveTarget ? (
+          <DeliveryDecisionReview
+            target={approveTarget}
+            review={decisionReview}
+            orderReview={orderReview}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        {...REVIEW_MODAL_PROPS}
         open={Boolean(rejectTarget)}
         title={`Từ chối phiếu ${rejectTarget?.deliveryCode || ""}`}
-        okText="Xác nhận từ chối"
+        okText={decisionLoading ? "Đang tải thông tin…" : "Xác nhận từ chối"}
         cancelText="Huỷ"
-        okButtonProps={{ danger: true, loading: submitting }}
+        okButtonProps={{ danger: true, loading: submitting, disabled: decisionLoading }}
         onOk={handleReject}
         onCancel={() => setRejectTarget(null)}
       >
+        {rejectTarget ? (
+          <DeliveryDecisionReview
+            target={rejectTarget}
+            review={decisionReview}
+            orderReview={orderReview}
+          />
+        ) : null}
         <Text type="secondary">Lý do sẽ hiển thị cho sale để họ báo lại khách.</Text>
         <Input.TextArea
           rows={4}

@@ -329,6 +329,12 @@
   color: #dc2626;
 }
 
+.admin-form-field__hint {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .admin-form-field .ant-input,
 .admin-form-field .ant-input-number,
 .admin-form-field .ant-select-selector {

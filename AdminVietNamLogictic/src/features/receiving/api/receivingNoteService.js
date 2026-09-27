@@ -6,8 +6,11 @@
  *   Sale lập → PENDING_APPROVAL ──(quản lý kho duyệt, approvalStage RECEIVE)──→ ACTIVE (có PDF WRN-)
  *                               ↘ REJECTED
  *   ACTIVE → kho kiểm đếm → khớp: APPROVED (tự chốt)
- *                         → lệch: RECEIVED / PARTIALLY_RECEIVED + requiresReview
- *                                 ──(approvalStage DISCREPANCY)──→ APPROVED / REJECTED
+ *                         → lệch SỐ LƯỢNG / hàng ngoài khai báo: RECEIVED / PARTIALLY_RECEIVED + requiresReview
+ *                                 ──(approvalStage DISCREPANCY, chặn xếp kệ)──→ APPROVED / REJECTED
+ *                         → đủ số lượng nhưng lệch CÂN: APPROVED (tự chốt, xếp kệ được)
+ *                                 ──(approvalStage DISCREPANCY_ACK)──→ chấp nhận số thực tế (chỉ APPROVED;
+ *                                   BE trả 400 nếu từ chối, 409 nếu đã có người quyết)
  *
  *   GET  /api/warehouse-receiving-notes?status=&warehouseId=&search=&pageNumber=&pageSize=
  *        → { message, data: { items, totalCount, pageNumber, pageSize, totalPages } }
@@ -51,7 +54,20 @@ export const RECEIVING_STATUS_META = Object.freeze({
 export const RECEIVING_APPROVAL_STAGE_META = Object.freeze({
   RECEIVE: { label: "Duyệt nhận hàng", color: "gold" },
   DISCREPANCY: { label: "Xem chênh lệch", color: "red" },
+  DISCREPANCY_ACK: { label: "Quyết định lệch cân", color: "volcano" },
 });
+
+/** Hai bước quyết định lệch: DISCREPANCY (lệch số lượng) và DISCREPANCY_ACK (lệch cân đã tự chốt). */
+export const isDiscrepancyStage = (stage) => {
+  const key = String(stage || "").toUpperCase();
+  return key === "DISCREPANCY" || key === "DISCREPANCY_ACK";
+};
+
+/**
+ * Bước này có cho từ chối không. DISCREPANCY_ACK: phiếu đã tự chốt, kiện có thể đã lên kệ —
+ * BE chỉ nhận chấp nhận số thực tế, hàng có vấn đề thì mở sự cố cho kiện.
+ */
+export const canRejectAtStage = (stage) => String(stage || "").toUpperCase() !== "DISCREPANCY_ACK";
 
 /** Tab ảo: mọi phiếu đang chờ quyết định (cả RECEIVE lẫn DISCREPANCY). */
 export const AWAITING_TAB_KEY = "AWAITING";
@@ -136,6 +152,24 @@ export async function listReceivingNotes({
   };
 }
 
+/**
+ * Số đếm cho đầu trang, tính trên TOÀN BỘ phiếu chứ không theo tab đang mở (trước đây chip
+ * "Có chênh lệch" đếm trên tab "Cần quyết định" nên luôn ra 0).
+ *
+ * @returns {Promise<{ awaiting: number, discrepancyAwaiting: number, discrepancy: number }>}
+ */
+export async function getReceivingSummary({ warehouseId = "", search = "" } = {}) {
+  const page = await listReceivingNotes({ status: "", warehouseId, search, pageSize: MAX_PAGE_SIZE });
+  const items = page.items || [];
+  return {
+    awaiting: items.filter((row) => row?.awaitingApproval).length,
+    discrepancyAwaiting: items.filter(
+      (row) => row?.awaitingApproval && isDiscrepancyStage(row?.approvalStage),
+    ).length,
+    discrepancy: items.filter((row) => row?.hasDiscrepancy).length,
+  };
+}
+
 /** Chi tiết phiếu: expectedItems (thùng gỗ + dịch vụ), items (biên bản đối chiếu), parcels. */
 export async function getReceivingNoteDetail(receivingNoteId) {
   const id = requireId(receivingNoteId, "Thiếu mã phiếu tiếp nhận.");
@@ -155,8 +189,9 @@ export async function getReceivingNoteByOrder(orderId) {
 /* ====================== Duyệt ====================== */
 
 /**
- * Duyệt phiếu — dùng cho cả hai giai đoạn (RECEIVE: cho khách mang hàng tới;
- * DISCREPANCY: chốt biên bản lệch). `reason` bắt buộc khi Admin duyệt thay quản lý kho.
+ * Duyệt phiếu — dùng cho cả ba giai đoạn (RECEIVE: cho khách mang hàng tới;
+ * DISCREPANCY: chốt biên bản lệch số lượng; DISCREPANCY_ACK: chấp nhận số thực tế của phiếu
+ * lệch cân đã tự chốt). `reason` bắt buộc khi Admin duyệt thay quản lý kho.
  *
  * @param {string} receivingNoteId
  * @param {string} [reason]
@@ -189,12 +224,15 @@ export async function rejectReceivingNote(receivingNoteId, rejectionReason) {
 
 export default {
   listReceivingNotes,
+  getReceivingSummary,
   getReceivingNoteDetail,
   getReceivingNoteByOrder,
   approveReceivingNote,
   rejectReceivingNote,
   getReceivingStatusMeta,
   getApprovalStageMeta,
+  isDiscrepancyStage,
+  canRejectAtStage,
   RECEIVING_STATUS_META,
   RECEIVING_APPROVAL_STAGE_META,
   RECEIVING_STATUS_TABS,

@@ -1,263 +1,57 @@
 /**
- * MOCK upload ảnh — bản chỉ-giao-diện, đã gỡ hẳn tầng HTTP.
+ * Upload ảnh — API THẬT (POST /api/uploads/images, UploadsController, [Authorize]).
  *
- * Bản thật dựng một axios instance riêng (Authorization từ authSession, xoá
- * Content-Type khi body là FormData) rồi POST multipart lên
- * API_ENDPOINTS.uploads.image / .images và trả về response.data. Ở đây không còn
- * mạng: file người dùng chọn chỉ được kiểm định dạng, ghi vào thư viện ảnh trong
- * bộ nhớ, rồi nhận một URL CDN giả trên cdn.vietnamlogistic.vn — cùng host với
- * ảnh và chứng từ đang có trong src/mocks/data/, để mọi màn trông đồng bộ.
+ * Backend: multipart field BẮT BUỘC là "files", JPG/PNG/WEBP (theo MIME), mỗi ảnh
+ * ≤ 5MB, ≤ 10 ảnh/lần → { message, urls: string[] } đúng thứ tự file. 500 { message }
+ * khi Cloudinary chưa cấu hình. Bản mock cũ (URL giả cdn.vietnamlogistic.vn) nằm ở
+ * uploadImage.mock.js — không màn nào import.
  *
- * HAI HÀM TRẢ VỀ HAI KIỂU KHÁC NHAU, và khác nhau là CỐ Ý vì component đọc đúng
- * như vậy — đổi cho "gọn" là màn hình hỏng ngay lúc chạy:
+ * GỬI MỖI REQUEST MỘT ẢNH (như web khách): nginx trước API chặn body lớn bằng trang
+ * HTML 413, gom 10 ảnh điện thoại vào một request là vượt ngay dù từng ảnh ≤ 5MB.
  *
- * - uploadImage() trả về MỘT CHUỖI URL. ConfirmPurchaseModal gán thẳng
- *   `url: await uploadImage(file)` vào item ảnh, nên trả object là thẻ <img> hỏng.
- *   WroShippingRouteModal cũng có nhánh `typeof res === "string" ? res : ...`.
+ * HỢP ĐỒNG GIỮ NGUYÊN BẢN MOCK — component đọc đúng như vậy:
+ * - uploadImage(file, onProgress)  → MỘT CHUỖI URL (ConsignmentOrder bóc URL từ chuỗi).
+ * - uploadImages(files, onProgress) → OBJECT { success, message, count, url, urls,
+ *   data: [{ url, fileName, contentType, size }] } (ConsignmentBuyOrder quét
+ *   url/urls/data). Mỗi file đúng một URL, đúng thứ tự.
+ * - uploadImageUrls(files, onProgress) → MẢNG URL (chat CSKH dùng qua chatImageUploadApi).
+ * - onUploadProgress nhận phần trăm 0..100 của CẢ lượt (cộng dồn các ảnh).
  *
- * - uploadImages() trả về OBJECT { success, url, urls, data: [{ url, ... }] }.
- *   WroShippingRouteModal đọc res.data[0].url (chỉ khi res.data LÀ MẢNG),
- *   ShipmentDetailModal quét url/data/urls và chỉ nhận chuỗi bắt đầu bằng http(s),
- *   CustomerServiceChat lấy response.data rồi gom trường `url` của từng phần tử và
- *   ĐỐI CHIẾU SỐ LƯỢNG với số file gửi lên. Vì vậy mỗi file phải sinh đúng một URL
- *   riêng biệt, không trùng nhau, và đúng thứ tự file — kể cả khi người dùng chọn
- *   hai file giống tên.
- *
- * Giữ nguyên phần kiểm tra file (kèm nguyên văn thông báo tiếng Việt) và callback
- * tiến độ, vì thanh % của các modal và toast lỗi đang dựa vào chúng.
- *
- * CẮM API THẬT TRỞ LẠI: dựng lại axios instance như bản gốc, rồi trong hai hàm
- * dưới đây thay khối "giả lập" bằng POST API_ENDPOINTS.uploads.image / .images với
- * FormData field "file" / "files" và onUploadProgress của axios. Phần chuẩn hoá
- * file (normalizeImageFile / normalizeImageFiles) dùng lại được nguyên vẹn.
+ * Chỉ nhận URL http(s) server trả. Mọi lỗi được đổi thành Error câu tiếng Việt (giữ
+ * lỗi gốc ở `cause`): getApiErrorMessage của các màn in thẳng response.data nếu là
+ * chuỗi, nên để lọt axios error 413 là toast hiện nguyên trang HTML của nginx.
  */
-import {
-  delay,
-  isoDaysAgo,
-  nextId,
-  nowIso,
-} from "@/mocks/mockUtils";
+import { createHttpClient } from "@shared/api/httpClient";
 
 /* ================= CONFIG ================= */
 
-/*
- * Host giả, trùng với ảnh/chứng từ trong src/mocks/data/ nên không có request nào
- * đi ra ngoài: URL chỉ để hiển thị và để lưu vào payload đơn hàng.
- */
-const MOCK_CDN_BASE_URL =
-  "https://cdn.vietnamlogistic.vn/uploads";
+const UPLOAD_ENDPOINT = "/api/uploads/images";
 
-/* Đặt khi tên file không còn ký tự nào dùng được sau khi bỏ dấu. */
-const FALLBACK_SLUGS = [
-  "anh-san-pham",
-  "bang-chung-mua-hang",
-  "anh-kien-hang",
-  "anh-chung-tu",
-  "anh-xuat-kho",
-  "anh-dong-goi",
-];
+/* Ảnh chụp điện thoại nặng: dài hơn timeout 30 giây của instance chung. */
+const UPLOAD_TIMEOUT_MS = 120_000;
 
-/* ================= FIXTURE TRONG BỘ NHỚ ================= */
+/* Khớp UploadsController.AllowedContentTypes / MaxFileSizeBytes / MaxFilesPerRequest. */
+export const UPLOAD_ALLOWED_IMAGE_TYPES = Object.freeze([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
-/*
- * Thư viện ảnh đã upload của phiên làm việc.
- *
- * Upload là hành vi GHI: mỗi lần gọi phải để lại dấu vết, nếu không thì màn nào
- * mở lại cũng như chưa từng có ai tải ảnh lên. Seed sẵn vài bản ghi cũ để hình
- * dạng bản ghi tự nói lên nó, và để danh sách không rỗng ngay từ đầu phiên.
- */
-const uploadedImageLibrary = [
-  {
-    id: "IMG-20260901084512-118372",
-    fileName: "anh-san-pham-ao-khoac-gio-01.jpg",
-    contentType: "image/jpeg",
-    size: 428_915,
-    width: 1200,
-    height: 1200,
-    url: `${MOCK_CDN_BASE_URL}/2026/09/anh-san-pham-ao-khoac-gio-01-118372.jpg`,
-    uploadedAt: isoDaysAgo(3),
-    uploadedBy: "Nguyễn Thị Hồng Nhung",
-    relatedCode: "PUR-20260901084455-118372",
-  },
-  {
-    id: "IMG-20260901084530-226194",
-    fileName: "anh-san-pham-ao-khoac-gio-02.jpg",
-    contentType: "image/jpeg",
-    size: 511_204,
-    width: 1200,
-    height: 1600,
-    url: `${MOCK_CDN_BASE_URL}/2026/09/anh-san-pham-ao-khoac-gio-02-226194.jpg`,
-    uploadedAt: isoDaysAgo(3),
-    uploadedBy: "Nguyễn Thị Hồng Nhung",
-    relatedCode: "PUR-20260901084455-118372",
-  },
-  {
-    id: "IMG-20260830143017-334016",
-    fileName: "bang-chung-mua-hang-1688.png",
-    contentType: "image/png",
-    size: 786_330,
-    width: 1440,
-    height: 900,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/bang-chung-mua-hang-1688-334016.png`,
-    uploadedAt: isoDaysAgo(5),
-    uploadedBy: "Trần Quốc Bảo",
-    relatedCode: "PUR-20260830142901-334016",
-  },
-  {
-    id: "IMG-20260830143102-441838",
-    fileName: "bang-chung-thanh-toan-alipay.png",
-    contentType: "image/png",
-    size: 654_112,
-    width: 1366,
-    height: 768,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/bang-chung-thanh-toan-alipay-441838.png`,
-    uploadedAt: isoDaysAgo(5),
-    uploadedBy: "Trần Quốc Bảo",
-    relatedCode: "PUR-20260830142901-334016",
-  },
-  {
-    id: "IMG-20260828101244-549660",
-    fileName: "anh-kien-hang-truoc-dong-goi.jpg",
-    contentType: "image/jpeg",
-    size: 372_480,
-    width: 1080,
-    height: 1440,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-kien-hang-truoc-dong-goi-549660.jpg`,
-    uploadedAt: isoDaysAgo(7),
-    uploadedBy: "Lê Minh Khoa",
-    relatedCode: "PCL-20260828101130-549660",
-  },
-  {
-    id: "IMG-20260828101320-657482",
-    fileName: "anh-kien-hang-sau-dong-goi.jpg",
-    contentType: "image/jpeg",
-    size: 401_775,
-    width: 1080,
-    height: 1440,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-kien-hang-sau-dong-goi-657482.jpg`,
-    uploadedAt: isoDaysAgo(7),
-    uploadedBy: "Lê Minh Khoa",
-    relatedCode: "PCL-20260828101130-549660",
-  },
-  {
-    id: "IMG-20260826091508-765304",
-    fileName: "anh-kiem-kien-thieu-hang.webp",
-    contentType: "image/webp",
-    size: 288_640,
-    width: 960,
-    height: 1280,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-kiem-kien-thieu-hang-765304.webp`,
-    uploadedAt: isoDaysAgo(9),
-    uploadedBy: "Phạm Thu Trang",
-    relatedCode: "PCL-20260826091402-765304",
-  },
-  {
-    id: "IMG-20260826091602-873126",
-    fileName: "anh-kien-hang-hu-hong-goc-thung.webp",
-    contentType: "image/webp",
-    size: 301_968,
-    width: 960,
-    height: 1280,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-kien-hang-hu-hong-goc-thung-873126.webp`,
-    uploadedAt: isoDaysAgo(9),
-    uploadedBy: "Phạm Thu Trang",
-    relatedCode: "PCL-20260826091402-765304",
-  },
-  {
-    id: "IMG-20260824164411-980948",
-    fileName: "anh-xuat-kho-xe-tai-bien-so.jpg",
-    contentType: "image/jpeg",
-    size: 556_223,
-    width: 1600,
-    height: 1200,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-xuat-kho-xe-tai-bien-so-980948.jpg`,
-    uploadedAt: isoDaysAgo(12),
-    uploadedBy: "Hoàng Văn Đạt",
-    relatedCode: "WRO-20260824164302-980948",
-  },
-  {
-    id: "IMG-20260824164509-188770",
-    fileName: "anh-chung-tu-hai-quan-to-khai-nhap.jpg",
-    contentType: "image/jpeg",
-    size: 623_407,
-    width: 1654,
-    height: 2339,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-chung-tu-hai-quan-to-khai-nhap-188770.jpg`,
-    uploadedAt: isoDaysAgo(12),
-    uploadedBy: "Hoàng Văn Đạt",
-    relatedCode: "WRO-20260824164302-980948",
-  },
-  {
-    id: "IMG-20260821112035-296592",
-    fileName: "anh-lo-hang-niem-phong-container.jpg",
-    contentType: "image/jpeg",
-    size: 702_118,
-    width: 1600,
-    height: 1200,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-lo-hang-niem-phong-container-296592.jpg`,
-    uploadedAt: isoDaysAgo(15),
-    uploadedBy: "Đặng Thị Mai Chi",
-    relatedCode: "SHP-20260821111908-296592",
-  },
-  {
-    id: "IMG-20260821112144-404414",
-    fileName: "anh-lo-hang-manifest-ban-cung.jpg",
-    contentType: "image/jpeg",
-    size: 488_902,
-    width: 1240,
-    height: 1754,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-lo-hang-manifest-ban-cung-404414.jpg`,
-    uploadedAt: isoDaysAgo(15),
-    uploadedBy: "Đặng Thị Mai Chi",
-    relatedCode: "SHP-20260821111908-296592",
-  },
-  {
-    id: "IMG-20260818153311-512236",
-    fileName: "anh-chat-khach-gui-mau-vai.jpg",
-    contentType: "image/jpeg",
-    size: 254_663,
-    width: 828,
-    height: 1104,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-chat-khach-gui-mau-vai-512236.jpg`,
-    uploadedAt: isoDaysAgo(18),
-    uploadedBy: "Vũ Ngọc Hiếu",
-    relatedCode: "VCL-20260818153204-512236",
-  },
-  {
-    id: "IMG-20260818153402-620058",
-    fileName: "anh-chat-khach-gui-bang-mau.jpg",
-    contentType: "image/jpeg",
-    size: 233_915,
-    width: 828,
-    height: 1104,
-    url: `${MOCK_CDN_BASE_URL}/2026/08/anh-chat-khach-gui-bang-mau-620058.jpg`,
-    uploadedAt: isoDaysAgo(18),
-    uploadedBy: "Vũ Ngọc Hiếu",
-    relatedCode: "VCL-20260818153204-512236",
-  },
-];
+export const UPLOAD_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-/* Thư viện là fixture của phiên, không phải log: giữ trần để không phình vô hạn. */
-const MAX_LIBRARY_SIZE = 80;
+export const UPLOAD_MAX_FILES_PER_BATCH = 10;
 
 /* ================= FILE HELPERS ================= */
 
 const getExtensionFromMimeType = (mimeType) => {
-  const normalizedMimeType = String(mimeType || "")
-    .trim()
-    .toLowerCase();
-
   const extensionMap = {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
-    "image/gif": "gif",
-    "image/heic": "heic",
-    "image/heif": "heif",
   };
 
-  return extensionMap[normalizedMimeType] || "jpg";
+  return extensionMap[String(mimeType || "").trim().toLowerCase()] || "jpg";
 };
 
 const normalizeImageFile = (inputFile, index = 0) => {
@@ -265,177 +59,191 @@ const normalizeImageFile = (inputFile, index = 0) => {
     throw new Error("Vui lòng chọn ảnh.");
   }
 
-  if (
-    typeof File !== "undefined" &&
-    inputFile instanceof File
-  ) {
+  if (typeof File !== "undefined" && inputFile instanceof File) {
     return inputFile;
   }
 
-  if (
-    typeof Blob !== "undefined" &&
-    inputFile instanceof Blob
-  ) {
-    const mimeType = inputFile.type || "image/jpeg";
-    const extension = getExtensionFromMimeType(mimeType);
+  if (typeof Blob !== "undefined" && inputFile instanceof Blob) {
+    const mimeType = inputFile.type || "";
 
     return new File(
       [inputFile],
-      `image-${Date.now()}-${index + 1}.${extension}`,
-      {
-        type: mimeType,
-      },
+      `image-${Date.now()}-${index + 1}.${getExtensionFromMimeType(mimeType)}`,
+      { type: mimeType },
     );
   }
 
   throw new Error("File ảnh không hợp lệ.");
 };
 
-const normalizeImageFiles = (inputFiles) => {
-  let rawFiles = [];
-
-  if (
-    typeof FileList !== "undefined" &&
-    inputFiles instanceof FileList
-  ) {
-    rawFiles = Array.from(inputFiles);
-  } else if (Array.isArray(inputFiles)) {
-    rawFiles = inputFiles;
-  } else if (inputFiles) {
-    rawFiles = [inputFiles];
+const toRawFileList = (inputFiles) => {
+  if (typeof FileList !== "undefined" && inputFiles instanceof FileList) {
+    return Array.from(inputFiles);
   }
+
+  if (Array.isArray(inputFiles)) {
+    return inputFiles.filter(Boolean);
+  }
+
+  return inputFiles ? [inputFiles] : [];
+};
+
+/**
+ * Kiểm TRƯỚC khi gửi đúng giới hạn backend, để ảnh HEIC / > 5MB / rỗng báo lỗi tiếng
+ * Việt ngay thay vì tải lên xong mới bị 400/413. Ném Error, không gửi request nào.
+ */
+export const validateUploadImageFiles = (inputFiles) => {
+  const rawFiles = toRawFileList(inputFiles);
 
   if (!rawFiles.length) {
     throw new Error("Vui lòng chọn ít nhất một ảnh.");
   }
 
-  return rawFiles.map((file, index) => {
-    const normalizedFile = normalizeImageFile(file, index);
+  if (rawFiles.length > UPLOAD_MAX_FILES_PER_BATCH) {
+    throw new Error(
+      `Chỉ được upload tối đa ${UPLOAD_MAX_FILES_PER_BATCH} ảnh mỗi lần.`,
+    );
+  }
 
-    if (!normalizedFile.type?.startsWith("image/")) {
-      throw new Error(
-        `File "${normalizedFile.name || index + 1}" không phải là hình ảnh.`,
-      );
+  return rawFiles.map((rawFile, index) => {
+    const file = normalizeImageFile(rawFile, index);
+    const label = file.name || index + 1;
+    const mimeType = String(file.type || "").trim().toLowerCase();
+
+    if (!UPLOAD_ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+      throw new Error(`Ảnh "${label}": chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.`);
     }
 
-    return normalizedFile;
+    const size = Number(file.size);
+
+    if (!(size > 0)) {
+      throw new Error(`Ảnh "${label}" rỗng, vui lòng chọn ảnh khác.`);
+    }
+
+    if (size > UPLOAD_MAX_FILE_SIZE_BYTES) {
+      throw new Error(`Ảnh "${label}": vượt quá dung lượng tối đa 5MB.`);
+    }
+
+    return file;
   });
 };
 
-/* ================= SINH URL GIẢ ================= */
+/* ================= AXIOS INSTANCE ================= */
 
-/*
- * Tên file thật → slug đặt được trong URL: bỏ dấu tiếng Việt, hạ chữ, gộp dấu gạch.
- * Giữ lại tên gốc để người xem nhận ra ảnh mình vừa chọn trong danh sách chứng từ.
- */
-const slugifyFileName = (fileName, index = 0) => {
-  const baseName = String(fileName || "")
-    .trim()
-    .replace(/\.[^.]+$/, "");
-
-  const slug = baseName
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[đĐ]/g, "d")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .slice(0, 44)
-    .replace(/^-+|-+$/g, "");
-
-  if (slug) {
-    return slug;
-  }
-
-  return FALLBACK_SLUGS[index % FALLBACK_SLUGS.length];
-};
-
-const getImageSizeFallback = (file) => {
-  const size = Number(file?.size);
-
-  /* Blob dựng trong test/kéo-thả có thể size 0; số 0 làm cột "dung lượng" trông lỗi. */
-  return Number.isFinite(size) && size > 0
-    ? size
-    : 245_760;
-};
-
-/**
- * Ghi một file vừa "upload" vào thư viện trong bộ nhớ và trả về bản ghi.
- *
- * URL phải DUY NHẤT cho từng file: CustomerServiceChat và ConsignmentBuyOrder đều
- * so số URL nhận được với số file gửi lên, mà cả hai đều gom URL theo kiểu loại
- * trùng lặp. Chọn cùng lúc hai file trùng tên mà sinh ra một URL giống nhau là
- * lỗi "API chỉ trả về 1/2 URL ảnh" ngay trên màn hình. Đuôi số lấy từ nextId nên
- * mỗi lần gọi là một số khác.
- */
-const registerUploadedImage = (file, index = 0) => {
-  const assetId = nextId("IMG");
-  const uniqueTail = assetId.slice(-6);
-  const uploadedAt = nowIso();
-  const stamp = new Date(uploadedAt);
-  const year = stamp.getFullYear();
-  const month = String(stamp.getMonth() + 1).padStart(2, "0");
-
-  const extension = getExtensionFromMimeType(file?.type);
-  const slug = slugifyFileName(file?.name, index);
-
-  const record = {
-    id: assetId,
-    fileName:
-      String(file?.name || "").trim() ||
-      `${slug}.${extension}`,
-    contentType:
-      String(file?.type || "").trim() || "image/jpeg",
-    size: getImageSizeFallback(file),
-    width: 1200,
-    height: 1600,
-    url: `${MOCK_CDN_BASE_URL}/${year}/${month}/${slug}-${uniqueTail}.${extension}`,
-    uploadedAt,
-    uploadedBy: "Người dùng đang đăng nhập",
-    relatedCode: "",
-  };
-
-  uploadedImageLibrary.unshift(record);
-
-  if (uploadedImageLibrary.length > MAX_LIBRARY_SIZE) {
-    uploadedImageLibrary.length = MAX_LIBRARY_SIZE;
-  }
-
-  return record;
-};
-
-/* Chỉ trả những trường payload thật có; thêm bừa trường chứa URL khác là làm lệch
-   phép đếm URL/file ở CustomerServiceChat và ConsignmentBuyOrder. */
-const toUploadedImagePayload = (record) => ({
-  id: record.id,
-  fileName: record.fileName,
-  contentType: record.contentType,
-  size: record.size,
-  width: record.width,
-  height: record.height,
-  url: record.url,
-  uploadedAt: record.uploadedAt,
+/* Tạo qua createHttpClient: cùng baseURL, token Bearer và quy tắc 401 của app. */
+export const uploadAxios = createHttpClient({
+  timeout: UPLOAD_TIMEOUT_MS,
+  headers: {
+    Accept: "text/plain, application/json, */*",
+  },
 });
 
-/* ================= TIẾN ĐỘ UPLOAD ================= */
+const isHttpUrl = (value) => /^https?:\/\/\S+$/i.test(String(value ?? "").trim());
 
-/*
- * Axios bắn onUploadProgress nhiều nhịp trong lúc gửi byte. Mock trả ngay thì
- * thanh % nhảy thẳng 0 → biến mất: WroShippingRouteModal có Progress hiển thị
- * uploadProgress, ConsignmentBuyOrder in "... : {percent}%" vào dòng trạng thái.
- * Vì vậy vẫn phải bắn từng nhịp và chờ giữa các nhịp.
+/** Backend trả { message, urls }; chấp nhận thêm { url } cho chắc. Chỉ giữ URL http(s). */
+const extractServerUrls = (body) => {
+  let list = [];
+
+  if (Array.isArray(body?.urls)) list = body.urls;
+  else if (Array.isArray(body?.data?.urls)) list = body.data.urls;
+  else if (typeof body?.url === "string") list = [body.url];
+
+  return list.map((url) => String(url ?? "").trim()).filter(isHttpUrl);
+};
+
+/** Đổi lỗi axios thành câu tiếng Việt, không để trang HTML của nginx lọt ra toast. */
+const toUploadError = (error, file) => {
+  const status = error?.response?.status;
+  const data = error?.response?.data;
+  const label = file?.name ? ` "${file.name}"` : "";
+  const isHtml = typeof data === "string" && /^\s*</.test(data);
+
+  let message;
+
+  if (status === 413 || (isHtml && status >= 400)) {
+    message = `Ảnh${label} quá lớn, máy chủ từ chối. Vui lòng chọn ảnh nhỏ hơn 5MB.`;
+  } else if (typeof data?.message === "string" && data.message.trim()) {
+    message = data.message.trim();
+  } else if (status === 401) {
+    message = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại rồi tải ảnh lên.";
+  } else if (status === 403) {
+    message = "Tài khoản của bạn không có quyền tải ảnh lên.";
+  } else if (!error?.response) {
+    message = `Không kết nối được máy chủ để tải ảnh${label}. Vui lòng kiểm tra mạng và thử lại.`;
+  } else {
+    message = `Tải ảnh${label} lên thất bại (mã ${status}). Vui lòng thử lại.`;
+  }
+
+  const wrapped = new Error(message, { cause: error });
+  wrapped.status = status;
+
+  return wrapped;
+};
+
+/* ================= CORE ================= */
+
+/**
+ * Upload lần lượt từng ảnh (mỗi request một ảnh) và trả MẢNG URL đúng thứ tự file.
+ *
+ * @param {File|Blob|FileList|Array<File|Blob>} inputFiles
+ * @param {(percent: number) => void} [onUploadProgress]
+ * @returns {Promise<string[]>}
  */
-const PROGRESS_STEPS = [12, 38, 64, 86, 100];
+export const uploadImageUrls = async (inputFiles, onUploadProgress) => {
+  const files = validateUploadImageFiles(inputFiles);
+  const totalBytes = files.reduce((sum, file) => sum + Number(file.size), 0);
+  const report = typeof onUploadProgress === "function" ? onUploadProgress : null;
+  const urls = [];
+  let doneBytes = 0;
+  let lastPercent = -1;
 
-const emitUploadProgress = async (onUploadProgress) => {
-  if (typeof onUploadProgress !== "function") {
-    await delay(320);
-    return;
+  const emit = (bytes) => {
+    if (!report || !(totalBytes > 0)) return;
+
+    const percent = Math.min(100, Math.round((bytes * 100) / totalBytes));
+
+    if (percent !== lastPercent) {
+      lastPercent = percent;
+      report(percent);
+    }
+  };
+
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append("files", file, file.name);
+
+    let response;
+
+    try {
+      response = await uploadAxios.post(UPLOAD_ENDPOINT, formData, {
+        onUploadProgress: (event) => {
+          const total = Number(event?.total);
+          const loaded = Number(event?.loaded);
+
+          if (Number.isFinite(total) && total > 0 && Number.isFinite(loaded)) {
+            /* Byte multipart nhỉnh hơn byte ảnh: quy về tỉ lệ rồi nhân cỡ ảnh. */
+            emit(doneBytes + Math.min(1, loaded / total) * Number(file.size));
+          }
+        },
+      });
+    } catch (error) {
+      throw toUploadError(error, file);
+    }
+
+    const [url] = extractServerUrls(response?.data);
+
+    if (!url) {
+      throw new Error(
+        `Máy chủ không trả đường dẫn ảnh hợp lệ cho "${file.name}". Vui lòng thử lại.`,
+      );
+    }
+
+    urls.push(url);
+    doneBytes += Number(file.size);
+    emit(doneBytes);
   }
 
-  for (const percent of PROGRESS_STEPS) {
-    await delay(64);
-    onUploadProgress(percent);
-  }
+  return urls;
 };
 
 /* ================= UPLOAD MULTIPLE IMAGES ================= */
@@ -444,115 +252,48 @@ const emitUploadProgress = async (onUploadProgress) => {
  * Upload một hoặc nhiều ảnh.
  *
  * @param {File|Blob|FileList|Array<File|Blob>} inputFiles
- * @param {(percent: number) => void} onUploadProgress
- * @returns {Promise<{success: boolean, url: string, urls: string[], data: Array<object>}>}
+ * @param {(percent: number) => void} [onUploadProgress]
+ * @returns {Promise<{success: boolean, message: string, count: number, url: string, urls: string[], data: Array<{url: string, fileName: string, contentType: string, size: number}>}>}
  */
-export const uploadImages = async (
-  inputFiles,
-  onUploadProgress,
-) => {
-  const files = normalizeImageFiles(inputFiles);
+export const uploadImages = async (inputFiles, onUploadProgress) => {
+  const files = validateUploadImageFiles(inputFiles);
+  const urls = await uploadImageUrls(files, onUploadProgress);
 
-  await emitUploadProgress(onUploadProgress);
-  /* Nhịp chờ cuối: bản thật còn phải đợi server xử lý sau khi gửi xong 100%. */
-  await delay(180);
-
-  const records = files.map((file, index) =>
-    registerUploadedImage(file, index),
-  );
-
-  const urls = records.map((record) => record.url);
-
-  /*
-   * Ba trường url / urls / data cùng tồn tại vì ba màn hình đọc ba đường khác nhau:
-   * data[0].url (WRO), quét url + data + urls (lô hàng), response.data rồi map url
-   * (chat). Cả ba đều loại URL trùng nên nhắc lại cùng một URL là vô hại.
-   */
   return {
     success: true,
-    statusCode: 200,
     message:
-      files.length > 1
-        ? `Đã tải ${files.length} ảnh lên thành công.`
+      urls.length > 1
+        ? `Đã tải ${urls.length} ảnh lên thành công.`
         : "Đã tải ảnh lên thành công.",
-    count: records.length,
+    count: urls.length,
     url: urls[0],
     urls,
-    data: records.map(toUploadedImagePayload),
+    data: urls.map((url, index) => ({
+      url,
+      fileName: files[index].name,
+      contentType: files[index].type,
+      size: files[index].size,
+    })),
   };
 };
 
 /* ================= UPLOAD SINGLE IMAGE ================= */
 
 /**
- * Upload một ảnh và trả về CHUỖI URL.
- *
- * Cố ý không bọc object: ConfirmPurchaseModal gán trực tiếp giá trị này vào
- * `url` của item ảnh rồi đưa vào <img src>, còn ConsignmentOrder chạy nó qua
- * bộ dò URL vốn nhận cả chuỗi trần.
+ * Upload một ảnh và trả về CHUỖI URL (cố ý không bọc object — xem đầu file).
  *
  * @param {File|Blob} inputFile
- * @param {(percent: number) => void} onUploadProgress
+ * @param {(percent: number) => void} [onUploadProgress]
  * @returns {Promise<string>}
  */
-export const uploadImage = async (
-  inputFile,
-  onUploadProgress,
-) => {
-  const file = normalizeImageFile(inputFile);
-
-  if (!file.type?.startsWith("image/")) {
-    throw new Error(`File "${file.name || "đã chọn"}" không phải là hình ảnh.`);
+export const uploadImage = async (inputFile, onUploadProgress) => {
+  if (Array.isArray(inputFile) || (typeof FileList !== "undefined" && inputFile instanceof FileList)) {
+    throw new Error("uploadImage chỉ nhận một ảnh; dùng uploadImages cho nhiều ảnh.");
   }
 
-  await emitUploadProgress(onUploadProgress);
-  await delay(180);
+  const [url] = await uploadImageUrls([inputFile], onUploadProgress);
 
-  const record = registerUploadedImage(file);
-
-  return record.url;
+  return url;
 };
-
-/* ================= STUB THAY AXIOS INSTANCE ================= */
-
-/*
- * Bản gốc export axios instance để chỗ khác gọi lại được. Hiện không màn nào
- * import nó, nhưng export phải còn nguyên tên nếu không tầng kiểm hợp đồng sẽ
- * báo lệch. Đây là stub trơ: không có mạng, post() đi qua đúng mock ở trên nên
- * nếu sau này có ai dùng lại thì vẫn nhận đúng hình dạng { data } kiểu axios.
- */
-const uploadAxios = {
-  defaults: {
-    /* Rỗng để thấy rõ: không có request nào đi ra ngoài trong bản chỉ-giao-diện. */
-    baseURL: "",
-    timeout: 60_000,
-    headers: {
-      Accept: "text/plain, application/json, */*",
-    },
-  },
-  interceptors: {
-    request: { use: () => 0, eject: () => {} },
-    response: { use: () => 0, eject: () => {} },
-  },
-  post: async (_url, body) => {
-    const pickedFiles =
-      typeof FormData !== "undefined" &&
-      body instanceof FormData
-        ? [...body.getAll("files"), ...body.getAll("file")]
-        : body;
-
-    const data = await uploadImages(pickedFiles);
-
-    return {
-      data,
-      status: 200,
-      statusText: "OK",
-      headers: {},
-      config: {},
-    };
-  },
-};
-
-export { uploadAxios };
 
 export default uploadImage;

@@ -68,11 +68,11 @@ export { default as ServicePricings } from "./pages/ServicePricings/ServicePrici
 /* ------------------------------------------------------------------ */
 
 /*
- * exchangeRateService.js: 6 named export, KHÔNG có default — nên chỉ spread,
- * không có gì để re-export dạng default. Gồm hai hằng CURRENCY_CODES /
- * CURRENCY_NAMES, hai bộ chuẩn hoá normalizeExchangeRateItem /
- * normalizeConvertResult (quyết định hình dạng bản ghi mà component
- * destructure) và hai lời gọi getExchangeRatesApi / convertCurrencyApi.
+ * exchangeRateService.js (API THẬT /api/exchange-rates): 8 named export, KHÔNG có
+ * default — nên chỉ spread. Gồm hai hằng CURRENCY_CODES / CURRENCY_NAMES, hai bộ chuẩn
+ * hoá normalizeExchangeRateItem / normalizeConvertResult, hai hàm thuần
+ * findActiveExchangeRate / convertToVndWithRate và hai lời gọi getExchangeRatesApi /
+ * convertCurrencyApi.
  */
 export * from "./api/exchangeRateService";
 

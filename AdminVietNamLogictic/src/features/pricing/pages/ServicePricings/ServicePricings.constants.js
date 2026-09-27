@@ -131,6 +131,7 @@ export const RULE_CODE_LABELS = {
   VAT: "Thuế giá trị gia tăng",
   VOLUMETRIC_DIVISOR:
     "Hệ số khối lượng thể tích",
+  MIN_WEIGHT: "Cân tối thiểu",
   SUR_INSPECTION:
     "Phụ phí kiểm hàng",
   IMPORT_TAX: "Thuế nhập khẩu",
@@ -150,6 +151,9 @@ export const RULE_TYPE_LABELS = {
     "Khối lượng thể tích",
   VOLUMETRIC_WEIGHT:
     "Khối lượng thể tích",
+  VOLUMETRIC_DIVISOR:
+    "Khối lượng thể tích",
+  MIN_WEIGHT: "Cân tối thiểu",
   INSPECTION: "Kiểm hàng",
   IMPORT_TAX: "Thuế nhập khẩu",
   INSURANCE: "Bảo hiểm",

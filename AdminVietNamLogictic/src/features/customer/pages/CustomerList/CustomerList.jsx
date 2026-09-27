@@ -356,19 +356,20 @@ export default function CustomerList() {
 
   const handleDeleteCustomer = (customer) => {
     Modal.confirm({
-      title: "Xóa khách hàng?",
-      content: `Bạn có chắc muốn xóa ${customer?.fullName || "khách hàng này"}?`,
-      okText: "Xóa",
+      /* DELETE /api/customers/{id} chỉ VÔ HIỆU HOÁ (INACTIVE) để giữ lịch sử đơn — nói đúng như vậy. */
+      title: "Ngừng hoạt động khách hàng?",
+      content: `Hồ sơ ${customer?.fullName || "khách hàng này"} sẽ chuyển sang "Ngừng hoạt động" (không xoá lịch sử đơn).`,
+      okText: "Ngừng hoạt động",
       cancelText: "Hủy",
       okButtonProps: { danger: true },
       async onOk() {
         try {
-          await deleteCustomerApi(customer.id);
-          AuthNotify.success("Đã xóa", "Khách hàng đã được xóa khỏi hệ thống.");
+          const result = await deleteCustomerApi(customer.id);
+          AuthNotify.success("Đã ngừng hoạt động", result?.message || "Đã vô hiệu hoá hồ sơ khách hàng.");
           await loadCustomers();
         } catch (requestError) {
           AuthNotify.error(
-            "Không thể xóa khách hàng",
+            "Không thể ngừng hoạt động khách hàng",
             requestError?.response?.data?.message ||
               requestError?.response?.data?.error ||
               requestError?.message ||
