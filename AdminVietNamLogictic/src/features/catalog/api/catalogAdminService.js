@@ -558,20 +558,43 @@ export const deleteRestrictedItem = async (itemId, options = {}) => {
    LOẠI HÀNG
 ========================= */
 
-export const normalizeAdminProductType = (productType = {}) => ({
-  ...productType,
-  id: trimText(productType?.id),
-  name: trimText(productType?.name),
-  importTaxRate: toNumberOrNull(productType?.importTaxRate),
-  isActive: isActiveFlag(productType?.isActive),
-  createdAt: productType?.createdAt ?? null,
-});
+/*
+ * Thuế nhập khẩu: backend LƯU và TÍNH theo TỶ LỆ (0.10 = 10%) — `PurchaseRequestService` nhân
+ * thẳng `lineTotal * ImportTaxRate`. Form Admin lại nhập theo PHẦN TRĂM. Trước đây form ghi
+ * "(%)" nhưng hiện/gửi nguyên tỷ lệ: Admin thấy 0.1, sửa thành 10 là thuế thành 1000%.
+ * `importTaxRate` giữ nguyên tỷ lệ cho các màn khác đang đọc; `importTaxPercent` chỉ dùng cho form.
+ */
+const rateToPercent = (rate) =>
+  rate === null || rate === undefined ? null : Math.round(Number(rate) * 10000) / 100;
 
-const toProductTypePayload = (payload = {}) => ({
-  name: requireText(payload?.name, "tên loại hàng"),
-  importTaxRate: toNumberOrNull(payload?.importTaxRate),
-  isActive: isActiveFlag(payload?.isActive),
-});
+const percentToRate = (percent) =>
+  percent === null || percent === undefined ? null : Math.round(Number(percent) * 100) / 10000;
+
+export const normalizeAdminProductType = (productType = {}) => {
+  const importTaxRate = toNumberOrNull(productType?.importTaxRate);
+  return {
+    ...productType,
+    id: trimText(productType?.id),
+    name: trimText(productType?.name),
+    importTaxRate,
+    importTaxPercent: rateToPercent(importTaxRate),
+    isActive: isActiveFlag(productType?.isActive),
+    createdAt: productType?.createdAt ?? null,
+  };
+};
+
+const toProductTypePayload = (payload = {}) => {
+  // Form gửi `importTaxPercent`; nơi khác (nếu có) gửi thẳng tỷ lệ `importTaxRate`.
+  const percent = toNumberOrNull(payload?.importTaxPercent);
+  if (percent !== null && (percent < 0 || percent > 100)) {
+    throw new Error("Thuế nhập khẩu phải từ 0% đến 100%.");
+  }
+  return {
+    name: requireText(payload?.name, "tên loại hàng"),
+    importTaxRate: percent !== null ? percentToRate(percent) : toNumberOrNull(payload?.importTaxRate),
+    isActive: isActiveFlag(payload?.isActive),
+  };
+};
 
 /** GET /api/product-types/all (Admin) — gồm cả loại đã ngừng sử dụng. */
 export const getProductTypes = async (options = {}) => {

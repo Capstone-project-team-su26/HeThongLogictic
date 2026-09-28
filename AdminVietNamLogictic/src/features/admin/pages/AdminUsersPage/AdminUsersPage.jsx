@@ -34,13 +34,24 @@ import {
 import {
   createAdminUser,
   getAdminApiError,
-  getAdminUserDetail,
   getAdminUsers,
   lockAdminUser,
   unlockAdminUser,
   updateAdminUserRole,
 } from "@features/admin/api/adminService";
-import { isWarehouseRole } from "@features/admin/api/adminUserService";
+import {
+  LOCKED_STATUS_FILTER,
+  applyLockState,
+  applyRoleUpdate,
+  applyWarehouseAssignment,
+  buildCreatedAdminUser,
+  filterAdminUsers,
+  isLockedAdminUser,
+  isWarehouseRole,
+  patchAdminUser,
+  summarizeAdminUsers,
+  upsertAdminUser,
+} from "@features/admin/api/adminUserService";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "@features/admin/styles/AdminPage.css";
@@ -84,10 +95,9 @@ const INITIAL_CREATE_FORM = {
   region: "",
 };
 
-const isLockedUser = (user) => {
-  if (typeof user?.isLocked === "boolean") return user.isLocked;
-  return String(user?.status || "").toUpperCase().includes("LOCK");
-};
+const isLockedUser = isLockedAdminUser;
+
+const DEFAULT_PAGINATION = { current: 1, pageSize: 10 };
 
 const formatDate = (value) => {
   return formatVietnamDateTime(value, { fallback: "—" });
@@ -125,7 +135,16 @@ export default function AdminUsersPage() {
   const [roleForm, setRoleForm] = useState({ role: "", region: "" });
   /* Tài khoản vai trò kho đang mở hộp "Gán kho" (null = đóng). */
   const [warehouseAssignUser, setWarehouseAssignUser] = useState(null);
+  /* Phân trang bảng (điều khiển được để về trang 1 khi đổi tìm kiếm / bộ lọc). */
+  const [pagination, setPagination] = useState(DEFAULT_PAGINATION);
+  /* id các tài khoản đang khoá / mở khoá — chặn bấm lặp và hiện loading đúng dòng. */
+  const [lockPendingIds, setLockPendingIds] = useState(() => new Set());
   const queryRef = useRef(query);
+  /* Chặn gửi hai lần (bấm đúp nút OK + Enter trong form) trước khi state saving kịp render. */
+  const savingRef = useRef(false);
+  const lockPendingRef = useRef(new Set());
+  /* Chỉ kết quả của lần tải MỚI NHẤT được ghi vào bảng (bấm "Tải lại" liên tục). */
+  const loadSeqRef = useRef(0);
   const searchGuardTimersRef = useRef([]);
 
   useEffect(() => {
@@ -147,14 +166,24 @@ export default function AdminUsersPage() {
     );
   };
 
+  /*
+   * GET /api/User trả TOÀN BỘ tài khoản trong một lần (backend không phân trang, không giới
+   * hạn) và đã kèm assignedWarehouses — không gọi /api/users/{id}/warehouses cho từng người.
+   * Chỉ gọi khi mở trang và khi bấm "Tải lại"; tạo / phân quyền / khoá / gán kho cập nhật
+   * đúng dòng từ kết quả của chính thao tác đó.
+   */
   const loadUsers = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
-      setUsers(await getAdminUsers());
+      const list = await getAdminUsers();
+      if (seq === loadSeqRef.current) setUsers(list);
     } catch (error) {
-      AuthNotify.error("Tải dữ liệu thất bại", getAdminApiError(error, "Không thể tải danh sách người dùng."));
+      if (seq === loadSeqRef.current) {
+        AuthNotify.error("Tải dữ liệu thất bại", getAdminApiError(error, "Không thể tải danh sách người dùng."));
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, []);
 
@@ -173,7 +202,7 @@ export default function AdminUsersPage() {
   );
   const statusOptions = useMemo(() => {
     const options = [];
-    if (users.some(isLockedUser)) options.push({ label: "Đã khóa", value: "__locked__" });
+    if (users.some(isLockedUser)) options.push({ label: "Đã khóa", value: LOCKED_STATUS_FILTER });
     uniqueSelectOptions(
       users.filter((user) => !isLockedUser(user)),
       (user) => user.status || "—"
@@ -181,35 +210,27 @@ export default function AdminUsersPage() {
     return options;
   }, [users]);
 
-  const filteredUsers = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase("vi");
+  const filteredUsers = useMemo(
+    () =>
+      filterAdminUsers(users, {
+        query,
+        role: roleFilter,
+        userType: userTypeFilter,
+        status: statusFilter,
+      }),
+    [query, roleFilter, statusFilter, userTypeFilter, users]
+  );
 
-    return users.filter((user) => {
-      if (roleFilter && user.role !== roleFilter) return false;
-      if (userTypeFilter && user.userType !== userTypeFilter) return false;
-      if (statusFilter === "__locked__") {
-        if (!isLockedUser(user)) return false;
-      } else if (statusFilter && (isLockedUser(user) || (user.status || "—") !== statusFilter)) {
-        return false;
-      }
-      if (!keyword) return true;
-      return [
-        user.fullName,
-        user.email,
-        user.phone,
-        user.role,
-        user.region,
-        user.status,
-        ...(user.assignedWarehouses || []).flatMap((warehouse) => [
-          warehouse.warehouseName,
-          warehouse.warehouseCode,
-        ]),
-      ]
-        .some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
-    });
-  }, [query, roleFilter, statusFilter, userTypeFilter, users]);
+  /* Ô tổng: "nhân viên" = tài khoản KHÔNG phải khách; kèm tổng tài khoản + số khách để khớp
+     với số bản ghi GET /api/User trả (bảng hiện đủ mọi bản ghi). */
+  const summary = useMemo(() => summarizeAdminUsers(users), [users]);
 
-  const employeeCount = users.filter((user) => user.userType === "Employee").length;
+  /* Đổi tìm kiếm / bộ lọc → về trang 1 (không để bảng đứng ở trang không còn dữ liệu). */
+  const resetPage = () => setPagination((current) => (current.current === 1 ? current : { ...current, current: 1 }));
+  const withPageReset = (setter) => (value) => {
+    setter(value);
+    resetPage();
+  };
 
   const updateCreateField = (name, value) => {
     setCreateForm((current) => ({ ...current, [name]: value }));
@@ -245,32 +266,43 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    const payload = {
+      fullName,
+      email,
+      password: createForm.password,
+      phone,
+      role: createForm.role,
+      region: createForm.region.trim() || null,
+    };
     try {
-      await createAdminUser({
-        fullName,
-        email,
-        password: createForm.password,
-        phone,
-        role: createForm.role,
-        region: createForm.region.trim() || null,
-      });
-      AuthNotify.success("Tạo tài khoản thành công", "Đã tạo tài khoản nhân viên.");
+      const created = await createAdminUser(payload);
+      /* Một request duy nhất: chèn bản ghi dựng từ dữ liệu đã gửi + id server trả, không tải
+         lại cả danh sách. Chỉ khi server không trả id (ngoài hợp đồng) mới tải lại một lần. */
+      const createdUser = buildCreatedAdminUser(payload, created);
+      if (createdUser) {
+        setUsers((current) => upsertAdminUser(current, createdUser));
+        setPagination((current) => ({ ...current, current: 1 }));
+      }
+      AuthNotify.success("Tạo tài khoản thành công", `Đã tạo tài khoản ${fullName} (${email}).`);
       setCreateOpen(false);
       setCreateForm(INITIAL_CREATE_FORM);
-      await loadUsers();
+      if (!createdUser) loadUsers();
     } catch (error) {
       AuthNotify.error("Tạo tài khoản thất bại", getAdminApiError(error, "Không thể tạo tài khoản."));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
-  const openRoleEditor = (user) => {
+  const openRoleEditor = useCallback((user) => {
     setSelectedUser(user);
     setRoleForm({ role: user.role || "", region: user.region || "" });
     setRoleOpen(true);
-  };
+  }, []);
 
   const roleEditBlockedReason = (() => {
     if (!selectedUser) return "";
@@ -290,24 +322,37 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    const payload = { role: roleForm.role, region: roleForm.region.trim() || null };
+    const userId = selectedUser.id;
     try {
-      await updateAdminUserRole(selectedUser.id, {
-        role: roleForm.role,
-        region: roleForm.region.trim() || null,
-      });
+      await updateAdminUserRole(userId, payload);
+      /* Server chỉ trả { message } — cập nhật đúng dòng theo luật của server, không tải lại. */
+      setUsers((current) => patchAdminUser(current, userId, (user) => applyRoleUpdate(user, payload)));
       AuthNotify.success("Cập nhật thành công", "Đã cập nhật quyền tài khoản.");
       setRoleOpen(false);
-      await loadUsers();
     } catch (error) {
       AuthNotify.error("Cập nhật quyền thất bại", getAdminApiError(error, "Không thể cập nhật quyền."));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
-  const toggleLock = async (user) => {
+  const setLockPending = useCallback((userId, pending) => {
+    const next = new Set(lockPendingRef.current);
+    if (pending) next.add(userId);
+    else next.delete(userId);
+    lockPendingRef.current = next;
+    setLockPendingIds(next);
+  }, []);
+
+  const toggleLock = useCallback(async (user) => {
+    if (!user?.id || lockPendingRef.current.has(user.id)) return;
     const shouldLock = !isLockedUser(user);
+    setLockPending(user.id, true);
 
     try {
       if (shouldLock) {
@@ -315,25 +360,24 @@ export default function AdminUsersPage() {
       } else {
         await unlockAdminUser(user.id);
       }
+      setUsers((current) => patchAdminUser(current, user.id, (item) => applyLockState(item, shouldLock)));
+      const name = user.fullName || user.email;
       AuthNotify.success(
         shouldLock ? "Khóa tài khoản thành công" : "Mở khóa thành công",
-        shouldLock ? "Đã khóa tài khoản." : "Đã mở khóa tài khoản."
+        `${shouldLock ? "Đã khóa" : "Đã mở khóa"} tài khoản${name ? ` ${name}` : ""}.`
       );
-      await loadUsers();
     } catch (error) {
       AuthNotify.error("Cập nhật trạng thái thất bại", getAdminApiError(error, "Không thể cập nhật trạng thái tài khoản."));
+    } finally {
+      setLockPending(user.id, false);
     }
-  };
+  }, [setLockPending]);
 
-  const openDetail = async (user) => {
+  /* GET /api/User/{id} trả CÙNG DTO với dòng trong danh sách → mở chi tiết không gọi thêm API. */
+  const openDetail = useCallback((user) => {
     setDetailUser(user);
     setDetailOpen(true);
-    try {
-      setDetailUser((await getAdminUserDetail(user.id)) || user);
-    } catch {
-      setDetailUser(user);
-    }
-  };
+  }, []);
 
   const columns = useMemo(
     () => [
@@ -479,6 +523,8 @@ export default function AdminUsersPage() {
                 <Button
                   type="text"
                   danger={!isLockedUser(record)}
+                  loading={lockPendingIds.has(record.id)}
+                  disabled={lockPendingIds.has(record.id)}
                   icon={isLockedUser(record) ? <UnlockOutlined /> : <LockOutlined />}
                 />
               </Tooltip>
@@ -487,7 +533,7 @@ export default function AdminUsersPage() {
         ),
       },
     ],
-    []
+    [lockPendingIds, openDetail, openRoleEditor, toggleLock]
   );
 
   return (
@@ -498,10 +544,13 @@ export default function AdminUsersPage() {
           <h1>Quản lý người dùng</h1>
           <p>Tạo tài khoản nội bộ, phân quyền và kiểm soát trạng thái đăng nhập.</p>
         </div>
-        <div className="admin-page__hero-count">
-          <strong>{employeeCount}</strong>
+        <div
+          className="admin-page__hero-count admin-page__hero-count--wide"
+          title={`GET /api/User trả ${summary.total} tài khoản: ${summary.staff} nhân viên nội bộ + ${summary.customers} khách hàng`}
+        >
+          <strong>{summary.staff}</strong>
           <span>nhân viên</span>
-          <small>UTC đồng bộ</small>
+          <small>{summary.total} tài khoản · {summary.customers} khách</small>
         </div>
       </section>
 
@@ -514,7 +563,10 @@ export default function AdminUsersPage() {
             autoComplete="off"
             prefix={<SearchOutlined />}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              resetPage();
+            }}
             placeholder="Tìm theo tên, email, SĐT, vai trò..."
             className="admin-page__search"
           />
@@ -523,7 +575,7 @@ export default function AdminUsersPage() {
             placeholder="Vai trò"
             value={roleFilter}
             options={roleOptions}
-            onChange={setRoleFilter}
+            onChange={withPageReset(setRoleFilter)}
             className="admin-page__filter-select"
           />
           <Select
@@ -531,7 +583,7 @@ export default function AdminUsersPage() {
             placeholder="Loại TK"
             value={userTypeFilter}
             options={userTypeOptions}
-            onChange={setUserTypeFilter}
+            onChange={withPageReset(setUserTypeFilter)}
             className="admin-page__filter-select"
           />
           <Select
@@ -539,7 +591,7 @@ export default function AdminUsersPage() {
             placeholder="Trạng thái"
             value={statusFilter}
             options={statusOptions}
-            onChange={setStatusFilter}
+            onChange={withPageReset(setStatusFilter)}
             className="admin-page__filter-select"
           />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>
@@ -562,10 +614,21 @@ export default function AdminUsersPage() {
             loading={loading}
             scroll={{ x: "max-content" }}
             pagination={{
-              pageSize: 10,
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              pageSizeOptions: [10, 20, 50, 100],
               showSizeChanger: true,
-              showTotal: (total) => `${total} người dùng`,
+              showTotal: (total, range) =>
+                `${range[0]}–${range[1]} / ${total} người dùng${
+                  total !== users.length ? ` (lọc từ ${users.length})` : ""
+                }`,
             }}
+            onChange={(next) =>
+              setPagination({
+                current: next.current || 1,
+                pageSize: next.pageSize || DEFAULT_PAGINATION.pageSize,
+              })
+            }
           />
         </div>
       </section>
@@ -574,9 +637,12 @@ export default function AdminUsersPage() {
         open={createOpen}
         title="Tạo tài khoản nhân viên"
         width={680}
-        okText="Tạo tài khoản"
+        okText={saving ? "Đang tạo..." : "Tạo tài khoản"}
         cancelText="Hủy"
         confirmLoading={saving}
+        cancelButtonProps={{ disabled: saving }}
+        closable={!saving}
+        keyboard={!saving}
         mask={{ closable: !saving }}
         destroyOnHidden
         onOk={submitCreate}
@@ -666,9 +732,12 @@ export default function AdminUsersPage() {
       <Modal
         open={roleOpen}
         title={`Phân quyền: ${selectedUser?.fullName || "Tài khoản"}`}
-        okText="Lưu phân quyền"
+        okText={saving ? "Đang lưu..." : "Lưu phân quyền"}
         cancelText="Hủy"
         confirmLoading={saving}
+        cancelButtonProps={{ disabled: saving }}
+        closable={!saving}
+        keyboard={!saving}
         mask={{ closable: !saving }}
         destroyOnHidden
         okButtonProps={{ disabled: Boolean(roleEditBlockedReason) }}
@@ -742,9 +811,17 @@ export default function AdminUsersPage() {
           key={warehouseAssignUser.id}
           user={warehouseAssignUser}
           onClose={() => setWarehouseAssignUser(null)}
-          onSaved={() => {
+          onSaved={(result) => {
+            const userId = warehouseAssignUser.id;
             setWarehouseAssignUser(null);
-            loadUsers();
+            /* PUT đã trả danh sách kho + vùng mới → cập nhật đúng dòng, không tải lại cả bảng. */
+            if (result?.data) {
+              setUsers((current) =>
+                patchAdminUser(current, userId, (user) => applyWarehouseAssignment(user, result.data))
+              );
+            } else {
+              loadUsers();
+            }
           }}
         />
       ) : null}

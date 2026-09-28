@@ -116,6 +116,18 @@
   text-transform: uppercase;
 }
 
+/* Ô tổng của Quản lý người dùng: thêm dòng "N tài khoản · M khách" nên cần rộng hơn 112px. */
+.admin-page__hero-count--wide {
+  width: auto;
+  min-width: 112px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+}
+
+.admin-page__hero-count--wide small {
+  white-space: nowrap;
+}
+
 .admin-page__panel {
   display: flex;
   flex-direction: column;

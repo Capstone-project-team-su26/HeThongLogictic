@@ -567,3 +567,11 @@
   font-size: 11px;
   line-height: 1.35;
 }
+
+/* "Loại hàng" trong hộp duyệt phiếu xuất: nhãn Mua hộ / Ký gửi + số kiện, xuống dòng gọn ở màn hẹp. */
+.ops-type-mix {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

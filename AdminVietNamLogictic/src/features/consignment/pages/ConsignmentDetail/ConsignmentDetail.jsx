@@ -51,6 +51,7 @@ import {
   getConsignmentDetailApi,
   updateConsignmentStatusApi,
 } from "@features/consignment/api/consignmentService";
+import { getRequoteGuard } from "@features/consignment/api/quotationService";
 import {
   getProductTypesApi,
 } from "@features/consignment/api/consignmentMasterService";
@@ -1143,8 +1144,21 @@ export default function ConsignmentDetail({
     "CANCELLED",
   ].includes(currentOrderStatus);
 
+  /*
+   * Luật lập lại báo giá (backend trả kèm detail.quotation: canSalesRequote /
+   * requoteState): báo giá đã tới tay khách hoặc Admin đã duyệt giá thì Sale
+   * không mở màn lập báo giá nữa — chỉ mở lại khi khách từ chối, hết hạn, hoặc
+   * Admin từ chối giá ngoại lệ.
+   */
+  const requoteGuard = getRequoteGuard(
+    detail?.quotation || null
+  );
+
   const canOpenQuotationPage =
-    Boolean(orderId) && !terminalStatus && !readOnly;
+    Boolean(orderId) &&
+    !terminalStatus &&
+    !readOnly &&
+    requoteGuard.allowed;
 
   const handleOpenQuotationPage = () => {
     if (!orderId) {
@@ -1634,9 +1648,12 @@ export default function ConsignmentDetail({
               title="Báo giá đơn hàng"
               description="Tạo và gửi báo giá cho đơn ký gửi trên màn hình riêng."
               extra={
-                <Tag className="quotation-builder-status-tag">
+                <Tag
+                  className="quotation-builder-status-tag"
+                  color={quotation ? requoteGuard.tone : undefined}
+                >
                   {quotation
-                    ? translateQuoteType(quotation?.quoteType)
+                    ? `${translateQuoteType(quotation?.quoteType)} · ${requoteGuard.label}`
                     : "Chưa có báo giá"}
                 </Tag>
               }
@@ -1649,9 +1666,11 @@ export default function ConsignmentDetail({
 
               <div className="quotation-entry-card__text">
                 <strong>
-                  {quotation
-                    ? "Xem và cập nhật báo giá"
-                    : "Tạo báo giá cho đơn ký gửi"}
+                  {!quotation
+                    ? "Tạo báo giá cho đơn ký gửi"
+                    : requoteGuard.allowed
+                      ? "Lập lại / cập nhật báo giá"
+                      : "Báo giá đã chốt với khách"}
                 </strong>
 
                 <span>
@@ -1663,6 +1682,15 @@ export default function ConsignmentDetail({
                     Không thể tạo báo giá cho đơn đã hoàn thành hoặc đã hủy.
                   </small>
                 )}
+
+                {!terminalStatus &&
+                  !requoteGuard.allowed &&
+                  requoteGuard.reason && (
+                    <small>
+                      {requoteGuard.reason} Xem báo giá ở mục
+                      “Báo giá” bên dưới.
+                    </small>
+                  )}
               </div>
 
               <Button
@@ -1673,9 +1701,11 @@ export default function ConsignmentDetail({
                 onClick={handleOpenQuotationPage}
                 className="quotation-entry-card__button"
               >
-                {quotation
-                  ? "Mở màn hình báo giá"
-                  : "Tạo báo giá"}
+                {!quotation
+                  ? "Tạo báo giá"
+                  : requoteGuard.allowed
+                    ? "Mở màn hình báo giá"
+                    : "Không lập lại được"}
               </Button>
             </div>
           </section>

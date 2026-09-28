@@ -9,6 +9,7 @@ import {
   SHIPMENT_STATUS_TABS,
 } from "@features/shipment/api/internationalShipmentService";
 import ShipmentTimelineDrawer from "@features/shipment/components/ShipmentTimelineDrawer/ShipmentTimelineDrawer";
+import { countPurchaseRecords } from "@shared/components/OrderTypeTag/orderType";
 
 const { Text } = Typography;
 
@@ -90,8 +91,21 @@ export default function ShipmentWorkspace({
         title: "Kiện / cân",
         key: "size",
         width: 130,
-        render: (_, row) =>
-          `${row.totalPackages ?? row.parcels?.length ?? 0} kiện · ${Number(row.totalWeight || 0).toLocaleString("vi-VN")} kg`,
+        render: (_, row) => {
+          const purchase = countPurchaseRecords(row.parcels);
+          return (
+            <Space direction="vertical" size={2}>
+              <Text>
+                {`${row.totalPackages ?? row.parcels?.length ?? 0} kiện · ${Number(row.totalWeight || 0).toLocaleString("vi-VN")} kg`}
+              </Text>
+              {purchase ? (
+                <Tag color="purple" style={{ marginInlineEnd: 0 }}>
+                  {purchase} mua hộ
+                </Tag>
+              ) : null}
+            </Space>
+          );
+        },
       },
       { title: "Bàn giao lúc", dataIndex: "shippedAt", width: 170, render: formatDateTime },
       {

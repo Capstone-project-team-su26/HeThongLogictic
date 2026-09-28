@@ -1490,3 +1490,96 @@
   color: #94a3b8;
   font-size: 11.5px;
 }
+
+/* Tách TRẢ TRƯỚC / TẠM TÍNH ngay dưới tổng báo giá. */
+.purchase-quotation-summary > .purchase-quotation-split {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.purchase-quotation-split__card {
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.purchase-quotation-split__card.is-prepay {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.purchase-quotation-split__card.is-later {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.purchase-quotation-split__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.purchase-quotation-split__head b {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.purchase-quotation-summary .purchase-quotation-split__head strong {
+  display: inline;
+  font-size: 15px;
+}
+
+.purchase-quotation-split ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.purchase-quotation-split li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.purchase-quotation-split li i,
+.purchase-quotation-split li em {
+  font-style: normal;
+}
+
+.purchase-quotation-split li em {
+  flex: 0 0 auto;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.purchase-quotation-split__warn {
+  margin: 6px 0 0;
+  color: #b45309;
+  font-size: 12px;
+}
+
+.purchase-quotation-split__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .purchase-quotation-summary > .purchase-quotation-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

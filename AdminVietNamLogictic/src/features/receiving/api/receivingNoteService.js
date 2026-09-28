@@ -20,6 +20,11 @@
  *        duyệt  { status: "APPROVED", reason? }   (Admin duyệt thay quản lý kho: bắt buộc reason)
  *        từ chối { status: "REJECTED", rejectionReason }
  *
+ *   Phiếu MUA HỘ (`isPurchase`, `orderType = "PURCHASE"`): tự mở ACTIVE khi Sale bấm "Đã đặt NCC",
+ *   NCC giao hàng tới kho. Kèm `purchaseCode`, `purchaseOrderCode` (PO-), `supplierName`,
+ *   `supplierOrderCode` (mã đơn bên NCC), `domesticCarrier` / `domesticTrackingCode`. `search` khớp cả
+ *   các mã này; `orderType=PURCHASE|CONSIGNMENT` lọc theo loại.
+ *
  * Backend chỉ lọc MỘT status. Tab "Cần quyết định" (AWAITING_TAB_KEY) lấy mọi phiếu
  * rồi lọc awaitingApproval — backend đã xếp phiếu chờ duyệt lên đầu danh sách.
  */
@@ -93,6 +98,21 @@ export const getReceivingStatusMeta = (status) =>
 export const getApprovalStageMeta = (stage) =>
   RECEIVING_APPROVAL_STAGE_META[String(stage || "").toUpperCase()] || null;
 
+/** Loại phiếu cho bộ lọc nhanh (`orderType` của API; rỗng = tất cả). */
+export const RECEIVING_ORDER_TYPES = Object.freeze([
+  { value: "", label: "Mọi loại" },
+  { value: "PURCHASE", label: "Mua hộ" },
+  { value: "CONSIGNMENT", label: "Ký gửi" },
+]);
+
+/** Phiếu của hàng mua hộ. BE cũ chưa có cờ thì suy từ mã yêu cầu / mã đơn mua. */
+export const isPurchaseReceivingNote = (note) => {
+  if (!note || typeof note !== "object") return false;
+  if (typeof note.isPurchase === "boolean") return note.isPurchase;
+  if (note.orderType) return String(note.orderType).toUpperCase() === "PURCHASE";
+  return Boolean(note.purchaseCode || note.purchaseOrderCode);
+};
+
 /* ====================== Tiện ích ====================== */
 
 const trimText = (value) => String(value ?? "").trim();
@@ -108,13 +128,14 @@ const requireId = (value, message) => {
 /**
  * Danh sách phiếu → { items, totalCount, pageNumber, pageSize }.
  *
- * @param {{ status?: string, warehouseId?: string, search?: string,
+ * @param {{ status?: string, warehouseId?: string, search?: string, orderType?: string,
  *   pageNumber?: number, pageSize?: number }} [filters]
  */
 export async function listReceivingNotes({
   status = "",
   warehouseId = "",
   search = "",
+  orderType = "",
   pageNumber = 1,
   pageSize = MAX_PAGE_SIZE,
 } = {}) {
@@ -126,6 +147,7 @@ export async function listReceivingNotes({
       status: wantsAwaiting ? "" : status,
       warehouseId,
       search,
+      orderType: trimText(orderType).toUpperCase(),
       pageNumber: wantsAwaiting ? 1 : pageNumber,
       pageSize: size,
     }),
@@ -232,8 +254,10 @@ export default {
   getReceivingStatusMeta,
   getApprovalStageMeta,
   isDiscrepancyStage,
+  isPurchaseReceivingNote,
   canRejectAtStage,
   RECEIVING_STATUS_META,
+  RECEIVING_ORDER_TYPES,
   RECEIVING_APPROVAL_STAGE_META,
   RECEIVING_STATUS_TABS,
   AWAITING_TAB_KEY,

@@ -48,6 +48,13 @@ import {
 import {
   getServicePricingsApi,
 } from "@features/pricing/api/servicePricingService";
+/*
+ * Thuế suất NK theo loại hàng để ước tính phần TẠM TÍNH. Đi đường sâu (không qua barrel) như các
+ * module api khác của modal: GET /api/product-types (id, name) và GET /api/product-types/{id}
+ * (có importTaxRate) — cả hai AllowAnonymous nên Sale gọi được.
+ */
+import { getProductTypeDetail } from "@features/catalog/api/catalogAdminService";
+import { getProductTypesApi } from "@features/consignment/api/consignmentMasterService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import {
   calculateRuleAmountWithContext,
@@ -61,11 +68,14 @@ import {
   getRuleScopeLabel,
   getRuleValueLabel,
   isDomesticFeeRule,
+  isGuid,
   moneyFormatter,
   moneyParser,
   normalizeMoney,
   normalizeNumber,
   normalizeText,
+  resolveVatRatePercent,
+  roundHalfEven,
   roundMoney,
 } from "./CreatePurchaseRequestQuotationModal.helpers";
 
@@ -558,33 +568,134 @@ export default function CreatePurchaseRequestQuotationModal({
     feeOverrides,
   ]);
 
-  const additionalFeeTotal = useMemo(
-    () =>
-      additionalFeeBreakdown.reduce(
-        (total, current) => total + (current.isSkipped ? 0 : current.amount),
-        0
-      ),
-    [additionalFeeBreakdown]
+  /*
+   * Thuế suất NK từng loại hàng (key = productType thô của dòng hàng: UUID hoặc tên).
+   * `null` = không tra được → phần thuế NK của dòng đó không ước tính được (báo rõ, không đoán).
+   */
+  const productTypeKeys = useMemo(
+    () => [...new Set(items.map((item) => normalizeText(item?.productType)).filter(Boolean))].sort(),
+    [items]
   );
+  const productTypeSignature = productTypeKeys.join("|");
+  /* { signature, rates } — kết quả gắn với đúng bộ loại hàng đã tra, đổi bộ là coi như chưa có. */
+  const [importTaxLookup, setImportTaxLookup] = useState({ signature: "", rates: {} });
+  const importTaxRatesLoading =
+    open && productTypeKeys.length > 0 && importTaxLookup.signature !== productTypeSignature;
 
-  const quotationTotal = useMemo(
-    () =>
-      roundMoney(
-        productSubtotal +
-        normalizeMoney(purchaseFee) +
-        normalizeMoney(shippingFee) +
-        /* Ship nội địa cộng ĐÚNG MỘT LẦN — không còn nằm trong additionalFeeTotal. */
-        domesticShippingFee +
-        additionalFeeTotal
-      ),
-    [
-      additionalFeeTotal,
-      domesticShippingFee,
-      productSubtotal,
-      purchaseFee,
-      shippingFee,
-    ]
-  );
+  useEffect(() => {
+    if (!open || productTypeKeys.length === 0) return undefined;
+
+    let cancelled = false;
+
+    (async () => {
+      /* Dòng hàng lưu tên loại hàng (đời cũ) thì đổi tên → id qua danh sách loại đang dùng. */
+      let idByName = new Map();
+      if (productTypeKeys.some((key) => !isGuid(key))) {
+        try {
+          const list = await getProductTypesApi();
+          idByName = new Map(list.map((type) => [normalizeText(type.name).toLowerCase(), type.id]));
+        } catch {
+          idByName = new Map();
+        }
+      }
+
+      const entries = await Promise.all(
+        productTypeKeys.map(async (key) => {
+          const id = isGuid(key) ? key : idByName.get(key.toLowerCase());
+          if (!id) return [key, null];
+          try {
+            const detail = await getProductTypeDetail(id);
+            return [key, Number.isFinite(detail?.importTaxRate) ? detail.importTaxRate : null];
+          } catch {
+            return [key, null];
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setImportTaxLookup({ signature: productTypeKeys.join("|"), rates: Object.fromEntries(entries) });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, productTypeKeys]);
+
+  /*
+   * TRẢ TRƯỚC / TẠM TÍNH — cùng công thức backend lúc lưu báo giá
+   * (PurchaseRequestService.cs ~1675-1709):
+   *   prepay = tiền hàng + phí mua hộ + ship nội địa + phụ phí + VAT phần phí
+   *   later  = cước ước tính + VAT cước + thuế NK
+   * Chỉ là số xem trước — số chính thức do hệ thống tính khi lưu.
+   */
+  const quotationEstimate = useMemo(() => {
+    const vatRatePercent = resolveVatRatePercent(effectiveRules);
+    const fee = roundMoney(purchaseFee);
+    /* Phụ phí = đúng các dòng gửi lên backend (bỏ VAT / thuế NK — backend tự tính). */
+    const surcharges = additionalFeeBreakdown
+      .filter((current) => !current.isSkipped && !current.isTaxOrVat && current.amount > 0)
+      .reduce((total, current) => total + current.amount, 0);
+    const vatOnFees = roundHalfEven((fee + domesticShippingFee + surcharges) * (vatRatePercent / 100));
+    const prepay = productSubtotal + fee + domesticShippingFee + surcharges + vatOnFees;
+
+    const manualRate = roundMoney(freightRatePerKg);
+    const tableRate = normalizeMoney(autoMatchedServicePricing?.price);
+    const freightRate = manualRate > 0 ? manualRate : tableRate;
+    const totalQuantity = items.reduce((total, item) => total + Math.max(0, normalizeNumber(item?.quantity)), 0);
+    const weight = Number(estimatedWeight) > 0 ? Number(estimatedWeight) : Math.max(1, totalQuantity * 0.2);
+    const freight = roundHalfEven(weight * freightRate);
+    const vatOnFreight = roundHalfEven(freight * (vatRatePercent / 100));
+
+    const importTaxRates =
+      importTaxLookup.signature === productTypeSignature ? importTaxLookup.rates : {};
+    let importTax = 0;
+    let importTaxUnknown = 0;
+    itemBreakdown.forEach((current) => {
+      const rate = importTaxRates[normalizeText(current.item?.productType)];
+      if (rate === null || rate === undefined) {
+        importTaxUnknown += 1;
+        return;
+      }
+      importTax += roundHalfEven(current.lineTotal * rate);
+    });
+
+    const later = freight + vatOnFreight + importTax;
+
+    return {
+      vatRatePercent,
+      fee,
+      surcharges,
+      vatOnFees,
+      prepay,
+      freightRate,
+      freightRateFromTable: manualRate <= 0 && tableRate > 0,
+      weight,
+      weightIsDefault: !(Number(estimatedWeight) > 0),
+      freight,
+      vatOnFreight,
+      importTax,
+      importTaxUnknown,
+      later,
+      total: prepay + later,
+    };
+  }, [
+    additionalFeeBreakdown,
+    autoMatchedServicePricing?.price,
+    domesticShippingFee,
+    effectiveRules,
+    estimatedWeight,
+    freightRatePerKg,
+    importTaxLookup,
+    itemBreakdown,
+    items,
+    productSubtotal,
+    productTypeSignature,
+    purchaseFee,
+  ]);
+
+  /* Tổng báo giá = trả trước + tạm tính, như backend lưu vào quotation.TotalAmount. */
+  const quotationTotal = quotationEstimate.total;
 
   const validateForm = () => {
     if (rateBlockingMessage) {
@@ -666,6 +777,7 @@ export default function CreatePurchaseRequestQuotationModal({
             purchaseFee
           ),
 
+        /* Backend bỏ qua (ghi đè bằng cước tạm tính); giữ trường để đúng hợp đồng DTO. */
         shippingFee:
           roundMoney(
             shippingFee
@@ -1154,47 +1266,20 @@ export default function CreatePurchaseRequestQuotationModal({
               />
 
               <small>
+                {/* Không còn mức mặc định 50.000đ: có quy tắc PURCHASE_FEE đang bật thì điền sẵn theo quy tắc, không có thì để 0 cho Sale nhập. */}
                 {matchedPurchaseFeeRule
-                  ? `💡 ${matchedPurchaseFeeRule.ruleName || 'Phí dịch vụ mua hộ cố định (50.000 VNĐ)'}.`
-                  : "Phí dịch vụ mua hộ cố định (50.000 VNĐ) mỗi đơn hàng."}
+                  ? `Điền sẵn theo quy tắc phí "${matchedPurchaseFeeRule.ruleName || "PURCHASE_FEE"}" (${formatCurrency(matchedPurchaseFeeRule.value)}) — Sale sửa được.`
+                  : "Chưa có quy tắc phí mua hộ đang bật — Sale tự nhập phí cho đơn này."}
+                {" "}Thuộc phần <b>TRẢ TRƯỚC</b>.
               </small>
             </div>
 
-            <div className="purchase-quotation-field">
-              <label>
-                <TruckOutlined />
-                Phí vận chuyển
-              </label>
-
-              <InputNumber
-                value={
-                  shippingFee
-                }
-                min={0}
-                step={1000}
-                precision={0}
-                controls={false}
-                formatter={
-                  moneyFormatter
-                }
-                parser={
-                  moneyParser
-                }
-                onChange={(value) =>
-                  setShippingFee(
-                    normalizeMoney(
-                      value
-                    )
-                  )
-                }
-                addonAfter="₫"
-                placeholder="Nhập phí vận chuyển"
-              />
-
-              <small>
-                Giữ cho tương thích bản cũ; luồng chuẩn dùng đơn giá cước bên dưới.
-              </small>
-            </div>
+            {/*
+              Ô "Phí vận chuyển" (shippingFee) đã ẨN: backend không còn dùng số này cho tiền —
+              PurchaseRequestService gán quotation.ShippingFee = request.ShippingFee rồi ghi đè
+              bằng cước tạm tính (cân ước tính × đơn giá /kg); DTO ghi "Không còn dùng, giữ để FE
+              cũ gửi lên không bị lỗi". Cước quốc tế nhập ở hai ô "Đơn giá cước" + "Cân ước tính".
+            */}
 
             <div className="purchase-quotation-field">
               <label>
@@ -1587,18 +1672,6 @@ export default function CreatePurchaseRequestQuotationModal({
 
           <div>
             <span>
-              Phí vận chuyển
-            </span>
-
-            <strong>
-              {formatCurrency(
-                shippingFee
-              )}
-            </strong>
-          </div>
-
-          <div>
-            <span>
               Ship nội địa
             </span>
 
@@ -1610,13 +1683,16 @@ export default function CreatePurchaseRequestQuotationModal({
           </div>
 
           {(() => {
-            const activeFees = additionalFeeBreakdown.filter((item) => !item.isSkipped);
+            /* Chỉ phụ phí thật gửi lên backend; VAT và thuế NK nằm ở khối TRẢ TRƯỚC / TẠM TÍNH bên dưới. */
+            const activeFees = additionalFeeBreakdown.filter(
+              (item) => !item.isSkipped && !item.isTaxOrVat && item.amount > 0
+            );
             if (activeFees.length === 0) return null;
             const activeFeesTotal = activeFees.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
             const tooltipContent = (
               <div style={{ padding: "4px 2px" }}>
                 <div style={{ fontWeight: 800, marginBottom: "6px", borderBottom: "1px solid rgba(255,255,255,0.2)", paddingBottom: "4px" }}>
-                  Chi tiết {activeFees.length} khoản phụ phí & thuế:
+                  Chi tiết {activeFees.length} khoản phụ phí:
                 </div>
                 {activeFees.map((fee) => (
                   <div key={fee.pricingRuleId} style={{ display: "flex", justifyContent: "space-between", gap: "16px", fontSize: "12px", lineHeight: "1.6" }}>
@@ -1631,7 +1707,7 @@ export default function CreatePurchaseRequestQuotationModal({
               <div>
                 <Tooltip title={tooltipContent} placement="top">
                   <span style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                    Phụ phí & thuế ({activeFees.length} khoản) <InfoCircleOutlined style={{ fontSize: "12px", color: "#60a5fa" }} />
+                    Phụ phí ({activeFees.length} khoản) <InfoCircleOutlined style={{ fontSize: "12px", color: "#60a5fa" }} />
                   </span>
                 </Tooltip>
 
@@ -1644,7 +1720,7 @@ export default function CreatePurchaseRequestQuotationModal({
 
           <div className="purchase-quotation-summary__total">
             <span>
-              Tổng báo giá
+              Tổng báo giá (dự kiến)
             </span>
 
             <strong>
@@ -1652,6 +1728,67 @@ export default function CreatePurchaseRequestQuotationModal({
                 quotationTotal
               )}
             </strong>
+          </div>
+
+          <div className="purchase-quotation-split">
+            <div className="purchase-quotation-split__card is-prepay">
+              <div className="purchase-quotation-split__head">
+                <b>TRẢ TRƯỚC (khách trả ngay)</b>
+                <strong>{formatCurrency(quotationEstimate.prepay)}</strong>
+              </div>
+              <ul>
+                <li><i>Tiền hàng</i><em>{formatCurrency(productSubtotal)}</em></li>
+                <li><i>Phí mua hộ</i><em>{formatCurrency(quotationEstimate.fee)}</em></li>
+                <li><i>Ship nội địa từ NCC</i><em>{formatCurrency(domesticShippingFee)}</em></li>
+                <li><i>Phụ phí</i><em>{formatCurrency(quotationEstimate.surcharges)}</em></li>
+                <li>
+                  <i>VAT {formatNumber(quotationEstimate.vatRatePercent)}% phần phí</i>
+                  <em>{formatCurrency(quotationEstimate.vatOnFees)}</em>
+                </li>
+              </ul>
+            </div>
+
+            <div className="purchase-quotation-split__card is-later">
+              <div className="purchase-quotation-split__head">
+                <b>TẠM TÍNH (thu khi hàng về VN)</b>
+                <strong>{formatCurrency(quotationEstimate.later)}</strong>
+              </div>
+              <ul>
+                <li>
+                  <i>
+                    Cước quốc tế ước tính ({formatNumber(quotationEstimate.weight)} kg
+                    {quotationEstimate.weightIsDefault ? " mặc định" : ""} × {formatCurrency(quotationEstimate.freightRate)}/kg
+                    {quotationEstimate.freightRateFromTable ? " theo bảng giá tuyến" : ""})
+                  </i>
+                  <em>{formatCurrency(quotationEstimate.freight)}</em>
+                </li>
+                <li>
+                  <i>VAT {formatNumber(quotationEstimate.vatRatePercent)}% cước</i>
+                  <em>{formatCurrency(quotationEstimate.vatOnFreight)}</em>
+                </li>
+                <li>
+                  <i>
+                    Thuế nhập khẩu
+                    {importTaxRatesLoading
+                      ? " (đang tải thuế suất…)"
+                      : quotationEstimate.importTaxUnknown > 0
+                        ? ` (thiếu thuế suất ${quotationEstimate.importTaxUnknown} dòng — chưa cộng)`
+                        : ""}
+                  </i>
+                  <em>{formatCurrency(quotationEstimate.importTax)}</em>
+                </li>
+              </ul>
+              {quotationEstimate.freightRate <= 0 && (
+                <p className="purchase-quotation-split__warn">
+                  Chưa có đơn giá cước /kg cho tuyến này — nhập ô "Đơn giá cước quốc tế", nếu không hệ thống sẽ từ chối lưu.
+                </p>
+              )}
+            </div>
+
+            <p className="purchase-quotation-split__note">
+              Số xem trước, tính cùng công thức với hệ thống. <b>Số chính thức do hệ thống tính khi lưu</b>{" "}
+              (tỷ giá, thuế suất, bảng giá cước tại thời điểm lưu); phần tạm tính thu lại theo cân đo thật ở kho VN.
+            </p>
           </div>
         </div>
 
@@ -1666,7 +1803,7 @@ export default function CreatePurchaseRequestQuotationModal({
 
           <Tooltip
             title={
-              quotationTotal <= 0
+              productSubtotal <= 0
                 ? "Vui lòng nhập đơn giá sản phẩm"
                 : ""
             }
@@ -1684,7 +1821,7 @@ export default function CreatePurchaseRequestQuotationModal({
               loading={submitting}
               disabled={
                 submitting ||
-                quotationTotal <= 0 ||
+                productSubtotal <= 0 ||
                 Boolean(rateBlockingMessage)
               }
               onClick={

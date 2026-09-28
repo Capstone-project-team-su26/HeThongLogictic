@@ -47,6 +47,8 @@ import {
   REVIEW_MODAL_PROPS,
 } from "@shared/components/SubmitReview/submitReviewFormat";
 import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReviewData";
+import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
+import { countPurchaseRecords, isPurchaseRecord } from "@shared/components/OrderTypeTag/orderType";
 import "@features/operations/styles/OperationsPage.css";
 
 const { Text, Title } = Typography;
@@ -81,6 +83,7 @@ function WroDecisionReview({ target, review, parcelColumns }) {
   const parcels = Array.isArray(data.parcels) ? data.parcels : [];
   const orderCount = new Set(parcels.map((row) => row.consignmentCode).filter(Boolean)).size;
   const customerCount = new Set(parcels.map((row) => row.customerName).filter(Boolean)).size;
+  const purchaseCount = countPurchaseRecords(parcels);
 
   return (
     <SubmitReview
@@ -104,6 +107,18 @@ function WroDecisionReview({ target, review, parcelColumns }) {
           {
             label: "Đơn · khách",
             value: parcels.length ? `${orderCount} đơn · ${customerCount} khách` : null,
+          },
+          {
+            label: "Loại hàng",
+            value: parcels.length ? (
+              <span className="ops-type-mix">
+                {purchaseCount ? <OrderTypeTag purchase /> : null}
+                {purchaseCount < parcels.length ? <OrderTypeTag purchase={false} /> : null}
+                <Text type="secondary">
+                  {purchaseCount} kiện mua hộ · {parcels.length - purchaseCount} kiện ký gửi
+                </Text>
+              </span>
+            ) : null,
           },
           {
             label: "Người lập",
@@ -314,9 +329,16 @@ export default function OperationsWroPage({ requireReason = false }) {
         align: "center",
         width: 110,
         render: (_, row) => (
-          <Text>
-            {row.pickedCount || 0}/{row.parcelCount || 0}
-          </Text>
+          <Space direction="vertical" size={2} align="center">
+            <Text>
+              {row.pickedCount || 0}/{row.parcelCount || 0}
+            </Text>
+            {Number(row.purchaseParcelCount) > 0 ? (
+              <Tag color="purple" style={{ marginInlineEnd: 0 }}>
+                {row.purchaseParcelCount} mua hộ
+              </Tag>
+            ) : null}
+          </Space>
         ),
       },
       {
@@ -399,9 +421,17 @@ export default function OperationsWroPage({ requireReason = false }) {
     {
       title: "Đơn / khách",
       key: "order",
+      filters: [
+        { text: "Mua hộ", value: "PURCHASE" },
+        { text: "Ký gửi", value: "CONSIGNMENT" },
+      ],
+      onFilter: (value, row) => (value === "PURCHASE") === isPurchaseRecord(row),
       render: (_, row) => (
         <Space direction="vertical" size={0}>
-          <Text>{row.consignmentCode || "—"}</Text>
+          <Space size={6} wrap>
+            <Text>{row.consignmentCode || "—"}</Text>
+            <OrderTypeTag record={row} />
+          </Space>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {row.customerName || ""}
           </Text>

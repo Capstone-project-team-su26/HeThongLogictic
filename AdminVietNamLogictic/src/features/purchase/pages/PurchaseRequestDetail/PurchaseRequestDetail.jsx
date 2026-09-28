@@ -64,6 +64,8 @@ import {
 } from "@features/shipment/components/ShipmentJourney/journeySummary";
 
 import CreatePurchaseRequestQuotationModal from "@features/purchase/components/CreatePurchaseRequestQuotationModal/CreatePurchaseRequestQuotationModal";
+/* Import thẳng roles.js (không qua barrel @app/router) để không nạp vòng router → trang này. */
+import { normalizeRole } from "@app/router/roles";
 import CloseUnfulfilledModal from "@features/purchase/components/PurchaseRefunds/CloseUnfulfilledModal";
 import PurchaseRefundsPanel from "@features/purchase/components/PurchaseRefunds/PurchaseRefundsPanel";
 
@@ -71,6 +73,7 @@ import {
   CLOSE_UNFULFILLED_STATUSES,
   CREATE_QUOTATION_STATUSES,
   HIDDEN_SERVICE_RULE_CODES,
+  QUOTE_PURCHASE_ROLES,
 } from "./PurchaseRequestDetail.constants";
 
 import {
@@ -1320,15 +1323,24 @@ export default function PurchaseRequestDetail() {
   const appliedPricingRuleCount =
     pricingRuleRows.length;
 
+  /*
+   * Xem xét / lập báo giá yêu cầu mua hộ chỉ dành cho Sale và Admin (backend trả 403 cho vai trò
+   * khác: kho, giao vận, Operations Manager). Vai trò khác vào được trang thì chỉ xem.
+   */
+  const canQuotePurchase = QUOTE_PURCHASE_ROLES.has(
+    normalizeRole(sessionStorage.getItem("role"))
+  );
+
   const canCreateQuotation = useMemo(() => {
     const currentStatus = normalizeUpperText(detail?.status);
 
     return (
+      canQuotePurchase &&
       !detail?.quotation &&
       items.length > 0 &&
       CREATE_QUOTATION_STATUSES.has(currentStatus)
     );
-  }, [detail?.quotation, detail?.status, items.length]);
+  }, [canQuotePurchase, detail?.quotation, detail?.status, items.length]);
 
 
   /*
@@ -2338,7 +2350,7 @@ export default function PurchaseRequestDetail() {
       </div>
       <CreatePurchaseRequestQuotationModal
         open={
-          quotationModalOpen
+          canQuotePurchase && quotationModalOpen
         }
         onClose={() =>
           setQuotationModalOpen(

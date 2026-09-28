@@ -338,10 +338,12 @@ export const getAvailableActions = (order, role) => {
         Number(order?.refundAmount) > 0),
 
     /*
-     * Ghi NCC giao thiếu / đóng phần không mua được: chỉ khi đơn ĐÃ đặt NCC (backend chặn đơn chưa
-     * đặt hoặc đã huỷ — phần đó đóng theo "không mua được" ở màn yêu cầu mua hộ).
+     * "NCC giao thiếu": chỉ khi NCC ĐÃ phát hàng — hàng chưa đi thì chưa có chuyện giao thiếu.
+     * Backend vẫn nhận ghi thiếu từ ORDERED trở đi; màn này cố ý chỉ mở ở SUPPLIER_SHIPPED để
+     * nút không hiện cạnh "NCC đã phát hàng". NCC hết hàng TRƯỚC khi giao thì đóng ở trang chi
+     * tiết yêu cầu mua hộ (nút "Đóng phần không mua được") hoặc Admin huỷ đơn với nguyên nhân NCC.
      */
-    closeShortage: (isSale || isAdmin) && PLACED_STATUSES.includes(status),
+    closeShortage: (isSale || isAdmin) && status === PURCHASE_ORDER_STATUS.SUPPLIER_SHIPPED,
   };
 };
 
@@ -366,4 +368,71 @@ export const getNextProgressStep = (status) => {
   }
 
   return null;
+};
+
+/* =========================================================
+   THAO TÁC TRÊN MỘT DÒNG — gửi đúng một lần, cập nhật đúng dòng
+========================================================= */
+
+const orderKey = (value) => String(value ?? "").trim().toLowerCase();
+
+/**
+ * Bộ chạy thao tác theo đơn: mỗi đơn chỉ MỘT lời gọi đang bay. Gọi lần hai khi lần đầu chưa xong
+ * (bấm đúp, Enter + bấm chuột) trả ngay `{ ok: false, skipped: true }` — API không bị gọi lần hai.
+ * Không bao giờ ném: `{ ok: true, order }` (order = đơn backend trả, có thể null) hoặc
+ * `{ ok: false, error }` để hộp đang mở hiện câu lỗi và giữ nguyên.
+ */
+export const createOrderActionRunner = () => {
+  const inFlight = new Set();
+
+  const run = async (orderId, action) => {
+    const key = orderKey(orderId);
+
+    if (inFlight.has(key)) return { ok: false, skipped: true };
+
+    inFlight.add(key);
+
+    try {
+      const order = await action();
+
+      return { ok: true, order: order ?? null };
+    } catch (error) {
+      return { ok: false, error };
+    } finally {
+      inFlight.delete(key);
+    }
+  };
+
+  run.isBusy = (orderId) => inFlight.has(orderKey(orderId));
+
+  return run;
+};
+
+/**
+ * Gộp đơn backend vừa trả (cùng DTO với danh sách) vào bảng, đúng dòng theo `purchaseOrderId`.
+ * Đang lọc một trạng thái mà đơn đã sang trạng thái khác → bỏ dòng khỏi bảng, như server trả.
+ *
+ * @returns {Array|null} bảng mới; null = phản hồi không dùng được (thiếu id / trạng thái, hoặc
+ *   dòng không có trong bảng) → trang tải lại bảng MỘT lần.
+ */
+export const applyOrderUpdate = (rows, updated, { statusFilter = "" } = {}) => {
+  const id = orderKey(updated?.purchaseOrderId);
+  const status = upper(updated?.status);
+
+  if (!id || !status || !Array.isArray(rows)) return null;
+
+  const index = rows.findIndex((row) => orderKey(row?.purchaseOrderId) === id);
+
+  if (index < 0) return null;
+
+  const filter = upper(statusFilter);
+
+  if (filter && filter !== status) return rows.filter((_, position) => position !== index);
+
+  const next = rows.slice();
+
+  /* Giữ id gốc của dòng: khoá dòng bảng (rowKey) và đơn đang khoá (busyId) không đổi theo hoa/thường. */
+  next[index] = { ...rows[index], ...updated, purchaseOrderId: rows[index].purchaseOrderId };
+
+  return next;
 };

@@ -57,8 +57,20 @@ export const QUOTATION_STATUS_CONFIG = {
     className: "is-draft",
   },
   PENDING: {
-    label: "Chờ xác nhận",
+    label: "Đã gửi khách — chờ khách xác nhận",
     className: "is-warning",
+  },
+  PENDING_PRICE_APPROVAL: {
+    label: "Chờ Admin duyệt giá",
+    className: "is-info",
+  },
+  PRICE_REJECTED: {
+    label: "Admin từ chối giá — Sale lập lại",
+    className: "is-danger",
+  },
+  SUPERSEDED: {
+    label: "Đã được thay bằng báo giá mới",
+    className: "is-draft",
   },
   SENT: {
     label: "Đã gửi",
@@ -69,7 +81,7 @@ export const QUOTATION_STATUS_CONFIG = {
     className: "is-success",
   },
   REJECTED: {
-    label: "Đã từ chối",
+    label: "Khách từ chối — được lập lại",
     className: "is-danger",
   },
   EXPIRED: {

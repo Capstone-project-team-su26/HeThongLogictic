@@ -151,7 +151,13 @@ export default function SaleSettlementPage() {
   );
   const confirmLoading = orderReview.loading || purchaseReview.loading;
 
-  /* Xem trước tất toán theo cân đo VN + các khoản đã thu — chỉ đơn ký gửi có API này. */
+  /*
+   * Xem trước tất toán theo cân đo VN + các khoản đã thu — CẢ ký gửi lẫn mua hộ. Đơn mua hộ trong
+   * hàng chờ có `orderId` là đơn kho PUR; backend (VnSettlementService.PreviewAsync) tính cùng
+   * một đường với lúc phát hành: hoá đơn chặng quốc tế (cước tạm tính + VAT cước + thuế NK) lập
+   * khi đặt NCC, cước tính lại theo cân đo VN, và thêm `importTaxAdjustment` (≤ 0) cho phần hàng
+   * không tới tay khách (kiện DISPOSED / thất lạc, NCC giao thiếu).
+   */
   const [preview, setPreview] = useState(null);
   const [payments, setPayments] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -187,7 +193,7 @@ export default function SaleSettlementPage() {
     setPreview(null);
     setPayments(null);
     setPreviewError("");
-    if (!row || row.orderType === "PURCHASE") return;
+    if (!row) return;
 
     setPreviewLoading(true);
     const [previewResult, paymentResult] = await Promise.allSettled([
@@ -433,142 +439,155 @@ export default function SaleSettlementPage() {
               />
             )}
 
-            {target.orderType !== "PURCHASE" && (
-              <Spin spinning={previewLoading}>
-                <Title level={5} style={{ marginTop: 4 }}>
-                  Xem trước tất toán theo cân đo tại kho VN
-                </Title>
+            <Spin spinning={previewLoading}>
+              <Title level={5} style={{ marginTop: 4 }}>
+                Xem trước tất toán theo cân đo tại kho VN
+              </Title>
 
-                {previewError && (
-                  <Alert type="error" showIcon message={previewError} style={{ marginBottom: 12 }} />
-                )}
+              {isPurchase && (
+                <Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+                  Đơn mua hộ: chỉ tính phần chặng quốc tế (cước theo cân VN, VAT cước, thuế NK). Tiền hàng
+                  và phí mua hộ khách đã trả trước, không nằm trong hoá đơn này.
+                </Text>
+              )}
 
-                {preview && Array.isArray(preview.blockers) && preview.blockers.length > 0 && (
-                  <Alert
-                    type="warning"
-                    showIcon
+              {previewError && (
+                <Alert type="error" showIcon message={previewError} style={{ marginBottom: 12 }} />
+              )}
+
+              {preview && Array.isArray(preview.blockers) && preview.blockers.length > 0 && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="Chưa phát hành được đợt tất toán"
+                  description={
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {preview.blockers.map((blocker) => (
+                        <li key={blocker.code}>
+                          {blocker.message || SETTLEMENT_BLOCKER_HINTS[blocker.code] || blocker.code}
+                        </li>
+                      ))}
+                    </ul>
+                  }
+                />
+              )}
+
+              {preview && (
+                <>
+                  <Table
+                    size="small"
+                    rowKey="parcelId"
+                    pagination={false}
+                    dataSource={preview.parcels || []}
                     style={{ marginBottom: 12 }}
-                    message="Chưa phát hành được đợt tất toán"
-                    description={
-                      <ul style={{ margin: 0, paddingLeft: 18 }}>
-                        {preview.blockers.map((blocker) => (
-                          <li key={blocker.code}>
-                            {blocker.message || SETTLEMENT_BLOCKER_HINTS[blocker.code] || blocker.code}
-                          </li>
-                        ))}
-                      </ul>
-                    }
+                    columns={[
+                      {
+                        title: "Kiện",
+                        dataIndex: "packageCode",
+                        render: (value, row) => (
+                          <Space direction="vertical" size={0}>
+                            <Text code>{value}</Text>
+                            {row.isDisposed ? <Tag>Đã huỷ — không tính cước</Tag> : null}
+                          </Space>
+                        ),
+                      },
+                      { title: "Cân kho gốc", dataIndex: "originWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                      { title: "Cân VN", dataIndex: "vnWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                      {
+                        title: "Kích thước VN (cm)",
+                        key: "dims",
+                        render: (_, row) =>
+                          `${formatNumber(row.vnLength, 0)}×${formatNumber(row.vnWidth, 0)}×${formatNumber(row.vnHeight, 0)}`,
+                      },
+                      { title: "Cân quy đổi", dataIndex: "volumetricWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
+                      { title: "Cân tính cước", dataIndex: "chargeableWeight", align: "right", render: (v) => <Text strong>{formatNumber(v)} kg</Text> },
+                    ]}
                   />
-                )}
 
-                {preview && (
-                  <>
-                    <Table
-                      size="small"
-                      rowKey="parcelId"
-                      pagination={false}
-                      dataSource={preview.parcels || []}
-                      style={{ marginBottom: 12 }}
-                      columns={[
-                        {
-                          title: "Kiện",
-                          dataIndex: "packageCode",
-                          render: (value, row) => (
-                            <Space direction="vertical" size={0}>
-                              <Text code>{value}</Text>
-                              {row.isDisposed ? <Tag>Đã huỷ — không tính cước</Tag> : null}
-                            </Space>
-                          ),
-                        },
-                        { title: "Cân kho gốc", dataIndex: "originWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
-                        { title: "Cân VN", dataIndex: "vnWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
-                        {
-                          title: "Kích thước VN (cm)",
-                          key: "dims",
-                          render: (_, row) =>
-                            `${formatNumber(row.vnLength, 0)}×${formatNumber(row.vnWidth, 0)}×${formatNumber(row.vnHeight, 0)}`,
-                        },
-                        { title: "Cân quy đổi", dataIndex: "volumetricWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
-                        { title: "Cân tính cước", dataIndex: "chargeableWeight", align: "right", render: (v) => <Text strong>{formatNumber(v)} kg</Text> },
-                      ]}
-                    />
+                  <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+                    <Descriptions.Item label="Đơn giá cước (theo báo giá)">
+                      {formatMoney(preview.freightRate)}/kg
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Cân tính cước VN">
+                      {formatNumber(preview.vnChargeableWeight)} kg (tối thiểu {formatNumber(preview.minimumWeight)} kg,
+                      hệ số quy đổi {formatNumber(preview.volumetricDivisor, 0)})
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Cước đã báo">{formatMoney(preview.quotedFreight)}</Descriptions.Item>
+                    <Descriptions.Item label="Cước theo cân VN">{formatMoney(preview.vnFreight)}</Descriptions.Item>
+                    <Descriptions.Item label="Điều chỉnh cước">{signedMoney(preview.freightAdjustment)}</Descriptions.Item>
+                    <Descriptions.Item label={`Điều chỉnh VAT (${formatNumber(preview.vatRatePercent)}%)`}>
+                      {signedMoney(preview.vatAdjustment)}
+                    </Descriptions.Item>
+                    {/*
+                      Mua hộ: thuế NK KHÔNG thu của phần hàng không tới tay khách (kiện huỷ / thất
+                      lạc, NCC giao thiếu) — luôn ≤ 0, server ghi dòng TAX_ADJUSTMENT khi phát hành
+                      và đã gồm trong "Dự kiến khách trả". Backend cũ không có trường → ẩn.
+                    */}
+                    {Number(preview.importTaxAdjustment) ? (
+                      <Descriptions.Item label="Điều chỉnh thuế NK" span={2}>
+                        {signedMoney(preview.importTaxAdjustment)}
+                        {preview.importTaxAdjustmentNote ? (
+                          <Text type="secondary"> — {preview.importTaxAdjustmentNote}</Text>
+                        ) : null}
+                      </Descriptions.Item>
+                    ) : null}
+                    <Descriptions.Item label="Phí lưu kho">{formatMoney(preview.storageFee)}</Descriptions.Item>
+                    <Descriptions.Item
+                      label={
+                        isPurchase
+                          ? "Hoá đơn chặng quốc tế trước điều chỉnh"
+                          : "Hoá đơn trước điều chỉnh"
+                      }
+                    >
+                      {formatMoney(preview.invoiceTotalBefore)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={isPurchase ? "Đã cọc (hoá đơn chặng quốc tế)" : "Đã cọc"}>
+                      {formatMoney(preview.depositPaid)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Dự kiến khách trả">
+                      <Text strong>{formatMoney(preview.estimatedFinalAmount)}</Text>
+                      <Text type="secondary"> (chưa gồm phí phát sinh bên dưới)</Text>
+                    </Descriptions.Item>
+                    {preview.adjustmentNote ? (
+                      <Descriptions.Item label="Không tính lại cước" span={2}>
+                        {preview.adjustmentNote}
+                      </Descriptions.Item>
+                    ) : null}
+                  </Descriptions>
+                </>
+              )}
 
-                    <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
-                      <Descriptions.Item label="Đơn giá cước (theo báo giá)">
-                        {formatMoney(preview.freightRate)}/kg
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Cân tính cước VN">
-                        {formatNumber(preview.vnChargeableWeight)} kg (tối thiểu {formatNumber(preview.minimumWeight)} kg,
-                        hệ số quy đổi {formatNumber(preview.volumetricDivisor, 0)})
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Cước đã báo">{formatMoney(preview.quotedFreight)}</Descriptions.Item>
-                      <Descriptions.Item label="Cước theo cân VN">{formatMoney(preview.vnFreight)}</Descriptions.Item>
-                      <Descriptions.Item label="Điều chỉnh cước">{signedMoney(preview.freightAdjustment)}</Descriptions.Item>
-                      <Descriptions.Item label={`Điều chỉnh VAT (${formatNumber(preview.vatRatePercent)}%)`}>
-                        {signedMoney(preview.vatAdjustment)}
-                      </Descriptions.Item>
-                      {/*
-                        Mua hộ: thuế NK KHÔNG thu của phần hàng không tới tay khách (kiện huỷ / thất
-                        lạc, NCC giao thiếu) — luôn ≤ 0, server ghi dòng TAX_ADJUSTMENT khi phát hành
-                        và đã gồm trong "Dự kiến khách trả". Backend cũ không có trường → ẩn.
-                      */}
-                      {Number(preview.importTaxAdjustment) ? (
-                        <Descriptions.Item label="Điều chỉnh thuế NK" span={2}>
-                          {signedMoney(preview.importTaxAdjustment)}
-                          {preview.importTaxAdjustmentNote ? (
-                            <Text type="secondary"> — {preview.importTaxAdjustmentNote}</Text>
-                          ) : null}
-                        </Descriptions.Item>
-                      ) : null}
-                      <Descriptions.Item label="Phí lưu kho">{formatMoney(preview.storageFee)}</Descriptions.Item>
-                      <Descriptions.Item label="Hoá đơn trước điều chỉnh">
-                        {formatMoney(preview.invoiceTotalBefore)}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="Đã cọc">{formatMoney(preview.depositPaid)}</Descriptions.Item>
-                      <Descriptions.Item label="Dự kiến khách trả">
-                        <Text strong>{formatMoney(preview.estimatedFinalAmount)}</Text>
-                        <Text type="secondary"> (chưa gồm phí phát sinh bên dưới)</Text>
-                      </Descriptions.Item>
-                      {preview.adjustmentNote ? (
-                        <Descriptions.Item label="Không tính lại cước" span={2}>
-                          {preview.adjustmentNote}
-                        </Descriptions.Item>
-                      ) : null}
-                    </Descriptions>
-                  </>
-                )}
-
-                {payments && Array.isArray(payments.payments) && payments.payments.length > 0 && (
-                  <>
-                    <Text strong>Các khoản thanh toán của đơn</Text>
-                    <Table
-                      size="small"
-                      rowKey={(row) => row.paymentId}
-                      pagination={false}
-                      dataSource={payments.payments}
-                      style={{ margin: "8px 0 16px" }}
-                      columns={[
-                        {
-                          title: "Loại",
-                          dataIndex: "installmentType",
-                          render: (v) => PAYMENT_TYPE_LABELS[String(v || "").toUpperCase()] || v || "—",
-                        },
-                        { title: "Số tiền", dataIndex: "amount", align: "right", render: formatMoney },
-                        { title: "Phương thức", dataIndex: "paymentMethod", render: (v) => v || "—" },
-                        {
-                          title: "Trạng thái",
-                          dataIndex: "paymentStatus",
-                          render: (v) => (
-                            <Tag color={String(v).toUpperCase() === "PAID" ? "success" : "default"}>{v || "—"}</Tag>
-                          ),
-                        },
-                        { title: "Trả lúc", dataIndex: "paidAt", render: formatDateTime },
-                      ]}
-                    />
-                  </>
-                )}
-              </Spin>
-            )}
+              {payments && Array.isArray(payments.payments) && payments.payments.length > 0 && (
+                <>
+                  <Text strong>Các khoản thanh toán của đơn</Text>
+                  <Table
+                    size="small"
+                    rowKey={(row) => row.paymentId}
+                    pagination={false}
+                    dataSource={payments.payments}
+                    style={{ margin: "8px 0 16px" }}
+                    columns={[
+                      {
+                        title: "Loại",
+                        dataIndex: "installmentType",
+                        render: (v) => PAYMENT_TYPE_LABELS[String(v || "").toUpperCase()] || v || "—",
+                      },
+                      { title: "Số tiền", dataIndex: "amount", align: "right", render: formatMoney },
+                      { title: "Phương thức", dataIndex: "paymentMethod", render: (v) => v || "—" },
+                      {
+                        title: "Trạng thái",
+                        dataIndex: "paymentStatus",
+                        render: (v) => (
+                          <Tag color={String(v).toUpperCase() === "PAID" ? "success" : "default"}>{v || "—"}</Tag>
+                        ),
+                      },
+                      { title: "Trả lúc", dataIndex: "paidAt", render: formatDateTime },
+                    ]}
+                  />
+                </>
+              )}
+            </Spin>
 
             <div className="sale-settlement-fees">
               <div className="sale-settlement-fees__head">
@@ -690,7 +709,7 @@ export default function SaleSettlementPage() {
                 block
                 icon={<DollarOutlined />}
                 loading={submitting}
-                disabled={Boolean(target.orderType !== "PURCHASE" && (previewLoading || (preview && !preview.canIssue)))}
+                disabled={Boolean(previewLoading || (preview && !preview.canIssue))}
                 onClick={openConfirm}
                 style={{ marginTop: 16 }}
               >
@@ -759,7 +778,7 @@ export default function SaleSettlementPage() {
 
             <div style={{ height: 14 }} />
 
-            {!isPurchase && preview && (
+            {preview && (
               <ReviewItemsTable
                 title="Kiện tính cước theo cân đo VN"
                 items={preview.parcels || []}
@@ -820,9 +839,13 @@ export default function SaleSettlementPage() {
             <ReviewMoney
               title="Tiền khách sẽ tất toán"
               lines={[
-                ...(!isPurchase && preview
+                ...(preview
                   ? [
-                      { label: "Hoá đơn trước điều chỉnh", value: preview.invoiceTotalBefore },
+                      {
+                        label: "Hoá đơn trước điều chỉnh",
+                        value: preview.invoiceTotalBefore,
+                        hint: isPurchase ? "chặng quốc tế: cước tạm tính + VAT cước + thuế NK" : "",
+                      },
                       {
                         label: "Điều chỉnh cước theo cân VN",
                         value: signedMoney(preview.freightAdjustment),
@@ -839,7 +862,12 @@ export default function SaleSettlementPage() {
                         hidden: !Number(preview.importTaxAdjustment),
                       },
                       { label: "Phí lưu kho", value: preview.storageFee },
-                      { label: "Đã cọc", value: preview.depositPaid, tone: "success" },
+                      {
+                        label: "Đã cọc",
+                        value: preview.depositPaid,
+                        tone: "success",
+                        hint: isPurchase ? "tiền hàng + phí mua hộ đã trả trước, không thuộc hoá đơn này" : "",
+                      },
                       {
                         label: "Dự kiến theo cân VN",
                         value: preview.estimatedFinalAmount,
@@ -856,7 +884,7 @@ export default function SaleSettlementPage() {
                 ...(fees.length === 0
                   ? [{ label: "Phí phát sinh", value: "Không có" }]
                   : [{ label: "Cộng phí phát sinh", value: feesTotal }]),
-                !isPurchase && preview
+                preview
                   ? {
                       label: "Tổng dự kiến khách trả",
                       value: (Number(preview.estimatedFinalAmount) || 0) + feesTotal,
@@ -865,9 +893,7 @@ export default function SaleSettlementPage() {
                     }
                   : {
                       label: "Tổng khách trả",
-                      value: isPurchase
-                        ? "Hệ thống tính khi phát hành (đơn mua hộ không có bản xem trước)"
-                        : "Chưa có bản xem trước — hệ thống tính khi phát hành",
+                      value: "Chưa có bản xem trước — hệ thống tính khi phát hành",
                       strong: true,
                     },
               ]}

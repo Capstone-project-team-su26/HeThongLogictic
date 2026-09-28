@@ -140,8 +140,9 @@ export const RestrictedItemsAdminPage = () => page({
 const productTypeApi = { list: getProductTypes, detail: getProductTypeDetail, create: createProductType, update: updateProductType, remove: deleteProductType };
 export const ProductTypesAdminPage = () => page({
   title: "Loại hàng", singular: "loại hàng", description: "Danh mục loại hàng hóa và thuế nhập khẩu.", searchFields: ["name"], api: productTypeApi,
-  columns: [{ name: "name", label: "Tên loại hàng" }, { name: "importTaxRate", label: "Thuế NK", type: "number" }, { ...boolField, type: "active" }],
-  fields: [{ name: "name", label: "Tên loại hàng", required: true }, { name: "importTaxRate", label: "Thuế nhập khẩu (%)", type: "number", min: 0, max: 100 }, boolField],
+  // importTaxPercent = phần trăm (10 = 10%); service đổi về tỷ lệ 0.10 mà backend lưu.
+  columns: [{ name: "name", label: "Tên loại hàng" }, { name: "importTaxPercent", label: "Thuế NK (%)", type: "number" }, { ...boolField, type: "active" }],
+  fields: [{ name: "name", label: "Tên loại hàng", required: true }, { name: "importTaxPercent", label: "Thuế nhập khẩu (%)", type: "number", min: 0, max: 100 }, boolField],
 });
 
 const unitApi = { list: getUnitsOfMeasure, detail: getUnitOfMeasureDetail, create: createUnitOfMeasure, update: updateUnitOfMeasure, remove: deleteUnitOfMeasure };

@@ -13,6 +13,20 @@ import {
 ========================= */
 
 /*
+ * Tiêu đề khung khoá màn lập báo giá, theo `requoteState` backend trả
+ * (QuotationAcceptanceRules.EvaluateRequote). Trạng thái không có ở đây thì
+ * dùng nhãn của getRequoteGuard.
+ */
+export const REQUOTE_LOCK_TITLES = Object.freeze({
+  APPROVED_SENT_TO_CUSTOMER:
+    "Báo giá đã được Admin duyệt và gửi khách",
+  SENT_TO_CUSTOMER:
+    "Báo giá đã gửi khách — đang chờ khách xác nhận",
+  ACCEPTED: "Khách đã chấp nhận báo giá",
+  ORDER_NOT_QUOTABLE: "Đơn đã qua bước báo giá",
+});
+
+/*
  * Mã + nhãn trạng thái đơn lấy từ module dùng chung (constants/orderStatus.js);
  * ở đây chỉ gắn class CSS. Giữ tên export cũ.
  */

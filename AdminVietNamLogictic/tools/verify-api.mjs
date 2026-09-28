@@ -1160,6 +1160,49 @@ if (loadError) {
     );
   });
 
+  await check("getRequoteGuard: báo giá đã duyệt & gửi khách thì Sale không lập lại (cờ backend + suy luận dự phòng)", async () => {
+    resetState({ token: "tok" });
+    const blockedReason =
+      "Báo giá đã được Admin duyệt và gửi khách — không lập lại được. Chỉ lập báo giá mới khi khách từ chối báo giá, báo giá hết hạn hoặc Admin từ chối giá ngoại lệ.";
+    routes = [
+      {
+        method: "GET",
+        url: `/api/orders/${ORDER_ID}/quotation`,
+        reply: () =>
+          ok({
+            message: "Lấy thông tin báo giá thành công.",
+            data: {
+              ...DRAFT_QUOTATION,
+              status: "PENDING",
+              priceApprovalStatus: "APPROVED",
+              canSalesRequote: false,
+              requoteState: "APPROVED_SENT_TO_CUSTOMER",
+              requoteBlockedReason: blockedReason,
+            },
+          }),
+      },
+    ];
+    const detail = await quotation.getOrderQuotationApi(ORDER_ID);
+    const fromApi = quotation.getRequoteGuard(detail);
+    const now = Date.parse("2026-09-27T00:00:00Z");
+    const guess = (q) => quotation.getRequoteGuard(q, { now });
+    const future = "2026-10-01T00:00:00";
+    const past = "2026-09-20T00:00:00";
+    return all(
+      expectEqual("cờ backend được giữ", [detail.canSalesRequote, detail.requoteState], [false, "APPROVED_SENT_TO_CUSTOMER"]),
+      expectEqual("khoá theo cờ backend", [fromApi.allowed, fromApi.state, fromApi.reason, fromApi.fromBackend], [false, "APPROVED_SENT_TO_CUSTOMER", blockedReason, true]),
+      expectEqual("khách không có cờ → null", quotation.normalizeQuotationDetail({ status: "PENDING" }).canSalesRequote, null),
+      expectEqual("dự phòng: PENDING + APPROVED còn hạn → khoá", [guess({ status: "PENDING", priceApprovalStatus: "APPROVED", expiredAt: future }).allowed, guess({ status: "PENDING", priceApprovalStatus: "APPROVED", expiredAt: future }).state], [false, "APPROVED_SENT_TO_CUSTOMER"]),
+      expectEqual("dự phòng: PENDING theo bảng giá còn hạn → khoá", guess({ status: "PENDING", priceApprovalStatus: "NOT_REQUIRED", expiredAt: future }).allowed, false),
+      expectEqual("dự phòng: hết hạn → lập lại được", [guess({ status: "PENDING", expiredAt: past }).allowed, guess({ status: "PENDING", expiredAt: past }).state], [true, "EXPIRED"]),
+      expectEqual("dự phòng: khách từ chối → lập lại được", guess({ status: "REJECTED" }).allowed, true),
+      expectEqual("dự phòng: Admin từ chối giá → lập lại được", guess({ status: "PRICE_REJECTED" }).state, "PRICE_REJECTED"),
+      expectEqual("dự phòng: chờ Admin duyệt → thay bản đang chờ", [guess({ status: "PENDING_PRICE_APPROVAL" }).allowed, guess({ status: "PENDING_PRICE_APPROVAL" }).label], [true, "Chờ Admin duyệt giá"]),
+      expectEqual("dự phòng: khách đã chấp nhận → khoá", guess({ status: "ACCEPTED" }).allowed, false),
+      expectEqual("chưa có báo giá → mở", quotation.getRequoteGuard(null).allowed, true),
+    );
+  });
+
   await check("price-approval: APPROVED không cần note; body đúng hợp đồng", async () => {
     resetState({ token: "tok-admin" });
     routes = [
@@ -2125,6 +2168,66 @@ if (loadError) {
     );
   });
 
+  /*
+   * ĐƠN MUA NCC — "NCC đã phát hàng" bấm MỘT lần (27/09/2026): trước đây hộp đóng cả khi lỗi và bảng
+   * chỉ đổi sau khi tải lại cả danh sách. Nay: bộ chạy theo đơn chặn gửi lần hai, dòng cập nhật từ
+   * phản hồi backend (đúng dòng), lỗi trả về cho hộp hiện chứ không nuốt.
+   */
+  await check("Đơn mua NCC: bấm \"NCC đã phát hàng\" một lần → PUT /progress đúng 1 lần, đúng dòng đổi sang SUPPLIER_SHIPPED; lỗi không nuốt", async () => {
+    resetState({ token: "t" });
+    const helpers = await load("/src/features/purchase/pages/SupplierOrdersPage/SupplierOrdersPage.helpers.js");
+    const other = { purchaseOrderId: "other-po", purchaseOrderCode: "PO-2", status: "SUPPLIER_CONFIRMED" };
+    const rows = [other, { purchaseOrderId: PO_ID, purchaseOrderCode: "PO-1", status: "SUPPLIER_CONFIRMED", supplierName: "NCC A" }];
+    routes = [{
+      method: "PUT",
+      url: `/api/purchase-orders/${PO_ID}/progress`,
+      reply: (req) => ok({ message: "Đã cập nhật tiến độ NCC.", data: { purchaseOrderId: PO_ID.toUpperCase(), purchaseOrderCode: "PO-1", status: req.body.status, domesticTrackingCode: req.body.domesticTrackingCode, supplierName: "NCC A" } }),
+    }];
+    const runAction = helpers.createOrderActionRunner();
+    const send = () => runAction(PO_ID, () => purchaseOrder.updatePurchaseOrderProgress(PO_ID, { status: "SUPPLIER_SHIPPED", domesticTrackingCode: " VD123 ", domesticCarrier: "" }));
+    /* Bấm đúp: lần hai tới khi lần một chưa xong. */
+    const [first, second] = await Promise.all([send(), send()]);
+    const next = helpers.applyOrderUpdate(rows, first.order, { statusFilter: "" });
+    const updatedRow = next?.find((row) => row.purchaseOrderId === PO_ID.toUpperCase() || row.purchaseOrderId === PO_ID);
+    const filtered = helpers.applyOrderUpdate(rows, first.order, { statusFilter: "SUPPLIER_CONFIRMED" });
+    const noData = helpers.applyOrderUpdate(rows, null);
+
+    /* Lỗi backend: trả { ok:false, error } để hộp hiện câu lỗi, rồi mở khoá gửi lại được. */
+    routes = [{ method: "PUT", url: `/api/purchase-orders/${PO_ID}/progress`, reply: () => fail(400, { message: "Chỉ ghi NCC phát hàng cho đơn đã đặt / đã xác nhận." }) }];
+    const before = requests.length;
+    const failed = await send();
+    const retry = await send();
+
+    return all(
+      expectEqual("số lần gọi PUT", requests.slice(0, before).filter((req) => req.method === "PUT").length, 1),
+      expectEqual("body", requests[0]?.body, { status: "SUPPLIER_SHIPPED", domesticTrackingCode: "VD123" }),
+      expectEqual("kết quả hai lần bấm", [first.ok, Boolean(second.skipped)], [true, true]),
+      expectEqual("dòng đổi trạng thái + nút", [updatedRow?.status, updatedRow?.domesticTrackingCode, helpers.getNextProgressStep(updatedRow?.status), helpers.getAvailableActions(updatedRow, "sale").progress], ["SUPPLIER_SHIPPED", "VD123", null, false]),
+      expectEqual("dòng khác giữ nguyên", [next?.length, next?.[0]], [2, other]),
+      expectEqual("đang lọc trạng thái cũ → dòng rời bảng", filtered?.map((row) => row.purchaseOrderCode), ["PO-2"]),
+      expectEqual("phản hồi thiếu → tải lại (null)", noData, null),
+      expectEqual("lỗi trả về, không nuốt", [failed.ok, purchaseOrder.getPurchaseOrderApiError(failed.error)], [false, "Chỉ ghi NCC phát hàng cho đơn đã đặt / đã xác nhận."]),
+      expectEqual("lỗi xong gửi lại được", [Boolean(retry.skipped), requests.length - before], [false, 2]),
+    );
+  });
+
+  await check("Đơn mua NCC: cột Thao tác — \"NCC giao thiếu\" chỉ ở SUPPLIER_SHIPPED, mỗi trạng thái một bước kế tiếp", async () => {
+    const helpers = await load("/src/features/purchase/pages/SupplierOrdersPage/SupplierOrdersPage.helpers.js");
+    const can = (status, role = "sale") => helpers.getAvailableActions({ status, refunds: [] }, role);
+    const steps = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ORDERED", "SUPPLIER_CONFIRMED", "SUPPLIER_SHIPPED", "CANCELLED"];
+    const saleMain = steps.map((status) => {
+      const c = can(status);
+      return [c.submit && "Gửi duyệt", c.place && "Đã đặt NCC", c.progress && helpers.getNextProgressStep(status)?.label].filter(Boolean);
+    });
+    return all(
+      expectEqual("giao thiếu (Sale)", steps.map((status) => can(status).closeShortage), [false, false, false, false, false, true, false]),
+      expectEqual("giao thiếu (Admin)", steps.map((status) => can(status, "admin").closeShortage), [false, false, false, false, false, true, false]),
+      expectEqual("nút chính của Sale", saleMain, [["Gửi duyệt"], [], ["Đã đặt NCC"], ["NCC đã xác nhận đơn"], ["NCC đã phát hàng"], [], []]),
+      expectEqual("SUPPLIER_CONFIRMED không có giao thiếu", [can("SUPPLIER_CONFIRMED").progress, can("SUPPLIER_CONFIRMED").closeShortage], [true, false]),
+      expectEqual("Admin duyệt chỉ ở chờ duyệt", steps.map((status) => can(status, "admin").decide), [false, true, false, false, false, false, false]),
+    );
+  });
+
   await check("Tổng quan: ba endpoint /api/staff|operations|admin/dashboard bóc { data }, giữ số backend, thiếu trường → 0/[]; 403 ném lỗi", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -2298,6 +2401,85 @@ if (loadError) {
       expectEqual("403 rỗng", [forbidden.resolved, adminUser.getAdminUserApiError(forbidden.error)], [false, "Tài khoản của bạn không có quyền thực hiện thao tác này."]),
       expectEqual("403 không đăng xuất", fakeLocation.replaced, []),
       expectEqual("thiếu id không gọi mạng", [noId.resolved, requests.length], [false, before]),
+    );
+  });
+
+  /* ---------- Màn Quản lý người dùng: 58 bản ghi hiện đủ, ô tổng đúng định nghĩa, tạo không N+1 ---------- */
+
+  const make58Users = () => {
+    const staffRoles = ["Sale", "Delivery", "OperationsManager", "WarehouseStaff", "Admin"];
+    const staff = Array.from({ length: 50 }, (_, i) => ({
+      id: `staff-${i}`, fullName: `NV ${i}`, email: `nv${i}@vcl.vn`, phone: `09000000${String(i).padStart(2, "0")}`,
+      role: staffRoles[i % staffRoles.length], userType: "Employee", status: i === 3 ? "Locked" : "Active",
+      region: i % 2 ? "VN" : "CN", createdAt: `2026-09-${String((i % 28) + 1).padStart(2, "0")}T02:00:00`,
+      assignedWarehouses: i === 3 ? [{ warehouseId: WAREHOUSE_ID, warehouseCode: "GZ-01", warehouseName: "Kho Quảng Châu", region: "CN" }] : [],
+    }));
+    const customers = Array.from({ length: 8 }, (_, i) => ({
+      id: `cus-${i}`, fullName: `KH ${i}`, email: `kh${i}@mail.vn`, phone: `09100000${String(i).padStart(2, "0")}`,
+      role: "Customer", userType: "Customer", status: "Active", region: null, createdAt: "2026-09-10T02:00:00", assignedWarehouses: [],
+    }));
+    return [...staff, ...customers];
+  };
+
+  await check("Quản lý người dùng: API trả 58 bản ghi → bảng giữ đủ 58 (một request, không gọi kho từng người); ô tổng = 50 nhân viên + 8 khách = 58; bộ lọc áp đúng", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "GET", url: "/api/User", reply: () => ok(make58Users()) }];
+    const users = await adminSvc.getAdminUsers();
+    const summary = adminUser.summarizeAdminUsers(users);
+    const f = (opts) => adminUser.filterAdminUsers(users, opts).length;
+    return all(
+      expectEqual("chỉ một request", requests.map((r) => [r.method, r.url]), [["GET", "/api/User"]]),
+      expectEqual("bảng đủ bản ghi (không lọc)", f({}), 58),
+      expectEqual("ô tổng", summary, { total: 58, staff: 50, customers: 8 }),
+      expectEqual("lọc vai trò Customer", f({ role: "Customer" }), 8),
+      expectEqual("lọc vai trò Sale", f({ role: "Sale" }), 10),
+      expectEqual("lọc loại TK Employee", f({ userType: "Employee" }), 50),
+      expectEqual("lọc Đã khóa", f({ status: adminUser.LOCKED_STATUS_FILTER }), 1),
+      expectEqual("lọc Active (không tính tài khoản khoá)", f({ status: "Active" }), 57),
+      expectEqual("tìm theo tên kho phụ trách", f({ query: "quảng châu" }), 1),
+      expectEqual("khách trống userType vẫn là khách theo role", adminUser.isCustomerAccount({ role: "customer" }), true),
+    );
+  });
+
+  await check("Quản lý người dùng: tạo tài khoản = ĐÚNG MỘT request POST, chèn bản ghi mới vào bảng (không tải lại, không N+1); phân quyền / khoá / gán kho vá đúng dòng", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/User", reply: () => ok(make58Users()) },
+      { method: "POST", url: "/api/User", reply: () => ok({ id: "new-id" }, 201) },
+    ];
+    let users = await adminSvc.getAdminUsers();
+    requests = [];
+    const payload = { fullName: "Kho Mới", email: "khomoi@vcl.vn", password: "secret1", phone: "0988888888", role: "WarehouseStaff", region: "vn" };
+    const created = await adminSvc.createAdminUser(payload);
+    const record = adminUser.buildCreatedAdminUser(payload, created, new Date("2026-09-27T03:00:00Z"));
+    users = adminUser.upsertAdminUser(users, record);
+    const afterCreate = requests.map((r) => [r.method, r.url]);
+    const again = adminUser.upsertAdminUser(users, record);
+    const summary = adminUser.summarizeAdminUsers(users);
+
+    const patchedRole = adminUser.patchAdminUser(users, "staff-0", (u) => adminUser.applyRoleUpdate(u, { role: "Warehouse Staff", region: null }));
+    const locked = adminUser.patchAdminUser(users, "staff-1", (u) => adminUser.applyLockState(u, true));
+    const assigned = adminUser.patchAdminUser(users, "new-id", (u) => adminUser.applyWarehouseAssignment(u, { region: "VN", warehouses: [{ warehouseId: WAREHOUSE_ID, warehouseName: "Kho HN", region: "VN" }] }));
+
+    const pageSource = fs.readFileSync(path.join(ROOT, "src/features/admin/pages/AdminUsersPage/AdminUsersPage.jsx"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const submitCreate = pageSource.slice(pageSource.indexOf("const submitCreate"), pageSource.indexOf("const openRoleEditor"));
+    return all(
+      expectEqual("request khi tạo", afterCreate, [["POST", "/api/User"]]),
+      expectEqual("bản ghi mới", [record.id, record.userType, record.status, record.region, record.role, record.assignedWarehouses, record.createdAt], ["new-id", "Employee", "Active", "VN", "WarehouseStaff", [], "2026-09-27T03:00:00.000Z"]),
+      expectEqual("bảng 59 dòng, mới ở đầu", [users.length, users[0].id], [59, "new-id"]),
+      expectEqual("chèn lại cùng id không nhân đôi", again.length, 59),
+      expectEqual("ô tổng sau tạo", summary, { total: 59, staff: 51, customers: 8 }),
+      expectEqual("thiếu id → null (trang tải lại một lần)", adminUser.buildCreatedAdminUser(payload, {}), null),
+      expectEqual("đổi vai trò: chuẩn hoá tên, vùng rỗng giữ nguyên", [patchedRole[1].role, patchedRole[1].region], ["WarehouseStaff", "CN"]),
+      expectEqual("khoá", [locked[2].status, adminUser.isLockedAdminUser(locked[2])], ["Locked", true]),
+      expectEqual("gán kho", [assigned[0].region, assigned[0].assignedWarehouses.map((w) => w.warehouseName)], ["VN", ["Kho HN"]]),
+      expectEqual("dòng khác giữ tham chiếu", locked[5] === users[5], true),
+      expectEqual("trang không gọi kho từng người / không cắt danh sách", [
+        /getUserWarehousesApi|\/warehouses`/.test(pageSource),
+        /(users|filteredUsers|list)\s*\.slice\(|\btake\b|pageSize:\s*50\b/.test(pageSource),
+        /dataSource=\{filteredUsers\}/.test(pageSource),
+      ], [false, false, true]),
+      expectEqual("tạo xong không tải lại cả danh sách (chỉ khi thiếu id)", [/await\s+loadUsers\(/.test(submitCreate), /if \(!createdUser\) loadUsers\(\)/.test(submitCreate), /savingRef\.current/.test(submitCreate)], [false, true, true]),
     );
   });
 

@@ -7,6 +7,7 @@ import {
   Empty,
   Input,
   Modal,
+  Segmented,
   Space,
   Table,
   Tabs,
@@ -33,7 +34,9 @@ import {
   getReceivingStatusMeta,
   getReceivingSummary,
   isDiscrepancyStage,
+  isPurchaseReceivingNote,
   listReceivingNotes,
+  RECEIVING_ORDER_TYPES,
   RECEIVING_STATUS_TABS,
   rejectReceivingNote,
 } from "@features/receiving/api/receivingNoteService";
@@ -52,6 +55,7 @@ import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReview
 import { toPublicReceiptUrl } from "@shared/utils/receiptUrl";
 /* Hàng đủ D×R×C + báo giá + tiền đã cọc của đơn gốc — phiếu nhập kho không mang mấy số này. */
 import { OrderReviewPanel, useOrderReview } from "@features/consignment";
+import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
 
 const { Text, Title } = Typography;
 
@@ -98,6 +102,20 @@ function DiffCell({ value, suffix = "" }) {
 }
 
 const stageOf = (row) => String(row?.approvalStage || "").toUpperCase();
+
+/** "NCC: … · Mã đơn NCC: …" — để khớp kiện NCC giao với phiếu. */
+const describeSupplier = (note) =>
+  [
+    note?.supplierName ? `NCC: ${note.supplierName}` : "",
+    note?.supplierOrderCode ? `Mã đơn NCC: ${note.supplierOrderCode}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+const describeDomesticTracking = (note) =>
+  note?.domesticTrackingCode
+    ? `${note.domesticCarrier ? `${note.domesticCarrier} · ` : ""}${note.domesticTrackingCode}`
+    : "";
 
 /** Chữ trên nút / tiêu đề hộp quyết định theo giai đoạn. */
 const approveLabelOf = (row) => (isDiscrepancyStage(stageOf(row)) ? "Chấp nhận số thực tế" : "Duyệt phiếu");
@@ -198,7 +216,17 @@ function ReceivingDecisionReview({ target, noteReview, orderReview, compareColum
             label: "Đang chờ",
             value: getApprovalStageMeta(stage)?.label || note.statusText || note.status,
           },
-          { label: "Đơn ký gửi", value: <Text code>{note.consignmentCode || "—"}</Text> },
+          {
+            label: isPurchaseReceivingNote(note) ? "Đơn mua hộ" : "Đơn ký gửi",
+            value: <Text code>{note.consignmentCode || "—"}</Text>,
+          },
+          { label: "NCC", value: note.supplierName, hidden: !isPurchaseReceivingNote(note) },
+          { label: "Mã đơn NCC", value: note.supplierOrderCode, hidden: !isPurchaseReceivingNote(note) },
+          {
+            label: "Vận đơn nội địa",
+            value: describeDomesticTracking(note),
+            hidden: !isPurchaseReceivingNote(note) || !note.domesticTrackingCode,
+          },
           { label: "Tuyến", value: note.route },
           { label: "Khách hàng", value: note.customerName },
           { label: "Mã khách hàng", value: note.customerCode },
@@ -307,6 +335,7 @@ export default function ReceivingNotesWorkspace({
   const [statusTab, setStatusTab] = useState(defaultStatus);
   const [summary, setSummary] = useState({ awaiting: 0, discrepancyAwaiting: 0, discrepancy: 0 });
   const [keyword, setKeyword] = useState("");
+  const [orderType, setOrderType] = useState("");
 
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -334,7 +363,7 @@ export default function ReceivingNotesWorkspace({
     try {
       /* Số đếm đầu trang tính trên mọi phiếu, không theo tab — tab "Cần quyết định" rỗng không được kéo chip về 0. */
       const [result, counts] = await Promise.all([
-        listReceivingNotes({ status: statusTab, search: keyword.trim() }),
+        listReceivingNotes({ status: statusTab, search: keyword.trim(), orderType }),
         getReceivingSummary({ search: keyword.trim() }).catch(() => null),
       ]);
       setRows(result.items);
@@ -345,7 +374,7 @@ export default function ReceivingNotesWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [statusTab, keyword]);
+  }, [statusTab, keyword, orderType]);
 
   useEffect(() => {
     fetchRows();
@@ -448,10 +477,25 @@ export default function ReceivingNotesWorkspace({
         ),
       },
       {
-        title: "Đơn ký gửi",
+        title: "Đơn",
         dataIndex: "consignmentCode",
-        width: 190,
-        render: (value) => <Text code>{value || "—"}</Text>,
+        width: 240,
+        render: (value, row) => (
+          <Space direction="vertical" size={2}>
+            <Space size={6} wrap>
+              <Text code>{value || "—"}</Text>
+              <OrderTypeTag record={row} showCode={false} />
+            </Space>
+            {isPurchaseReceivingNote(row) && describeSupplier(row) ? (
+              <Text style={{ fontSize: 12, color: "#531dab" }}>{describeSupplier(row)}</Text>
+            ) : null}
+            {isPurchaseReceivingNote(row) && row.domesticTrackingCode ? (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Vận đơn nội địa: {describeDomesticTracking(row)}
+              </Text>
+            ) : null}
+          </Space>
+        ),
       },
       {
         title: "Khách hàng",
@@ -666,12 +710,17 @@ export default function ReceivingNotesWorkspace({
       <Space style={{ marginBottom: 12 }} wrap>
         <Input.Search
           allowClear
-          placeholder="Tìm mã phiếu, mã đơn, tên hoặc SĐT khách"
-          style={{ width: 340 }}
+          placeholder="Tìm mã phiếu, mã đơn, mã đơn NCC, tên hoặc SĐT khách"
+          style={{ width: 380 }}
           onSearch={(value) => setKeyword(value)}
           onChange={(event) => {
             if (!event.target.value) setKeyword("");
           }}
+        />
+        <Segmented
+          value={orderType}
+          onChange={(value) => setOrderType(value)}
+          options={RECEIVING_ORDER_TYPES.map((type) => ({ value: type.value, label: type.label }))}
         />
         <Text type="secondary">
           {totalCount ? `${formatNumber(totalCount)} phiếu` : ""}
@@ -703,7 +752,16 @@ export default function ReceivingNotesWorkspace({
         open={!!detail}
         width={980}
         onClose={() => setDetail(null)}
-        title={detail ? `Phiếu ${detail.receivingNoteCode}` : "Chi tiết phiếu tiếp nhận"}
+        title={
+          detail ? (
+            <Space size={8}>
+              <span>Phiếu {detail.receivingNoteCode}</span>
+              <OrderTypeTag record={detail} showCode={false} />
+            </Space>
+          ) : (
+            "Chi tiết phiếu tiếp nhận"
+          )
+        }
         extra={
           canApprove && detail?.awaitingApproval ? (
             <Space>
@@ -767,10 +825,37 @@ export default function ReceivingNotesWorkspace({
               />
             ) : null}
 
+            {isPurchaseReceivingNote(detail) ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 12, background: "#f9f0ff", borderColor: "#d3adf7" }}
+                message={`Hàng mua hộ — kho đối chiếu với đơn NCC ${detail.supplierOrderCode || "(chưa có mã)"}`}
+                description="NCC giao hàng tới kho (không phải khách mang tới). Phiếu tự mở khi Sale đặt NCC, không qua bước duyệt nhận hàng."
+              />
+            ) : null}
+
             <Descriptions bordered size="small" column={2}>
-              <Descriptions.Item label="Đơn ký gửi">
+              <Descriptions.Item label={isPurchaseReceivingNote(detail) ? "Đơn mua hộ (kho)" : "Đơn ký gửi"}>
                 <Text code>{detail.consignmentCode || "—"}</Text>
               </Descriptions.Item>
+              {isPurchaseReceivingNote(detail) ? (
+                <>
+                  <Descriptions.Item label="Yêu cầu mua hộ">
+                    {detail.purchaseCode ? <Text code>{detail.purchaseCode}</Text> : "—"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Đơn mua NCC">
+                    {detail.purchaseOrderCode ? <Text code>{detail.purchaseOrderCode}</Text> : "—"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="NCC">{detail.supplierName || "—"}</Descriptions.Item>
+                  <Descriptions.Item label="Mã đơn NCC">
+                    {detail.supplierOrderCode ? <Text code copyable>{detail.supplierOrderCode}</Text> : "—"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Vận đơn nội địa">
+                    {describeDomesticTracking(detail) || "NCC chưa phát hàng"}
+                  </Descriptions.Item>
+                </>
+              ) : null}
               <Descriptions.Item label="Tuyến">{detail.route || "—"}</Descriptions.Item>
               <Descriptions.Item label="Khách hàng">
                 {detail.customerName || "—"}
@@ -784,10 +869,10 @@ export default function ReceivingNotesWorkspace({
               <Descriptions.Item label="Tạo lúc">
                 {formatDateTime(detail.createdAt)}
               </Descriptions.Item>
-              <Descriptions.Item label="Người lập phiếu">
+              <Descriptions.Item label={isPurchaseReceivingNote(detail) ? "Sale đặt NCC" : "Người lập phiếu"}>
                 {detail.createdByName || "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Duyệt nhận hàng">
+              <Descriptions.Item label={isPurchaseReceivingNote(detail) ? "Mở phiếu" : "Duyệt nhận hàng"}>
                 {detail.receiveApprovedByName
                   ? `${detail.receiveApprovedByName} · ${formatDateTime(detail.receiveApprovedAt)}`
                   : "—"}
@@ -844,7 +929,7 @@ export default function ReceivingNotesWorkspace({
             )}
 
             <Title level={5} style={{ marginTop: 20 }}>
-              Hàng khách khai trên đơn
+              {isPurchaseReceivingNote(detail) ? "Hàng đã đặt NCC" : "Hàng khách khai trên đơn"}
             </Title>
             <Table
               rowKey={(row) => row.orderItemId || row.productName}

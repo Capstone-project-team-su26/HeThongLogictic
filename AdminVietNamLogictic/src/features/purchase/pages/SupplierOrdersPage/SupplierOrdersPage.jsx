@@ -9,6 +9,7 @@
  * màn này thay thế nó: mỗi bước là một lời gọi API thật, có người chịu trách nhiệm rõ ràng.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Alert,
   Button,
@@ -34,6 +35,7 @@ import {
   ShoppingCartOutlined,
 } from "@ant-design/icons";
 
+import { ADMIN } from "@app/router/paths";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import {
   PURCHASE_CANCEL_CAUSE,
@@ -74,7 +76,9 @@ import PurchaseOrderFormModal from "./PurchaseOrderFormModal";
  */
 import PurchaseOrderReview, { PurchaseOrderReviewScroll } from "./PurchaseOrderReview";
 import {
+  applyOrderUpdate,
   buildPickerRow,
+  createOrderActionRunner,
   formatDateTime,
   PLACED_STATUSES,
   formatVnd,
@@ -134,9 +138,21 @@ const normalizeRole = (value) =>
 
 export default function SupplierOrdersPage() {
   const role = normalizeRole(sessionStorage.getItem("role"));
+  const { pathname } = useLocation();
+
+  /*
+   * Admin vào màn này (route /admin/purchase-orders) là để DUYỆT, nên mở sẵn lọc "Chờ duyệt" và
+   * đếm số đơn đang chờ lên chip + đầu trang. Sale giữ "Tất cả" như cũ. Màn không dùng query URL
+   * nên không có lọc nào cần giữ qua URL.
+   */
+  const isAdminView = role === "admin" || pathname.startsWith(ADMIN.purchaseOrders);
 
   const [orders, setOrders] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState(() =>
+    isAdminView ? PURCHASE_ORDER_STATUS.PENDING_APPROVAL : "",
+  );
+  /* Số đơn chờ Admin duyệt — null khi chưa biết (không phải Admin / tải lỗi). */
+  const [pendingCount, setPendingCount] = useState(null);
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -168,6 +184,7 @@ export default function SupplierOrdersPage() {
 
   /* Hộp "Đã đặt NCC" (có tải chứng từ bắt buộc). */
   const [placeTarget, setPlaceTarget] = useState(null);
+  const [placeError, setPlaceError] = useState("");
 
   /*
    * Tiền hoàn: giữ MÃ đơn chứ không giữ bản sao dòng — bảng tải lại sau mỗi thao tác thì hộp
@@ -180,14 +197,46 @@ export default function SupplierOrdersPage() {
   /* Đơn cần đưa ra trước mắt ở lần tải tới (vừa tạo / vừa sửa). */
   const pendingFocusRef = useRef("");
 
+  /*
+   * Mỗi lần tải có số thứ tự: chỉ lần tải MỚI NHẤT được ghi vào bảng. Trước đây một lần tải bắt
+   * đầu trước thao tác mà về sau thì ghi đè dòng vừa cập nhật bằng dữ liệu cũ → nút cũ hiện lại.
+   */
+  const loadSeqRef = useRef(0);
+  const loadingRef = useRef(false);
+  const ordersRef = useRef([]);
+  /* Một bộ chạy cho cả vòng đời màn (useState lười: tạo đúng một lần). */
+  const [runOrderAction] = useState(createOrderActionRunner);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
+
   const load = useCallback(async () => {
+    const seq = loadSeqRef.current + 1;
+
+    loadSeqRef.current = seq;
+    loadingRef.current = true;
     setLoading(true);
     setErrorMessage("");
 
     try {
       const rows = await listPurchaseOrders({ status: statusFilter });
 
+      if (seq !== loadSeqRef.current) return;
+
+      ordersRef.current = rows;
       setOrders(rows);
+
+      if (isAdminView) {
+        if (statusFilter === PURCHASE_ORDER_STATUS.PENDING_APPROVAL) {
+          setPendingCount(rows.length);
+        } else {
+          /* Đang xem lọc khác: đếm riêng, lỗi thì chỉ ẩn con số chứ không chặn bảng. */
+          listPurchaseOrders({ status: PURCHASE_ORDER_STATUS.PENDING_APPROVAL })
+            .then((pending) => setPendingCount(pending.length))
+            .catch(() => setPendingCount(null));
+        }
+      }
 
       /* Nhảy tới trang có đơn vừa lưu (bảng sắp theo lần cập nhật gần nhất nên thường ở trang 1). */
       if (pendingFocusRef.current) {
@@ -197,15 +246,29 @@ export default function SupplierOrdersPage() {
         pendingFocusRef.current = "";
       }
     } catch (error) {
+      if (seq !== loadSeqRef.current) return;
       setErrorMessage(getPurchaseOrderApiError(error, "Không tải được danh sách đơn mua."));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
-  }, [statusFilter]);
+  }, [statusFilter, isAdminView]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const filterOptions = useMemo(
+    () =>
+      FILTERS.map((option) =>
+        isAdminView && option.value === PURCHASE_ORDER_STATUS.PENDING_APPROVAL && pendingCount !== null
+          ? { ...option, label: `${option.label} (${pendingCount})` }
+          : option,
+      ),
+    [isAdminView, pendingCount],
+  );
 
   /* Cuộn tới dòng đang tô sáng, rồi tắt tô sáng sau vài giây. */
   useEffect(() => {
@@ -258,21 +321,146 @@ export default function SupplierOrdersPage() {
     );
   }, [orders, keyword]);
 
-  /** Chạy một thao tác, hiện lỗi backend nguyên văn rồi tải lại bảng. */
-  const run = async (orderId, action, successMessage) => {
+  /**
+   * Đưa đơn backend vừa trả vào bảng ngay (đúng dòng, không chờ tải lại cả danh sách).
+   * Phản hồi không dùng được, hoặc đang có một lần tải dở (dữ liệu của nó có thể cũ hơn thao tác)
+   * → tải lại bảng đúng MỘT lần.
+   */
+  const commitOrderUpdate = async (updated) => {
+    const previous = ordersRef.current.find(
+      (row) => String(row.purchaseOrderId).toLowerCase() === String(updated?.purchaseOrderId || "").toLowerCase()
+    );
+    const next = loadingRef.current ? null : applyOrderUpdate(ordersRef.current, updated, { statusFilter });
+
+    if (!next) {
+      await load();
+      return;
+    }
+
+    ordersRef.current = next;
+    setOrders(next);
+
+    /* Admin: đơn rời / vào hàng "Chờ duyệt" thì con số trên chip đổi theo. */
+    if (isAdminView && previous) {
+      const pending = PURCHASE_ORDER_STATUS.PENDING_APPROVAL;
+      const delta =
+        (String(updated.status).toUpperCase() === pending ? 1 : 0) -
+        (String(previous.status).toUpperCase() === pending ? 1 : 0);
+
+      if (delta) setPendingCount((count) => (count === null ? null : Math.max(0, count + delta)));
+    }
+  };
+
+  /**
+   * Gửi MỘT thao tác của một đơn: khoá đơn trong lúc gửi (bấm lần hai không gọi API lần hai),
+   * thành công thì cập nhật dòng từ phản hồi backend + báo thành công; lỗi thì trả câu lỗi
+   * nguyên văn cho hộp đang mở hiện ra (hộp KHÔNG đóng).
+   *
+   * @returns {Promise<{ ok: boolean, skipped?: boolean, message?: string }>}
+   */
+  const performAction = async (orderId, action, successMessage) => {
     setBusyId(orderId);
 
+    const result = await runOrderAction(orderId, action);
+
+    if (result.skipped) return result;
+
     try {
-      await action();
+      if (!result.ok) {
+        return { ok: false, message: getPurchaseOrderApiError(result.error) };
+      }
+
+      await commitOrderUpdate(result.order);
       AuthNotify.success("Đã cập nhật", successMessage);
-      await load();
-      return true;
-    } catch (error) {
-      AuthNotify.error("Không thực hiện được", getPurchaseOrderApiError(error));
-      return false;
+
+      return { ok: true };
     } finally {
-      setBusyId("");
+      setBusyId((current) => (current === orderId ? "" : current));
     }
+  };
+
+  /**
+   * Hộp xác nhận cho mọi thao tác một bước (gửi duyệt, duyệt / từ chối, tiến độ NCC, huỷ, hoàn tiền).
+   *
+   * Không trả Promise cho `onOk` của Modal.confirm: antd đóng hộp khi Promise xong — kể cả khi thao
+   * tác LỖI (trước đây `run` nuốt lỗi rồi trả false → hộp đóng, dòng không đổi, người dùng phải bấm
+   * lại). Ở đây hộp tự quản: đang gửi thì nút OK quay + khoá Đóng/Esc, thành công mới đóng, lỗi thì
+   * hiện câu lỗi ngay trong hộp và giữ nguyên những gì đã nhập.
+   *
+   * `renderFields()` dựng phần nhập liệu (ô không điều khiển — vị trí cây giữ nguyên nên giá trị đã
+   * nhập còn nguyên khi hộp vẽ lại). `action()` trả Promise đơn đã cập nhật.
+   */
+  const openActionDialog = ({
+    order,
+    title,
+    okText,
+    okDanger = false,
+    cancelText = "Đóng",
+    renderFields,
+    action,
+    successMessage,
+  }) => {
+    let submitting = false;
+    let errorText = "";
+
+    const buildContent = () => (
+      <PurchaseOrderReviewScroll>
+        <PurchaseOrderReview order={order} />
+        {renderFields()}
+        <div aria-live="polite">
+          {errorText ? (
+            <Alert
+              type="error"
+              showIcon
+              style={{ marginTop: 12 }}
+              message="Chưa thực hiện được"
+              description={errorText}
+            />
+          ) : null}
+        </div>
+      </PurchaseOrderReviewScroll>
+    );
+
+    const buttonState = () => ({
+      content: buildContent(),
+      okButtonProps: { danger: okDanger, loading: submitting },
+      cancelButtonProps: { disabled: submitting },
+      keyboard: !submitting,
+    });
+
+    const modal = Modal.confirm({
+      title,
+      width: 1000,
+      okText,
+      cancelText,
+      ...buttonState(),
+      /* Hàm có tham số `close` + không trả Promise → antd không tự đóng hộp. */
+      onOk: (close) => {
+        if (submitting) return;
+
+        submitting = true;
+        errorText = "";
+        modal.update(buttonState());
+
+        performAction(
+          order.purchaseOrderId,
+          () => action(),
+          typeof successMessage === "function" ? successMessage() : successMessage
+        ).then((result) => {
+          if (result.skipped) return;
+
+          submitting = false;
+
+          if (result.ok) {
+            close();
+            return;
+          }
+
+          errorText = result.message;
+          modal.update(buttonState());
+        });
+      },
+    });
   };
 
   /*
@@ -442,26 +630,18 @@ export default function SupplierOrdersPage() {
    * sửa và chuyển sang bước khách / Admin xác nhận (server quyết theo chênh lệch giá).
    */
   const askSubmit = (order) => {
-    Modal.confirm({
+    openActionDialog({
+      order,
       title: `Gửi duyệt đơn mua — ${order.purchaseOrderCode}`,
-      width: 1000,
-      content: (
-        <PurchaseOrderReviewScroll>
-          <PurchaseOrderReview order={order} />
-          <Text type="secondary">
-            Gửi xong đơn không sửa được nữa. Hệ thống so giá mua với giá đã báo khách: lệch quá
-            ngưỡng thì chờ khách đồng ý, còn lại chờ Admin duyệt ngân sách.
-          </Text>
-        </PurchaseOrderReviewScroll>
-      ),
       okText: "Gửi duyệt",
-      cancelText: "Đóng",
-      onOk: () =>
-        run(
-          order.purchaseOrderId,
-          () => submitPurchaseOrder(order.purchaseOrderId),
-          "Đã gửi duyệt."
-        ),
+      renderFields: () => (
+        <Text type="secondary">
+          Gửi xong đơn không sửa được nữa. Hệ thống so giá mua với giá đã báo khách: lệch quá
+          ngưỡng thì chờ khách đồng ý, còn lại chờ Admin duyệt ngân sách.
+        </Text>
+      ),
+      action: () => submitPurchaseOrder(order.purchaseOrderId),
+      successMessage: "Đã gửi duyệt.",
     });
   };
 
@@ -469,18 +649,31 @@ export default function SupplierOrdersPage() {
    * "Đã đặt NCC": hộp riêng vì backend bắt buộc chứng từ PURCHASE_PROOF + mã đơn thật của NCC —
    * Modal.confirm cũ không tải được ảnh nên lần nào bấm cũng ăn lỗi 400.
    */
-  const askPlace = (order) => setPlaceTarget(order);
+  const askPlace = (order) => {
+    setPlaceError("");
+    setPlaceTarget(order);
+  };
 
   const confirmPlace = async ({ supplierOrderCode, note }) => {
     if (!placeTarget) return;
 
-    const ok = await run(
-      placeTarget.purchaseOrderId,
-      () => placePurchaseOrder(placeTarget.purchaseOrderId, { supplierOrderCode, note }),
+    const orderId = placeTarget.purchaseOrderId;
+
+    setPlaceError("");
+
+    const result = await performAction(
+      orderId,
+      () => placePurchaseOrder(orderId, { supplierOrderCode, note }),
       "Đã ghi nhận đặt hàng và bàn giao việc cho kho nguồn."
     );
 
-    if (ok) setPlaceTarget(null);
+    if (result.skipped) return;
+
+    if (result.ok) {
+      setPlaceTarget(null);
+    } else {
+      setPlaceError(result.message);
+    }
   };
 
   const askProgress = (order) => {
@@ -491,85 +684,71 @@ export default function SupplierOrdersPage() {
     let tracking = "";
     let carrier = "";
 
-    Modal.confirm({
+    openActionDialog({
+      order,
       title: `${step.label} — ${order.purchaseOrderCode}`,
-      width: 1000,
-      content: (
-        <PurchaseOrderReviewScroll>
-          <PurchaseOrderReview order={order} />
-          {step.needsTracking ? (
-            <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
-              <Text type="secondary">Mã vận đơn nội địa là bắt buộc để khách theo dõi được.</Text>
-              <Input
-                placeholder="Mã vận đơn nội địa"
-                onChange={(event) => {
-                  tracking = event.target.value;
-                }}
-              />
-              <Input
-                placeholder="Hãng vận chuyển nội địa (không bắt buộc)"
-                onChange={(event) => {
-                  carrier = event.target.value;
-                }}
-              />
-            </Space>
-          ) : (
-            <Text type="secondary">Ghi nhận nhà cung cấp đã xác nhận đơn.</Text>
-          )}
-        </PurchaseOrderReviewScroll>
-      ),
       okText: step.label,
-      cancelText: "Huỷ",
-      onOk: () =>
-        run(
-          order.purchaseOrderId,
-          () =>
-            updatePurchaseOrderProgress(order.purchaseOrderId, {
-              status: step.status,
-              domesticTrackingCode: tracking,
-              domesticCarrier: carrier,
-            }),
-          "Đã cập nhật tiến độ và báo cho khách."
+      renderFields: () =>
+        step.needsTracking ? (
+          <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
+            <Text type="secondary">Mã vận đơn nội địa là bắt buộc để khách theo dõi được.</Text>
+            <Input
+              placeholder="Mã vận đơn nội địa (bắt buộc)"
+              defaultValue={tracking}
+              onChange={(event) => {
+                tracking = event.target.value;
+              }}
+            />
+            <Input
+              placeholder="Hãng vận chuyển nội địa (không bắt buộc)"
+              defaultValue={carrier}
+              onChange={(event) => {
+                carrier = event.target.value;
+              }}
+            />
+          </Space>
+        ) : (
+          <Text type="secondary">Ghi nhận nhà cung cấp đã xác nhận đơn.</Text>
         ),
+      action: () =>
+        updatePurchaseOrderProgress(order.purchaseOrderId, {
+          status: step.status,
+          domesticTrackingCode: tracking,
+          domesticCarrier: carrier,
+        }),
+      successMessage: `${step.label} — đã cập nhật tiến độ và báo cho khách.`,
     });
   };
 
   const askDecide = (order, approve) => {
     let note = "";
 
-    Modal.confirm({
+    openActionDialog({
+      order,
       title: approve
         ? `Duyệt ngân sách — ${order.purchaseOrderCode}`
         : `Từ chối đơn mua — ${order.purchaseOrderCode}`,
-      width: 1000,
-      content: (
-        <PurchaseOrderReviewScroll>
-          <PurchaseOrderReview order={order} />
-          <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
-            <Text type="secondary">
-              {approve
-                ? `Công ty sẽ chi ${formatVnd(order.totalAmount)} cho ${order.supplierName || "nhà cung cấp"}.`
-                : "Ghi rõ lý do để Sale sửa lại đơn."}
-            </Text>
-            <Input.TextArea
-              rows={3}
-              placeholder={approve ? "Ghi chú (không bắt buộc)" : "Lý do từ chối (bắt buộc)"}
-              onChange={(event) => {
-                note = event.target.value;
-              }}
-            />
-          </Space>
-        </PurchaseOrderReviewScroll>
-      ),
       okText: approve ? "Duyệt" : "Từ chối",
-      okButtonProps: { danger: !approve },
-      cancelText: "Đóng",
-      onOk: () =>
-        run(
-          order.purchaseOrderId,
-          () => decidePurchaseOrder(order.purchaseOrderId, { approve, note }),
-          approve ? "Đã duyệt ngân sách." : "Đã từ chối, Sale sửa lại rồi gửi lần nữa."
-        ),
+      okDanger: !approve,
+      renderFields: () => (
+        <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
+          <Text type="secondary">
+            {approve
+              ? `Công ty sẽ chi ${formatVnd(order.totalAmount)} cho ${order.supplierName || "nhà cung cấp"}.`
+              : "Ghi rõ lý do để Sale sửa lại đơn."}
+          </Text>
+          <Input.TextArea
+            rows={3}
+            placeholder={approve ? "Ghi chú (không bắt buộc)" : "Lý do từ chối (bắt buộc)"}
+            defaultValue={note}
+            onChange={(event) => {
+              note = event.target.value;
+            }}
+          />
+        </Space>
+      ),
+      action: () => decidePurchaseOrder(order.purchaseOrderId, { approve, note }),
+      successMessage: approve ? "Đã duyệt ngân sách." : "Đã từ chối, Sale sửa lại rồi gửi lần nữa.",
     });
   };
 
@@ -583,12 +762,12 @@ export default function SupplierOrdersPage() {
     let cause = PURCHASE_CANCEL_CAUSE.CUSTOMER;
     const placed = PLACED_STATUSES.includes(String(order.status || "").toUpperCase());
 
-    Modal.confirm({
+    openActionDialog({
+      order,
       title: `Huỷ đơn mua ${order.purchaseOrderCode}`,
-      width: 1000,
-      content: (
-        <PurchaseOrderReviewScroll>
-          <PurchaseOrderReview order={order} />
+      okText: "Huỷ đơn mua",
+      okDanger: true,
+      renderFields: () => (
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             <Text type="secondary">
               Chỉ huỷ được khi kho chưa nhận kiện nào của đơn. Huỷ xong, đơn kho + hoá đơn chặng VN
@@ -599,7 +778,7 @@ export default function SupplierOrdersPage() {
               <>
                 <Text strong>Nguyên nhân huỷ — quyết định số tiền hoàn cho khách</Text>
                 <Radio.Group
-                  defaultValue={PURCHASE_CANCEL_CAUSE.CUSTOMER}
+                  defaultValue={cause}
                   onChange={(event) => {
                     cause = event.target.value;
                   }}
@@ -633,24 +812,19 @@ export default function SupplierOrdersPage() {
             <Input.TextArea
               rows={3}
               placeholder="Lý do huỷ (bắt buộc)"
+              defaultValue={reason}
               onChange={(event) => {
                 reason = event.target.value;
               }}
             />
           </Space>
-        </PurchaseOrderReviewScroll>
       ),
-      okText: "Huỷ đơn mua",
-      okButtonProps: { danger: true },
-      cancelText: "Đóng",
-      onOk: () =>
-        run(
-          order.purchaseOrderId,
-          () => cancelPurchaseOrder(order.purchaseOrderId, { reason, cause }),
-          placed
-            ? `Đã huỷ đơn mua — nguyên nhân: ${PURCHASE_CANCEL_CAUSE_META[cause].label}. Xem khoản hoàn ở nút Khoản hoàn.`
-            : "Đã huỷ đơn mua."
-        ),
+      action: () => cancelPurchaseOrder(order.purchaseOrderId, { reason, cause }),
+      /* Hàm: đọc `cause` lúc bấm, không phải lúc mở hộp. */
+      successMessage: () =>
+        placed
+          ? `Đã huỷ đơn mua — nguyên nhân: ${PURCHASE_CANCEL_CAUSE_META[cause].label}. Xem khoản hoàn ở nút Khoản hoàn.`
+          : "Đã huỷ đơn mua.",
     });
   };
 
@@ -665,12 +839,11 @@ export default function SupplierOrdersPage() {
   const askCompleteRefund = (order) => {
     let transactionCode = "";
 
-    Modal.confirm({
+    openActionDialog({
+      order,
       title: `Xác nhận đã hoàn tiền — ${order.purchaseOrderCode}`,
-      width: 1000,
-      content: (
-        <PurchaseOrderReviewScroll>
-          <PurchaseOrderReview order={order} />
+      okText: "Đã chuyển trả khách",
+      renderFields: () => (
           <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
             <Text>
               Số tiền phải trả lại khách: <Text strong>{formatVnd(order.refundAmount)}</Text>
@@ -690,21 +863,15 @@ export default function SupplierOrdersPage() {
 
             <Input
               placeholder="Mã giao dịch chuyển khoản (bắt buộc)"
+              defaultValue={transactionCode}
               onChange={(event) => {
                 transactionCode = event.target.value;
               }}
             />
           </Space>
-        </PurchaseOrderReviewScroll>
       ),
-      okText: "Đã chuyển trả khách",
-      cancelText: "Đóng",
-      onOk: () =>
-        run(
-          order.purchaseOrderId,
-          () => completePurchaseRefund(order.purchaseOrderId, { transactionCode }),
-          "Đã ghi nhận hoàn tiền."
-        ),
+      action: () => completePurchaseRefund(order.purchaseOrderId, { transactionCode }),
+      successMessage: "Đã ghi nhận hoàn tiền.",
     });
   };
 
@@ -828,19 +995,23 @@ export default function SupplierOrdersPage() {
         const busy = busyId === row.purchaseOrderId;
         const step = getNextProgressStep(row.status);
 
+        /*
+         * Thứ tự: việc kế tiếp của đơn (nút chính) → Sửa → việc về tiền hoàn → Huỷ (nguy hiểm,
+         * luôn cuối). Mỗi trạng thái chỉ có nút của bước kế tiếp; đang gửi thì khoá cả dòng.
+         */
+        const hasAction =
+          can.edit ||
+          can.submit ||
+          can.decide ||
+          can.place ||
+          (can.progress && step) ||
+          can.cancel ||
+          (can.completeRefund && row.refunds.length === 0) ||
+          (can.viewRefunds && row.refunds.length > 0) ||
+          can.closeShortage;
+
         return (
           <Space size={[6, 6]} wrap>
-            {can.edit && (
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                disabled={busy}
-                onClick={() => openFormFor(row.purchaseRequestId, row)}
-              >
-                Sửa
-              </Button>
-            )}
-
             {can.submit && (
               <Button
                 size="small"
@@ -868,6 +1039,7 @@ export default function SupplierOrdersPage() {
                   size="small"
                   danger
                   icon={<CloseCircleOutlined />}
+                  disabled={busy}
                   onClick={() => askDecide(row, false)}
                 >
                   Từ chối
@@ -893,12 +1065,15 @@ export default function SupplierOrdersPage() {
               </Button>
             )}
 
-            {can.cancel && (
-              <Tooltip title="Chỉ huỷ được khi kho chưa nhận kiện">
-                <Button size="small" danger onClick={() => askCancel(row)}>
-                  Huỷ
-                </Button>
-              </Tooltip>
+            {can.edit && (
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                disabled={busy}
+                onClick={() => openFormFor(row.purchaseRequestId, row)}
+              >
+                Sửa
+              </Button>
             )}
 
             {/* Backend mới: mọi khoản hoàn của đơn, đóng từng khoản theo refundId. */}
@@ -907,18 +1082,11 @@ export default function SupplierOrdersPage() {
                 size="small"
                 type={getPendingRefunds(row).length ? "primary" : "default"}
                 ghost={getPendingRefunds(row).length > 0}
+                disabled={busy}
                 onClick={() => setRefundOrderId(row.purchaseOrderId)}
               >
                 Khoản hoàn ({row.refunds.length})
               </Button>
-            )}
-
-            {can.closeShortage && (
-              <Tooltip title="NCC giao thiếu, hoặc đóng phần sản phẩm không mua được — lập khoản hoàn">
-                <Button size="small" onClick={() => openShortage(row)}>
-                  NCC giao thiếu
-                </Button>
-              </Tooltip>
             )}
 
             {/* Backend cũ (production): chỉ có một khoản, đóng theo đường cũ không refundId. */}
@@ -936,19 +1104,27 @@ export default function SupplierOrdersPage() {
               </Tooltip>
             )}
 
-            {!can.edit &&
-              !can.submit &&
-              !can.decide &&
-              !can.place &&
-              !can.progress &&
-              !can.cancel &&
-              !can.completeRefund &&
-              !can.viewRefunds &&
-              !can.closeShortage && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Đang chờ bộ phận khác
-                </Text>
-              )}
+            {can.closeShortage && (
+              <Tooltip title="NCC đã phát hàng nhưng giao thiếu: ghi số thiếu để lập khoản hoàn cho khách. NCC hết hàng trước khi giao thì đóng ở trang chi tiết yêu cầu mua hộ (nút “Đóng phần không mua được”).">
+                <Button size="small" disabled={busy} onClick={() => openShortage(row)}>
+                  NCC giao thiếu
+                </Button>
+              </Tooltip>
+            )}
+
+            {can.cancel && (
+              <Tooltip title="Chỉ huỷ được khi kho chưa nhận kiện">
+                <Button size="small" danger disabled={busy} onClick={() => askCancel(row)}>
+                  Huỷ
+                </Button>
+              </Tooltip>
+            )}
+
+            {!hasAction && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Đang chờ bộ phận khác
+              </Text>
+            )}
           </Space>
         );
       },
@@ -960,7 +1136,21 @@ export default function SupplierOrdersPage() {
       <section className="ops-page__hero">
         <div>
           <span>{role === "admin" ? "QUẢN TRỊ" : "KINH DOANH (SALE)"}</span>
-          <h1>Đơn Mua Nhà Cung Cấp</h1>
+          <h1>
+            {isAdminView ? "Duyệt Đơn Mua Nhà Cung Cấp" : "Đơn Mua Nhà Cung Cấp"}
+            {isAdminView && pendingCount !== null && (
+              <Tag
+                color={pendingCount > 0 ? "orange" : "default"}
+                style={{ marginLeft: 12, verticalAlign: "middle", cursor: "pointer" }}
+                onClick={() => {
+                  setStatusFilter(PURCHASE_ORDER_STATUS.PENDING_APPROVAL);
+                  setTablePage(1);
+                }}
+              >
+                {pendingCount > 0 ? `${pendingCount} đơn chờ duyệt` : "Không có đơn chờ duyệt"}
+              </Tag>
+            )}
+          </h1>
           <p>
             Mỗi đơn mua là một lần công ty chi tiền: Sale lập và đặt hàng, Admin duyệt ngân sách.
             Đặt xong, hệ thống tự sinh đơn kho và phiếu tiếp nhận cho kho nguồn — không ai phải bấm
@@ -987,7 +1177,7 @@ export default function SupplierOrdersPage() {
       <Space size={[10, 10]} wrap style={{ marginBottom: 12 }}>
         <Segmented
           value={statusFilter}
-          options={FILTERS}
+          options={filterOptions}
           onChange={(value) => {
             setStatusFilter(value);
             setTablePage(1);
@@ -1222,7 +1412,11 @@ export default function SupplierOrdersPage() {
           open
           order={placeTarget}
           submitting={busyId === placeTarget.purchaseOrderId}
-          onCancel={() => setPlaceTarget(null)}
+          errorMessage={placeError}
+          onCancel={() => {
+            if (busyId === placeTarget.purchaseOrderId) return;
+            setPlaceTarget(null);
+          }}
           onConfirm={confirmPlace}
         />
       )}
@@ -1233,7 +1427,7 @@ export default function SupplierOrdersPage() {
         canComplete={role === "sale" || role === "admin"}
         canCloseShortage={Boolean(refundOrder && getAvailableActions(refundOrder, role).closeShortage)}
         onClose={() => setRefundOrderId("")}
-        onChanged={load}
+        onChanged={(updated) => commitOrderUpdate(updated)}
         onCloseShortage={openShortage}
       />
 

@@ -128,6 +128,129 @@ export const getAdminUserApiError = (error, fallbackMessage = "Không thực hi�
 };
 
 /* =========================
+   HÀM THUẦN CHO MÀN QUẢN LÝ NGƯỜI DÙNG
+   (tách khỏi component để tools/verify-api.mjs kiểm được bằng dữ liệu mẫu)
+========================= */
+
+/**
+ * GET /api/User trả MỌI tài khoản, không phân trang (UserController.GetAllUsers →
+ * UserService.GetAllUsersAsync = cả bảng User), gồm cả khách hàng tự đăng ký
+ * (AuthService đặt UserType "Customer"). Tài khoản do Admin tạo có UserType "Employee".
+ * "Nhân viên" = mọi tài khoản KHÔNG phải khách (kể cả bản ghi cũ trống userType).
+ */
+export const isCustomerAccount = (user) =>
+  text(user?.userType).toLowerCase() === "customer" || text(user?.role).toLowerCase() === "customer";
+
+export const isLockedAdminUser = (user) => {
+  if (typeof user?.isLocked === "boolean") return user.isLocked;
+  return text(user?.status).toUpperCase().includes("LOCK");
+};
+
+/** Số cho ô tổng: total = đúng số bản ghi API trả; staff + customers = total. */
+export const summarizeAdminUsers = (users) => {
+  const list = Array.isArray(users) ? users : [];
+  const customers = list.filter(isCustomerAccount).length;
+  return { total: list.length, staff: list.length - customers, customers };
+};
+
+/** Giá trị bộ lọc Trạng thái cho "Đã khóa" (các trạng thái khác lọc theo đúng chuỗi status). */
+export const LOCKED_STATUS_FILTER = "__locked__";
+
+/** Lọc bảng — KHÔNG cắt số lượng; phân trang do bảng tự làm trên toàn bộ kết quả. */
+export const filterAdminUsers = (users, { query = "", role = null, userType = null, status = null } = {}) => {
+  const keyword = text(query).toLocaleLowerCase("vi");
+  return (Array.isArray(users) ? users : []).filter((user) => {
+    if (role && user.role !== role) return false;
+    if (userType && user.userType !== userType) return false;
+    if (status === LOCKED_STATUS_FILTER) {
+      if (!isLockedAdminUser(user)) return false;
+    } else if (status && (isLockedAdminUser(user) || (user.status || "—") !== status)) {
+      return false;
+    }
+    if (!keyword) return true;
+    return [
+      user.fullName,
+      user.email,
+      user.phone,
+      user.role,
+      user.region,
+      user.status,
+      ...(user.assignedWarehouses || []).flatMap((warehouse) => [
+        warehouse.warehouseName,
+        warehouse.warehouseCode,
+      ]),
+    ].some((value) => String(value ?? "").toLocaleLowerCase("vi").includes(keyword));
+  });
+};
+
+/** Khớp UserService.NormalizeRole của backend (chỉ hai biến thể có dấu cách). */
+export const normalizeStaffRole = (role) => {
+  const value = text(role);
+  if (value.toLowerCase() === "warehouse staff") return "WarehouseStaff";
+  if (value.toLowerCase() === "operations manager") return "OperationsManager";
+  return value;
+};
+
+/** Vùng như backend trả (enum RegionCode.ToString() → viết hoa); rỗng → null. */
+const toRegionValue = (region) => text(region).toUpperCase() || null;
+
+/**
+ * Bản ghi cho tài khoản vừa tạo, dựng từ đúng dữ liệu đã gửi + id của 201 { id } — khớp
+ * UserService.CreateEmployeeAsync (UserType "Employee", Status "Active", chưa gán kho) để
+ * chèn thẳng vào bảng mà KHÔNG phải tải lại cả danh sách. createdAt là giờ máy khách
+ * (lệch vài giây với server; "Tải lại" sẽ lấy giờ chuẩn). Không có id → null.
+ */
+export const buildCreatedAdminUser = (payload = {}, created = {}, now = new Date()) => {
+  const id = text(created?.id ?? created?.userId);
+  if (!id) return null;
+  return normalizeAdminUser({
+    id,
+    fullName: payload?.fullName ?? "",
+    email: payload?.email ?? "",
+    phone: payload?.phone ?? "",
+    role: normalizeStaffRole(payload?.role),
+    userType: "Employee",
+    status: "Active",
+    region: toRegionValue(payload?.region),
+    createdAt: now.toISOString(),
+    assignedWarehouses: [],
+  });
+};
+
+/** Thêm (hoặc thay nếu trùng id) một tài khoản, trả mảng mới. */
+export const upsertAdminUser = (users, user) => {
+  if (!user?.id) return users;
+  const list = Array.isArray(users) ? users : [];
+  const index = list.findIndex((item) => String(item.id) === String(user.id));
+  if (index < 0) return [user, ...list];
+  return list.map((item, position) => (position === index ? user : item));
+};
+
+/** Cập nhật đúng một tài khoản theo id, các bản ghi khác giữ nguyên tham chiếu. */
+export const patchAdminUser = (users, userId, update) =>
+  (Array.isArray(users) ? users : []).map((user) =>
+    String(user.id) === String(userId) ? { ...user, ...update(user) } : user,
+  );
+
+/** Sau PUT /api/User/{id}/role thành công: region rỗng = server GIỮ NGUYÊN vùng cũ. */
+export const applyRoleUpdate = (user, { role, region } = {}) => ({
+  role: normalizeStaffRole(role),
+  region: toRegionValue(region) ?? user?.region ?? null,
+});
+
+/** Sau PUT lock/unlock thành công (server đặt Status "Locked" / "Active"). */
+export const applyLockState = (user, locked) => ({
+  status: locked ? "Locked" : "Active",
+  ...(typeof user?.isLocked === "boolean" ? { isLocked: locked } : {}),
+});
+
+/** Sau PUT /api/users/{id}/warehouses: response đã có danh sách kho + vùng mới của tài khoản. */
+export const applyWarehouseAssignment = (user, data = {}) => ({
+  region: data?.region ?? user?.region ?? null,
+  assignedWarehouses: normalizeWarehouseList(data?.warehouses),
+});
+
+/* =========================
    TÀI KHOẢN
 ========================= */
 
@@ -144,7 +267,8 @@ export const getAdminUserDetail = async (userId, options = {}) => {
   return data && typeof data === "object" ? normalizeAdminUser(data) : null;
 };
 
-/* Backend trả 201 { id } — trang chỉ await rồi tải lại danh sách nên trả nguyên object đó. */
+/* Backend trả 201 { id } — trả nguyên object đó; trang dựng bản ghi bằng buildCreatedAdminUser
+   rồi chèn vào bảng, không tải lại cả danh sách. */
 export const createAdminUser = async (payload = {}, options = {}) => {
   const response = await httpClient.post(
     API_ENDPOINTS.users.list,
@@ -239,6 +363,17 @@ export default {
   normalizeAdminUser,
   normalizeAssignableWarehouse,
   getAdminUserApiError,
+  isCustomerAccount,
+  isLockedAdminUser,
+  summarizeAdminUsers,
+  filterAdminUsers,
+  normalizeStaffRole,
+  buildCreatedAdminUser,
+  upsertAdminUser,
+  patchAdminUser,
+  applyRoleUpdate,
+  applyLockState,
+  applyWarehouseAssignment,
   getAdminUsers,
   getAdminUserDetail,
   createAdminUser,

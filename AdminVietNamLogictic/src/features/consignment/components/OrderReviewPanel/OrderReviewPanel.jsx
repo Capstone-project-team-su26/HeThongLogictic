@@ -48,6 +48,8 @@ const QUOTATION_STATUS_LABELS = Object.freeze({
   REJECTED: "Khách từ chối",
   EXPIRED: "Đã hết hạn",
   PENDING_PRICE_APPROVAL: "Chờ Admin duyệt giá",
+  PRICE_REJECTED: "Admin từ chối giá",
+  SUPERSEDED: "Đã được thay bằng báo giá mới",
 });
 
 const ORDER_TYPE_LABELS = Object.freeze({ CONSIGNMENT: "Ký gửi", PURCHASE: "Mua hộ" });

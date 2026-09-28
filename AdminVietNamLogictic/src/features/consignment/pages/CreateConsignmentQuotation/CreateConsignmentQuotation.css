@@ -2205,3 +2205,31 @@
   color: #94a3b8;
   font-size: 11px;
 }
+
+/* Nhãn trạng thái báo giá cạnh trạng thái đơn + khung khoá khi không lập lại được. */
+.quotation-create-topbar__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.quotation-create-topbar__tags .ant-tag {
+  margin-inline-end: 0;
+}
+
+.quotation-requote-lock .ant-alert-action {
+  align-self: center;
+}
+
+@media (max-width: 640px) {
+  .quotation-requote-lock {
+    flex-wrap: wrap;
+  }
+
+  .quotation-requote-lock .ant-alert-action {
+    margin-inline-start: 0;
+    margin-top: 8px;
+  }
+}

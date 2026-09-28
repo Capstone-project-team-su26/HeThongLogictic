@@ -20,6 +20,10 @@
  * - Từ chối BẮT BUỘC có `note`.
  * - Admin lập báo giá thì KHÔNG tự duyệt được → backend trả 403.
  * - Báo giá không ở trạng thái chờ duyệt giá → 400.
+ *
+ * TỪ CHỐI BÁO GIÁ (PUT /api/quotations/{id}/reject, POST /api/orders/{id}/quotation/reject):
+ * chỉ khách (chủ đơn) hoặc Admin; Sale/nhân viên khác → 403. Vì vậy admin UI
+ * KHÔNG có nút từ chối báo giá cho Sale — Sale không từ chối thay khách rồi lập lại.
  */
 
 import httpClient from "@shared/api/httpClient";
@@ -159,6 +163,11 @@ export const normalizeQuotationDetail = (data = {}) => ({
   salesNote: normalizeText(data?.salesNote),
   warehouseId: normalizeText(data?.warehouseId) || null,
   canCustomerAccept: data?.canCustomerAccept === true,
+  /* Chỉ nhân viên nhận các cờ này; khách nhận null. */
+  canSalesRequote:
+    typeof data?.canSalesRequote === "boolean" ? data.canSalesRequote : null,
+  requoteState: normalizeUpperText(data?.requoteState) || null,
+  requoteBlockedReason: normalizeText(data?.requoteBlockedReason) || null,
 
   totalWeight: toNumber(data?.totalWeight, 0),
   totalVolume: toNumber(data?.totalVolume, 0),
@@ -214,6 +223,137 @@ export const getOrderLevelFees = (additionalFees = []) =>
   getArrayItems(additionalFees)
     .map(normalizeQuotationFee)
     .filter((fee) => !fee.orderItemId);
+
+/* =========================
+   LẬP LẠI BÁO GIÁ (luật của Sale)
+========================= */
+
+/**
+ * Sale còn lập/gửi báo giá mới được không — cùng luật backend
+ * (VCL_BLL/Helpers/QuotationAcceptanceRules.cs · EvaluateRequote, trả về
+ * `canSalesRequote` / `requoteState` / `requoteBlockedReason` cho nhân viên).
+ *
+ * Báo giá đã tới tay khách (gửi thẳng theo bảng giá, hoặc Admin đã duyệt giá
+ * ngoại lệ) thì KHÔNG lập lại — API gửi báo giá trả 409. Chỉ lập lại khi khách
+ * từ chối, báo giá hết hạn, hoặc Admin từ chối giá ngoại lệ. Bản còn chờ Admin
+ * duyệt giá thì gửi bản mới sẽ thay bản đang chờ.
+ */
+export const REQUOTE_STATE = Object.freeze({
+  OPEN: "OPEN",
+  REPLACE_PENDING_PRICE_APPROVAL: "REPLACE_PENDING_PRICE_APPROVAL",
+  CUSTOMER_REJECTED: "CUSTOMER_REJECTED",
+  EXPIRED: "EXPIRED",
+  PRICE_REJECTED: "PRICE_REJECTED",
+  SENT_TO_CUSTOMER: "SENT_TO_CUSTOMER",
+  APPROVED_SENT_TO_CUSTOMER: "APPROVED_SENT_TO_CUSTOMER",
+  ACCEPTED: "ACCEPTED",
+  ORDER_NOT_QUOTABLE: "ORDER_NOT_QUOTABLE",
+});
+
+const REQUOTE_STATE_META = Object.freeze({
+  OPEN: { label: "Chưa có báo giá chính thức", tone: "default" },
+  REPLACE_PENDING_PRICE_APPROVAL: { label: "Chờ Admin duyệt giá", tone: "processing" },
+  CUSTOMER_REJECTED: { label: "Khách từ chối — được lập lại", tone: "warning" },
+  EXPIRED: { label: "Báo giá hết hạn — được lập lại", tone: "warning" },
+  PRICE_REJECTED: { label: "Admin từ chối giá — Sale sửa lại", tone: "error" },
+  SENT_TO_CUSTOMER: { label: "Đã gửi khách — chờ khách xác nhận", tone: "success" },
+  APPROVED_SENT_TO_CUSTOMER: { label: "Đã duyệt & gửi khách", tone: "success" },
+  ACCEPTED: { label: "Khách đã chấp nhận", tone: "success" },
+  ORDER_NOT_QUOTABLE: { label: "Đơn đã qua bước báo giá", tone: "default" },
+});
+
+const REQUOTE_WHEN =
+  "Chỉ lập báo giá mới khi khách từ chối báo giá, báo giá hết hạn hoặc Admin từ chối giá ngoại lệ.";
+
+/* Backend trả DateTime không kèm múi giờ nhưng là giờ UTC. */
+const parseUtcTime = (value) => {
+  const text = normalizeText(value);
+  if (!text) return null;
+  const withZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`;
+  const time = Date.parse(withZone);
+  return Number.isFinite(time) ? time : null;
+};
+
+const guessRequoteState = (quotation, now) => {
+  const status = normalizeUpperText(quotation?.status);
+  const approval = normalizeUpperText(quotation?.priceApprovalStatus);
+  const expiredAt = parseUtcTime(quotation?.expiredAt);
+  const expired = expiredAt !== null && expiredAt < now;
+
+  switch (status) {
+    case QUOTATION_STATUS.ACCEPTED:
+      return REQUOTE_STATE.ACCEPTED;
+    case QUOTATION_STATUS.PENDING:
+      if (expired) return REQUOTE_STATE.EXPIRED;
+      return approval === PRICE_APPROVAL_STATUS.APPROVED
+        ? REQUOTE_STATE.APPROVED_SENT_TO_CUSTOMER
+        : REQUOTE_STATE.SENT_TO_CUSTOMER;
+    case QUOTATION_STATUS.PENDING_PRICE_APPROVAL:
+      return REQUOTE_STATE.REPLACE_PENDING_PRICE_APPROVAL;
+    case QUOTATION_STATUS.REJECTED:
+      return REQUOTE_STATE.CUSTOMER_REJECTED;
+    case QUOTATION_STATUS.PRICE_REJECTED:
+      return REQUOTE_STATE.PRICE_REJECTED;
+    default:
+      return REQUOTE_STATE.OPEN;
+  }
+};
+
+const BLOCKED_STATES = new Set([
+  REQUOTE_STATE.SENT_TO_CUSTOMER,
+  REQUOTE_STATE.APPROVED_SENT_TO_CUSTOMER,
+  REQUOTE_STATE.ACCEPTED,
+  REQUOTE_STATE.ORDER_NOT_QUOTABLE,
+]);
+
+const fallbackBlockedReason = (state) => {
+  if (state === REQUOTE_STATE.APPROVED_SENT_TO_CUSTOMER) {
+    return `Báo giá đã được Admin duyệt và gửi khách — không lập lại được. ${REQUOTE_WHEN}`;
+  }
+  if (state === REQUOTE_STATE.SENT_TO_CUSTOMER) {
+    return `Báo giá đã gửi khách và đang chờ khách xác nhận — không lập lại được. ${REQUOTE_WHEN}`;
+  }
+  if (state === REQUOTE_STATE.ACCEPTED) {
+    return "Khách đã chấp nhận báo giá của đơn này. Phí phát sinh đi qua đợt thanh toán cuối.";
+  }
+  return null;
+};
+
+/**
+ * @param {object|null} quotation Báo giá chi tiết (GET .../quotation của nhân viên)
+ *   hoặc tóm tắt `detail.quotation` của chi tiết đơn.
+ * @returns {{ allowed: boolean, state: string, label: string, tone: string,
+ *   reason: string|null, fromBackend: boolean }}
+ */
+export const getRequoteGuard = (quotation, { now = Date.now() } = {}) => {
+  const fromBackend =
+    typeof quotation?.canSalesRequote === "boolean" &&
+    Boolean(normalizeText(quotation?.requoteState));
+
+  const state = fromBackend
+    ? normalizeUpperText(quotation.requoteState)
+    : quotation
+      ? guessRequoteState(quotation, now)
+      : REQUOTE_STATE.OPEN;
+
+  const allowed = fromBackend
+    ? quotation.canSalesRequote
+    : !BLOCKED_STATES.has(state);
+
+  const meta = REQUOTE_STATE_META[state] || { label: state, tone: "default" };
+
+  return {
+    allowed,
+    state,
+    label: meta.label,
+    tone: meta.tone,
+    reason: allowed
+      ? null
+      : normalizeText(quotation?.requoteBlockedReason) ||
+        fallbackBlockedReason(state),
+    fromBackend,
+  };
+};
 
 /* =========================
    API
@@ -442,6 +582,8 @@ const quotationService = {
   QUOTATION_STATUS,
   PRICE_APPROVAL_STATUS,
   PRICE_APPROVAL_DECISION,
+  REQUOTE_STATE,
+  getRequoteGuard,
   normalizeQuotationFee,
   normalizeQuotationDetail,
   groupFeesByOrderItem,

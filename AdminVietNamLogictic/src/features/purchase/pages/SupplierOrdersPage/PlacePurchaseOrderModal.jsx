@@ -32,7 +32,14 @@ const PROOF_DOCUMENT_TYPE = "PURCHASE_PROOF";
 /** Cột `supplier_order_code` của backend: HasMaxLength(100). */
 const SUPPLIER_ORDER_CODE_MAX_LENGTH = 100;
 
-export default function PlacePurchaseOrderModal({ open, order, submitting = false, onCancel, onConfirm }) {
+export default function PlacePurchaseOrderModal({
+  open,
+  order,
+  submitting = false,
+  errorMessage = "",
+  onCancel,
+  onConfirm,
+}) {
   /* Trang gắn `key` theo đơn và chỉ dựng hộp khi có đơn → mỗi lần mở là state mới tinh. */
   const [code, setCode] = useState(order?.supplierOrderCode || "");
   const [codeTouched, setCodeTouched] = useState(false);
@@ -88,7 +95,8 @@ export default function PlacePurchaseOrderModal({ open, order, submitting = fals
   const handleOk = () => {
     setCodeTouched(true);
 
-    if (blockedReason) return;
+    /* Đang gửi thì bỏ qua (Enter / bấm đúp) — trang cũng khoá theo đơn, đây là lớp chặn thứ hai. */
+    if (blockedReason || submitting) return;
 
     onConfirm?.({ supplierOrderCode: trimmedCode, note: note.trim() });
   };
@@ -102,6 +110,10 @@ export default function PlacePurchaseOrderModal({ open, order, submitting = fals
       okText="Đã đặt NCC"
       cancelText="Huỷ"
       okButtonProps={{ disabled: Boolean(blockedReason), loading: submitting, title: blockedReason }}
+      cancelButtonProps={{ disabled: submitting }}
+      closable={!submitting}
+      keyboard={!submitting}
+      maskClosable={false}
       onOk={handleOk}
       onCancel={onCancel}
     >
@@ -170,6 +182,10 @@ export default function PlacePurchaseOrderModal({ open, order, submitting = fals
             placeholder="Ghi chú (không bắt buộc)"
             onChange={(event) => setNote(event.target.value)}
           />
+
+          {errorMessage ? (
+            <Alert type="error" showIcon message="Chưa ghi nhận được" description={errorMessage} />
+          ) : null}
 
           {blockedReason ? (
             <Alert type="info" showIcon message={`Chưa bấm "Đã đặt NCC" được: ${blockedReason}`} />

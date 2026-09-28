@@ -126,6 +126,8 @@ export {
   QUOTATION_STATUS,
   PRICE_APPROVAL_STATUS,
   PRICE_APPROVAL_DECISION,
+  REQUOTE_STATE,
+  getRequoteGuard,
   normalizeQuotationFee,
   normalizeQuotationDetail,
   groupFeesByOrderItem,

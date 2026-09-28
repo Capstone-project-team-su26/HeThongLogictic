@@ -107,6 +107,12 @@ export const CREATE_QUOTATION_STATUSES =
   ]);
 
 /*
+ * Vai trò (đã chuẩn hoá bằng normalizeRole: chữ thường, bỏ ký tự lạ) được xem xét / lập báo giá
+ * yêu cầu mua hộ — khớp StaffRoleHelper.CanQuotePurchase ở backend (ADMIN, ADMINISTRATOR, SALE, SALES).
+ */
+export const QUOTE_PURCHASE_ROLES = new Set(["admin", "administrator", "sale", "sales"]);
+
+/*
  * Trạng thái yêu cầu cho phép "đóng phần không mua được": từ lúc khách đã trả trước (PAID) tới khi
  * hàng về kho / hoàn tất. Khớp nhóm `BeyondPrepaid` + PAID của backend (PurchasePaymentEffects),
  * trừ CANCELLED — yêu cầu đã huỷ thì không còn gì để đóng.

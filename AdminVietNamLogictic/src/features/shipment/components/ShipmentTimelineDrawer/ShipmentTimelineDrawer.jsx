@@ -47,6 +47,8 @@ import {
   ReviewItemsTable,
 } from "@shared/components/SubmitReview/SubmitReview";
 import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
+import { countPurchaseRecords, isPurchaseRecord } from "@shared/components/OrderTypeTag/orderType";
 
 const { Text, Title } = Typography;
 
@@ -373,6 +375,12 @@ export default function ShipmentTimelineDrawer({
                     {(detail?.wroRequests || []).map((wro) => (
                       <Tag key={wro.wroRequestId}>{wro.wroCode}</Tag>
                     ))}
+                    {countPurchaseRecords(detail?.parcels) ? (
+                      <Text type="secondary">
+                        · {countPurchaseRecords(detail?.parcels)} kiện mua hộ /{" "}
+                        {(detail?.parcels || []).length} kiện
+                      </Text>
+                    ) : null}
                   </Space>
                   <Table
                     size="small"
@@ -381,7 +389,21 @@ export default function ShipmentTimelineDrawer({
                     dataSource={detail?.parcels || []}
                     columns={[
                       { title: "Mã kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
-                      { title: "Đơn", dataIndex: "orderCode", render: (v) => v || "—" },
+                      {
+                        title: "Đơn",
+                        dataIndex: "orderCode",
+                        filters: [
+                          { text: "Mua hộ", value: "PURCHASE" },
+                          { text: "Ký gửi", value: "CONSIGNMENT" },
+                        ],
+                        onFilter: (value, row) => (value === "PURCHASE") === isPurchaseRecord(row),
+                        render: (v, row) => (
+                          <Space size={6} wrap>
+                            <span>{v || "—"}</span>
+                            <OrderTypeTag record={row} />
+                          </Space>
+                        ),
+                      },
                       { title: "Khách", dataIndex: "customerName", render: (v) => v || "—" },
                       {
                         title: "Cân nặng",

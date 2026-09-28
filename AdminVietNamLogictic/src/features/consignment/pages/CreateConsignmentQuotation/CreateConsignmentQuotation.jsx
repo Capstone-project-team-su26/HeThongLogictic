@@ -14,6 +14,7 @@ import {
   Alert,
   Button,
   Checkbox,
+  ConfigProvider,
   Empty,
   Form,
   Input,
@@ -28,8 +29,10 @@ import {
   CheckCircleOutlined,
   DollarOutlined,
   EnvironmentOutlined,
+  EyeOutlined,
   FileTextOutlined,
   InboxOutlined,
+  LockOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
@@ -43,6 +46,7 @@ import {
 import {
   getOrderLevelFees,
   getOrderQuotationApi,
+  getRequoteGuard,
   groupFeesByOrderItem,
 } from "@features/consignment/api/quotationService";
 import {
@@ -70,6 +74,7 @@ import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import ConfirmConsignmentQuotation from "@features/consignment/components/ConfirmConsignmentQuotation/ConfirmConsignmentQuotation";
 import {
   DIM_DECIMAL_PLACES,
+  REQUOTE_LOCK_TITLES,
 } from "./CreateConsignmentQuotation.constants";
 import {
   calculateItemDimKg,
@@ -1545,10 +1550,33 @@ export default function CreateConsignmentQuotation() {
       currentOrderStatus,
     ]);
 
+  /*
+   * LUẬT LẬP LẠI BÁO GIÁ — backend trả kèm báo giá của nhân viên
+   * (canSalesRequote / requoteState / requoteBlockedReason, cùng luật với
+   * POST .../quotation/send): báo giá đã tới tay khách, hoặc Admin đã duyệt giá
+   * ngoại lệ, thì KHÔNG lập lại (API trả 409). Chỉ lập lại khi khách từ chối,
+   * báo giá hết hạn, hoặc Admin từ chối giá ngoại lệ. Backend cũ chưa trả cờ thì
+   * getRequoteGuard tự suy từ status / priceApprovalStatus / expiredAt.
+   */
+  const requoteGuard = useMemo(
+    () =>
+      getRequoteGuard(
+        draftQuotation ||
+        detail?.quotation ||
+        null
+      ),
+    [draftQuotation, detail?.quotation]
+  );
+
+  const requoteLocked =
+    !requoteGuard.allowed;
+
   const orderIsQuotable =
     QUOTABLE_ORDER_STATUSES.includes(
       currentOrderStatus
-    ) && !quotationAccepted;
+    ) &&
+    !quotationAccepted &&
+    !requoteLocked;
 
   /* Khoá nút sau khi vừa gửi xong trong phiên này, tránh bấm hai lần. */
   const hasSentQuotation = Boolean(
@@ -1645,9 +1673,11 @@ export default function CreateConsignmentQuotation() {
         );
       }
 
+      /* Bị khoá theo luật lập lại báo giá thì khung khoá phía trên đã nói lý do. */
       if (
         !terminalStatus &&
-        !orderIsQuotable
+        !orderIsQuotable &&
+        !requoteLocked
       ) {
         messages.push(
           quotationAccepted
@@ -1679,6 +1709,7 @@ export default function CreateConsignmentQuotation() {
       selectedServicePricing,
       terminalStatus,
       orderIsQuotable,
+      requoteLocked,
       quotationAccepted,
       orderStatus.label,
       hasSentQuotation,
@@ -2126,6 +2157,18 @@ export default function CreateConsignmentQuotation() {
         quotationSubmitLockRef.current =
           false;
 
+        /*
+         * 409: trong lúc Sale soạn, báo giá của đơn đã tới tay khách (Admin vừa
+         * duyệt, hoặc Sale khác vừa gửi). Tải lại để khung khoá hiện ra.
+         */
+        if (
+          sendError?.response?.status ===
+          409
+        ) {
+          setConfirmationOpen(false);
+          loadPageData();
+        }
+
         const message =
           sendError?.response?.data
             ?.message ||
@@ -2202,11 +2245,22 @@ export default function CreateConsignmentQuotation() {
             Quay lại chi tiết đơn
           </Button>
 
-          <Tag
-            className={`quotation-order-status ${orderStatus.className}`}
-          >
-            {orderStatus.label}
-          </Tag>
+          <div className="quotation-create-topbar__tags">
+            {draftQuotation && (
+              <Tag
+                color={requoteGuard.tone}
+                className="quotation-requote-state"
+              >
+                Báo giá: {requoteGuard.label}
+              </Tag>
+            )}
+
+            <Tag
+              className={`quotation-order-status ${orderStatus.className}`}
+            >
+              {orderStatus.label}
+            </Tag>
+          </div>
         </div>
 
         {warningMessage && (
@@ -2296,6 +2350,47 @@ export default function CreateConsignmentQuotation() {
           </div>
         </section>
 
+        {requoteLocked && (
+          <Alert
+            type={
+              requoteGuard.state ===
+              "ORDER_NOT_QUOTABLE"
+                ? "info"
+                : "success"
+            }
+            showIcon
+            icon={<LockOutlined />}
+            message={
+              REQUOTE_LOCK_TITLES[
+              requoteGuard.state
+              ] || requoteGuard.label
+            }
+            description={
+              requoteGuard.reason ||
+              "Không lập lại báo giá cho đơn này được."
+            }
+            action={
+              <Button
+                icon={<EyeOutlined />}
+                onClick={() =>
+                  navigate(
+                    `/sale/consignments/${orderId}`,
+                    {
+                      state: {
+                        orderId,
+                        refreshQuotation: true,
+                      },
+                    }
+                  )
+                }
+              >
+                Xem báo giá
+              </Button>
+            }
+            className="quotation-create-warning quotation-requote-lock"
+          />
+        )}
+
         {pendingPriceApproval && (
           <Alert
             type="info"
@@ -2306,7 +2401,8 @@ export default function CreateConsignmentQuotation() {
           />
         )}
 
-        {validationMessages.length >
+        {!requoteLocked &&
+          validationMessages.length >
           0 && (
             <Alert
               type="warning"
@@ -2327,6 +2423,12 @@ export default function CreateConsignmentQuotation() {
             />
           )}
 
+        {/* Khoá toàn bộ ô nhập khi không được lập lại báo giá. */}
+        <ConfigProvider
+          componentDisabled={
+            requoteLocked
+          }
+        >
         <div className="quotation-create-layout">
           <section className="quotation-create-main">
             <article className="quotation-section-card">
@@ -3146,6 +3248,8 @@ export default function CreateConsignmentQuotation() {
               icon={
                 hasSentQuotation ? (
                   <CheckCircleOutlined />
+                ) : requoteLocked ? (
+                  <LockOutlined />
                 ) : (
                   <SendOutlined />
                 )
@@ -3167,7 +3271,9 @@ export default function CreateConsignmentQuotation() {
             >
               {hasSentQuotation
                 ? "Đã gửi báo giá"
-                : "Xem lại và gửi báo giá"}
+                : requoteLocked
+                  ? "Không lập lại được báo giá"
+                  : "Xem lại và gửi báo giá"}
             </Button>
 
             <div className="quotation-summary-note">
@@ -3186,6 +3292,7 @@ export default function CreateConsignmentQuotation() {
             </div>
           </aside>
         </div>
+        </ConfigProvider>
       </div>
 
       <ConfirmConsignmentQuotation

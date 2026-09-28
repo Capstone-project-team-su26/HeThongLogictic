@@ -11,7 +11,7 @@
  * lỗi ở đó không chặn việc đóng khoản.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Alert, Button, Modal, Space, Typography } from "antd";
 
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
@@ -44,6 +44,7 @@ export default function OrderRefundsModal({
 }) {
   const [target, setTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [reloadSeq, setReloadSeq] = useState(0);
 
   const summary = useSubmitReviewData(
@@ -55,17 +56,24 @@ export default function OrderRefundsModal({
   const pending = getPendingRefunds(order);
 
   const submitComplete = async ({ transactionCode, amount, refundId }) => {
+    /* Enter + bấm nút cùng lúc: chỉ gửi một lần. */
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
-      await completePurchaseRefund(order.purchaseOrderId, { transactionCode, amount, refundId });
+      const updated = await completePurchaseRefund(order.purchaseOrderId, { transactionCode, amount, refundId });
       AuthNotify.success("Đã ghi nhận hoàn tiền", `Đã chuyển trả ${formatReviewMoney(amount)}.`);
       setTarget(null);
       setReloadSeq((value) => value + 1);
-      /* Màn cha tải lại bảng → `order` mới (khoản vừa đóng thành Đã chuyển trả) chảy xuống đây. */
-      onChanged?.();
+      /*
+       * Đưa đơn backend vừa trả lên màn cha (cập nhật đúng dòng; phản hồi thiếu thì màn cha tải
+       * lại) → `order` mới (khoản vừa đóng thành Đã chuyển trả) chảy xuống đây.
+       */
+      onChanged?.(updated);
     } catch (error) {
       AuthNotify.error("Không ghi nhận được", getPurchaseOrderApiError(error));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

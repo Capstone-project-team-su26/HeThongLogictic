@@ -294,3 +294,40 @@ export const buildInitialPrices = (
     {}
   );
 };
+
+/*
+ * ƯỚC TÍNH TRẢ TRƯỚC / TẠM TÍNH — chép đúng công thức backend lúc lưu báo giá mua hộ
+ * (VCL_BLL/Services/PurchaseRequestService.cs, CreatePurchaseQuotationAsync):
+ *   prepay = tiền hàng + phí mua hộ + ship nội địa + phụ phí + VAT phần phí
+ *   later  = cước ước tính + VAT cước + thuế NK
+ * Chỉ để Sale xem trước; số chính thức là số backend trả về sau khi lưu.
+ */
+
+/** `Math.Round(decimal, 0)` của C# mặc định làm tròn nửa về số chẵn (banker's rounding). */
+export const roundHalfEven = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  const floor = Math.floor(number);
+  const diff = number - floor;
+  if (Math.abs(diff - 0.5) < 1e-9) return floor % 2 === 0 ? floor : floor + 1;
+  return Math.round(number);
+};
+
+/** ResolveVatRatePercentAsync: rule VAT đang bật (≤ 1 là tỷ lệ → ×100), không có thì 8%. */
+export const resolveVatRatePercent = (rules = []) => {
+  const vatRule = (Array.isArray(rules) ? rules : []).find((rule) => {
+    const status = normalizeUpperText(rule?.status);
+    if (status && status !== "ACTIVE") return false;
+    const code = normalizeUpperText(rule?.ruleCode);
+    const type = normalizeUpperText(rule?.ruleType);
+    const name = normalizeUpperText(rule?.ruleName);
+    return code === "VAT" || type === "VAT" || (type === "TAX" && name.includes("VAT"));
+  });
+  const value = Number(vatRule?.value);
+  if (Number.isFinite(value) && value > 0) return value <= 1 ? value * 100 : value;
+  return 8;
+};
+
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const isGuid = (value) => GUID_PATTERN.test(normalizeText(value));
