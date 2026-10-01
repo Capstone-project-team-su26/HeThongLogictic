@@ -106,6 +106,7 @@ import {
 } from "./CreateConsignmentQuotation.helpers";
 import { normalizeOrderStatus } from "../../constants/orderStatus";
 import "./CreateConsignmentQuotation.css";
+import { getRouteLabel } from "@shared/utils/statusLabel";
 
 /* =========================
    HIỂN THỊ TẢI DỮ LIỆU
@@ -2465,7 +2466,7 @@ export default function CreateConsignmentQuotation() {
                     )}
                   </strong>
                   <small>
-                    {detail?.route || "—"}
+                    {getRouteLabel(detail?.route, "—")}
                   </small>
                 </div>
 

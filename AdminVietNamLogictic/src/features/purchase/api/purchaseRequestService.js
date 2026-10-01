@@ -22,6 +22,9 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getPagedData, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 
+import { listPurchaseOrders, listPurchaseOrdersOfRequest } from "./purchaseOrderService";
+import { buildPurchaseStageContext } from "./purchaseRequestStage";
+
 /* Hằng và hàm thuần dùng chung — module thuần, không phải bản mock. */
 export {
   PURCHASE_REQUEST_STATUS,
@@ -71,6 +74,8 @@ export const getPurchaseRequestsApi = async (filters = {}) => {
     pageNumber,
     pageSize,
     status: filters?.status ? trimText(filters.status).toUpperCase() : undefined,
+    /* Chặng thật (backend mới lọc được; backend cũ bỏ qua tham số lạ → màn tự lọc lại). */
+    stage: filters?.stage ? trimText(filters.stage).toUpperCase() : undefined,
     /* Backend đọc `searchKeyword`; gửi kèm `search` cho bản cũ vẫn hiểu. */
     searchKeyword: searchText,
     search: searchText,
@@ -112,6 +117,57 @@ export const getPurchaseRequestDetailApi = async (purchaseRequestId, options = {
   });
 
   return getResponseData(response);
+};
+
+/* =========================================================
+   CHẶNG THẬT CỦA YÊU CẦU — dữ liệu đối chiếu
+========================================================= */
+
+const WAREHOUSE_ORDER_PAGE_SIZE = 500;
+
+/** Đơn kho mua hộ (ORDERS.OrderType = PURCHASE) — chỉ lấy mã + trạng thái để suy chặng. */
+const listPurchaseWarehouseOrders = async ({ searchCode } = {}) => {
+  const response = await httpClient.get(API_ENDPOINTS.consignments.list, {
+    params: removeEmptyParams({
+      orderType: "PURCHASE",
+      searchCode: trimText(searchCode) || undefined,
+      pageNumber: 1,
+      pageSize: WAREHOUSE_ORDER_PAGE_SIZE,
+    }),
+  });
+
+  return getPagedData(getResponseData(response), {
+    pageNumber: 1,
+    pageSize: WAREHOUSE_ORDER_PAGE_SIZE,
+  }).items.map((order) => ({
+    orderId: order?.orderId,
+    consignmentCode: trimText(order?.consignmentCode),
+    status: trimText(order?.status).toUpperCase(),
+  }));
+};
+
+/**
+ * Nạp dữ liệu để suy CHẶNG THẬT của yêu cầu mua hộ (xem purchaseRequestStage.js).
+ *
+ * Danh sách yêu cầu (`PurchaseRequestListItemDto`) chỉ có `status` của yêu cầu — mã COMPLETED
+ * ở đó có thể chỉ là "đã tất toán đợt cuối" đời cũ. Nên đọc thêm đơn mua NCC (kèm
+ * `warehouseOrderStatus`, `refunds`) và đơn kho mua hộ. Truyền `purchaseRequestId` +
+ * `purchaseCode` thì chỉ đọc cho một yêu cầu (màn chi tiết).
+ *
+ * Nguồn nào lỗi thì trả `null` cho nguồn đó (không ném) — màn hình vẫn hiện, chặng nào không
+ * đối chiếu được sẽ hiện "Chưa đối chiếu được tiến độ" chứ không bao giờ tự nhận hoàn tất.
+ *
+ * @returns {Promise<ReturnType<typeof buildPurchaseStageContext>>}
+ */
+export const getPurchaseStageContextApi = async ({ purchaseRequestId, purchaseCode } = {}) => {
+  const id = trimText(purchaseRequestId);
+
+  const [purchaseOrders, warehouseOrders] = await Promise.all([
+    (id ? listPurchaseOrdersOfRequest(id) : listPurchaseOrders()).catch(() => null),
+    listPurchaseWarehouseOrders({ searchCode: id ? purchaseCode : undefined }).catch(() => null),
+  ]);
+
+  return buildPurchaseStageContext({ purchaseOrders, warehouseOrders });
 };
 
 /* =========================================================
@@ -251,6 +307,7 @@ const purchaseRequestService = {
   createPurchaseRequestApi,
   getPurchaseRequestsApi,
   getPurchaseRequestDetailApi,
+  getPurchaseStageContextApi,
   createPurchaseRequestQuotationApi,
 };
 

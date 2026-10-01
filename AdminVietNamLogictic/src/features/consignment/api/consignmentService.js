@@ -98,8 +98,15 @@ const normalizePositiveNumber = (
   );
 };
 
+/*
+ * Chỉ kiểm dạng GUID 8-4-4-4-12 hex, KHÔNG kiểm version/variant RFC 4122.
+ * Backend (.NET Guid) nhận mọi GUID hex, và dữ liệu seed dùng id cố định kiểu
+ * 99999999-2222-2222-2222-222222222222 (thùng MEDIUM) — regex RFC chặt trước đây
+ * từ chối đúng id thật lấy từ GET /api/package-configurations, làm Sale không tạo
+ * được đơn hộ khách ("Kiện 1: packageConfigurationId không đúng định dạng UUID").
+ */
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const normalizeUuid = (value, fieldName) => {
   const id = normalizeText(value);
@@ -795,7 +802,7 @@ export const normalizeConsignmentStatusPayload =
       throw new Error(
         status === "APPROVED"
           ? "Hệ thống đã bỏ bước duyệt đơn. Sale gửi báo giá trực tiếp, hoặc chọn Yêu cầu bổ sung / Từ chối."
-          : "Trạng thái chỉ được phép là NEED_MORE_INFO hoặc REJECTED."
+          : "Chỉ được chọn Yêu cầu bổ sung thông tin hoặc Từ chối đơn."
       );
     }
 

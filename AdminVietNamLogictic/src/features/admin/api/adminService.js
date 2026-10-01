@@ -18,6 +18,8 @@
  * chỉ còn ba helper bóc dữ liệu/bóc lỗi + các re-export, và vẫn không import httpClient.
  */
 
+import { translateCodesInText } from "@shared/utils/statusLabel";
+
 export const getAdminApiData = (response) => {
   const responseData = response?.data ?? response;
   return responseData?.data ?? responseData;
@@ -31,7 +33,7 @@ export const getAdminApiList = (response) => {
   return [];
 };
 
-export const getAdminApiError = (error, fallbackMessage) => {
+const readAdminApiError = (error, fallbackMessage) => {
   const data = error?.response?.data;
   if (typeof data === "string" && data.trim()) return data;
   /* Lỗi 500 của backend có message chung chung, lý do thật nằm ở `error` — ghép cả hai. */
@@ -50,6 +52,13 @@ export const getAdminApiError = (error, fallbackMessage) => {
   if (validationMessages.length) return validationMessages.join(" ");
   if (typeof data?.title === "string") return data.title;
   return error?.message || fallbackMessage;
+};
+
+/* Câu lỗi server đôi khi chèn nguyên mã trạng thái ("…SUPPLIER_CONFIRMED, SUPPLIER_SHIPPED") →
+   dịch mã sang nhãn tiếng Việt, giữ phần chữ còn lại. */
+export const getAdminApiError = (error, fallbackMessage) => {
+  const message = readAdminApiError(error, fallbackMessage);
+  return typeof message === "string" ? translateCodesInText(message) : message;
 };
 
 /* ==================== USERS (API THẬT) ==================== */

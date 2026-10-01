@@ -36,6 +36,7 @@ import {
   removeEmptyParams,
 } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getReceivingApiError };
 
@@ -53,6 +54,8 @@ export const RECEIVING_STATUS_META = Object.freeze({
   RECEIVED: { label: "Đã kiểm đếm", tone: "processing" },
   APPROVED: { label: "Đã chốt nhận hàng", tone: "success" },
   REJECTED: { label: "Bị từ chối", tone: "error" },
+  /* Huỷ theo đơn mua NCC bị huỷ (PurchaseOrderService). */
+  CANCELLED: { label: "Đã huỷ", tone: "default" },
 });
 
 /** Giai đoạn chờ quyết định của phiếu (`approvalStage`). */
@@ -90,10 +93,7 @@ export const RECEIVING_STATUS_TABS = Object.freeze([
 ]);
 
 export const getReceivingStatusMeta = (status) =>
-  RECEIVING_STATUS_META[String(status || "").toUpperCase()] || {
-    label: status || "—",
-    tone: "default",
-  };
+  metaOf(RECEIVING_STATUS_META, status, { tone: "default" });
 
 export const getApprovalStageMeta = (stage) =>
   RECEIVING_APPROVAL_STAGE_META[String(stage || "").toUpperCase()] || null;

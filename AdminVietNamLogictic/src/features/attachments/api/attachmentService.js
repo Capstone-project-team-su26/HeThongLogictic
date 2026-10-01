@@ -16,6 +16,7 @@ import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getArrayItems, getResponseData } from "@shared/api/apiEnvelope";
 import { openFileInNewTab, saveFile, fetchFileBlob } from "@shared/api/fileDownload";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { labelOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getAttachmentApiError };
 
@@ -50,11 +51,12 @@ export const DOCUMENT_TYPE_LABELS = Object.freeze({
   PURCHASE_PROOF: "Chứng từ mua hộ",
   PUT_AWAY_PROOF: "Ảnh kiện trong ô kệ",
   WRO_APPROVAL_PROOF: "Ảnh hiện trạng lúc duyệt xuất",
+  VN_ARRIVAL_PROOF: "Ảnh tiếp nhận kho VN",
   OTHER: "Giấy tờ khác",
 });
 
 export const getDocumentTypeLabel = (documentType) =>
-  DOCUMENT_TYPE_LABELS[String(documentType || "").toUpperCase()] || documentType || "—";
+  labelOf(DOCUMENT_TYPE_LABELS, documentType, { generic: "Loại giấy tờ khác" });
 
 /*
  * Server chỉ nhận PDF/JPG/PNG/WEBP ≤ 10 MB và xét theo Content-Type chứ không theo đuôi file.

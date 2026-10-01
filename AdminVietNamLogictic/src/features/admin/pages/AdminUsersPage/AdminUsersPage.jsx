@@ -56,14 +56,13 @@ import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "@features/admin/styles/AdminPage.css";
 import UserWarehouseAssignModal from "@features/admin/components/UserWarehouseAssignModal/UserWarehouseAssignModal";
+import { getRoleLabel, getUserStatusLabel, getUserTypeLabel } from "@shared/utils/statusLabel";
 
-const ROLE_OPTIONS = [
-  { value: "Admin", label: "Quản trị viên" },
-  { value: "Sale", label: "Nhân viên Sale" },
-  { value: "OperationsManager", label: "Quản lý vận hành" },
-  { value: "WarehouseStaff", label: "Nhân viên kho" },
-  { value: "Delivery", label: "Nhân viên giao nhận" },
-];
+/* Nhãn lấy từ bảng vai trò dùng chung — cùng một chữ ở bảng, bộ lọc và hộp phân quyền. */
+const ROLE_OPTIONS = ["Admin", "Sale", "OperationsManager", "WarehouseStaff", "Delivery"].map((value) => ({
+  value,
+  label: getRoleLabel(value),
+}));
 
 /*
  * Luật của PUT /api/User/{id}/role (backend thật):
@@ -193,11 +192,11 @@ export default function AdminUsersPage() {
   }, [loadUsers]);
 
   const roleOptions = useMemo(
-    () => uniqueSelectOptions(users, (user) => user.role),
+    () => uniqueSelectOptions(users, (user) => user.role, (value) => getRoleLabel(value)),
     [users]
   );
   const userTypeOptions = useMemo(
-    () => uniqueSelectOptions(users, (user) => user.userType),
+    () => uniqueSelectOptions(users, (user) => user.userType, (value) => getUserTypeLabel(value)),
     [users]
   );
   const statusOptions = useMemo(() => {
@@ -205,7 +204,8 @@ export default function AdminUsersPage() {
     if (users.some(isLockedUser)) options.push({ label: "Đã khóa", value: LOCKED_STATUS_FILTER });
     uniqueSelectOptions(
       users.filter((user) => !isLockedUser(user)),
-      (user) => user.status || "—"
+      (user) => user.status || "—",
+      (value) => (value === "—" ? "—" : getUserStatusLabel(value))
     ).forEach((item) => options.push(item));
     return options;
   }, [users]);
@@ -410,11 +410,14 @@ export default function AdminUsersPage() {
         sorter: (a, b) => compareText(a.role, b.role),
         render: (value) =>
           isNonStandardWarehouseRole(value) ? (
-            <Tag color="orange" title={`Vai trò kho viết khác chuẩn — nên đổi sang ${STANDARD_WAREHOUSE_ROLE}`}>
-              {value}
+            <Tag
+              color="orange"
+              title={`Vai trò kho viết khác chuẩn (“${value}”) — nên đổi sang ${STANDARD_WAREHOUSE_ROLE}`}
+            >
+              {getRoleLabel(value)}
             </Tag>
           ) : (
-            <Tag color="blue">{value || "—"}</Tag>
+            <Tag color="blue">{getRoleLabel(value)}</Tag>
           ),
       },
       {
@@ -423,6 +426,7 @@ export default function AdminUsersPage() {
         key: "userType",
         width: 135,
         sorter: (a, b) => compareText(a.userType, b.userType),
+        render: (value) => getUserTypeLabel(value),
       },
       {
         title: "Khu vực",
@@ -481,7 +485,7 @@ export default function AdminUsersPage() {
         },
         render: (value, record) => (
           <Tag color={isLockedUser(record) ? "error" : value === "Active" ? "success" : "warning"}>
-            {isLockedUser(record) ? "Đã khóa" : value || "—"}
+            {isLockedUser(record) ? "Đã khóa" : getUserStatusLabel(value)}
           </Tag>
         ),
       },

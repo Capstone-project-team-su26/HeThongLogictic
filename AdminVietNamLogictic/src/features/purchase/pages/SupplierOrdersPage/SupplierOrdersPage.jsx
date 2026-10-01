@@ -87,6 +87,7 @@ import {
   getWarehouseOrderStatusLabel,
   toSearchText,
 } from "./SupplierOrdersPage.helpers";
+import { textOr } from "@shared/utils/statusLabel";
 
 const { Text } = Typography;
 
@@ -945,7 +946,7 @@ export default function SupplierOrdersPage() {
       render: (value, row) => (
         <Space direction="vertical" size={2}>
           <Tag color={row.statusMeta.tone} style={{ whiteSpace: "normal" }}>
-            {row.statusText || row.statusMeta.label}
+            {textOr(row.statusText, row.statusMeta.label)}
           </Tag>
           <Text type="secondary" style={{ fontSize: 12 }}>
             Đang chờ: {row.statusMeta.waiting}

@@ -57,6 +57,7 @@ import {
 } from "./PendingConsignmentListHistory.helpers";
 
 import "./PendingConsignmentListHistory.css";
+import { getRouteLabel } from "@shared/utils/statusLabel";
 
 const { RangePicker } = DatePicker;
 
@@ -810,7 +811,7 @@ export default function PendingConsignmentListHistory() {
                             </span>
 
                             <span className="tag-count">
-                              Tuyến {item.route || "-"}
+                              Tuyến {getRouteLabel(item.route, "-")}
                             </span>
 
                             <span

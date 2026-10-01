@@ -31,15 +31,25 @@ import {
 
 import { getAdminApiError } from "@features/admin/api/adminService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import { labelOf } from "@shared/utils/statusLabel";
 import {
   formatVietnamDateTime,
   localToUtcIso,
   toDateTimeLocalInputValue,
 } from "@shared/utils/timeUtc";
+import { tablePagination } from "@shared/utils/tablePagination";
 import "@features/admin/styles/AdminPage.css";
 
 const FILTERABLE_TYPES = new Set(["tag", "active", "status", "restriction"]);
 const RESTRICTION_LABELS = { BANNED: "Cấm", RESTRICTED: "Hạn chế", WARNING: "Cảnh báo" };
+const ACTIVE_STATUS_LABELS = { ACTIVE: "Đang hoạt động", INACTIVE: "Ngừng hoạt động" };
+
+/**
+ * Nhãn của một ô "tag": cột khai `labels` (bảng mã → nhãn) thì dịch, mã lạ ra "Loại khác" —
+ * không in mã thô. Cột không khai `labels` là mã người dùng cần đọc (mã tiền tệ, mã kho…) → giữ.
+ */
+const tagLabel = (column, value) =>
+  column.labels ? labelOf(column.labels, value, { generic: "Loại khác" }) : String(value);
 
 const formatNumber = (value) => {
   const number = Number(value);
@@ -52,6 +62,9 @@ const formatDate = (value) => {
 
 const compareText = (a, b) =>
   String(a ?? "").localeCompare(String(b ?? ""), "vi", { sensitivity: "base" });
+
+const describeDetailValue = (meta, value) =>
+  meta?.labels ? labelOf(meta.labels, value, { generic: "Loại khác" }) : String(value);
 
 const uniqueSelectOptions = (items, getValue, getLabel = (value) => value) => {
   const map = new Map();
@@ -188,16 +201,16 @@ const renderColumnValue = (column, value, record) => {
 
   if (column.type === "status") {
     const active = String(value || "").toUpperCase() === "ACTIVE";
-    return <Tag color={active ? "success" : "default"}>{value || "—"}</Tag>;
+    return <Tag color={active ? "success" : "default"}>{labelOf(ACTIVE_STATUS_LABELS, value)}</Tag>;
   }
 
   if (column.type === "restriction") {
     const colors = { BANNED: "error", RESTRICTED: "warning", WARNING: "gold" };
     const labels = { BANNED: "Cấm", RESTRICTED: "Hạn chế", WARNING: "Cảnh báo" };
-    return <Tag color={colors[value]}>{labels[value] || value || "—"}</Tag>;
+    return <Tag color={colors[value]}>{labelOf(labels, value, { generic: "Mức khác" })}</Tag>;
   }
 
-  if (column.type === "tag") return value ? <Tag color="blue">{value}</Tag> : "—";
+  if (column.type === "tag") return value ? <Tag color="blue">{tagLabel(column, value)}</Tag> : "—";
   if (column.type === "money") {
     return `${formatNumber(value)} ${record?.currency || "₫"}`;
   }
@@ -235,6 +248,25 @@ export default function AdminResourcePage({
   const [editingRecord, setEditingRecord] = useState(null);
   const [detailRecord, setDetailRecord] = useState(null);
   const [form, setForm] = useState({});
+
+  /* Nhãn tiếng Việt + bảng mã của từng trường, để ngăn chi tiết không in tên trường / mã thô. */
+  const detailFieldMeta = useMemo(() => {
+    const meta = {};
+    for (const item of [...(fields || []), ...(columns || [])]) {
+      const key = item?.name || item?.dataIndex;
+      if (!key) continue;
+      const labels =
+        item.labels ||
+        (Array.isArray(item.options) && item.options.length ? item.options : null) ||
+        (item.type === "restriction" ? RESTRICTION_LABELS : null) ||
+        (item.type === "status" || key === "status" ? ACTIVE_STATUS_LABELS : null);
+      meta[key] = {
+        label: meta[key]?.label || (typeof item.label === "string" ? item.label : item.title),
+        labels: meta[key]?.labels || labels,
+      };
+    }
+    return meta;
+  }, [columns, fields]);
 
   const filterColumns = useMemo(
     () => columns.filter(isFilterableColumn),
@@ -285,7 +317,7 @@ export default function AdminResourcePage({
         options[column.name] = uniqueSelectOptions(
           items,
           (item) => item?.[column.name],
-          (value) => RESTRICTION_LABELS[value] || value
+          (value) => labelOf(RESTRICTION_LABELS, value, { generic: "Mức khác" })
         );
         continue;
       }
@@ -294,12 +326,16 @@ export default function AdminResourcePage({
         options[column.name] = uniqueSelectOptions(
           items,
           (item) => item?.[column.name],
-          (value) => (String(value).toUpperCase() === "ACTIVE" ? "Đang hoạt động" : value === "INACTIVE" ? "Ngừng hoạt động" : value)
+          (value) => labelOf(ACTIVE_STATUS_LABELS, value)
         );
         continue;
       }
 
-      options[column.name] = uniqueSelectOptions(items, (item) => item?.[column.name]);
+      options[column.name] = uniqueSelectOptions(
+        items,
+        (item) => item?.[column.name],
+        (value) => (column.type === "tag" ? tagLabel(column, value) : value)
+      );
     }
 
     return options;
@@ -519,11 +555,7 @@ export default function AdminResourcePage({
             columns={tableColumns}
             dataSource={filteredItems}
             scroll={{ x: "max-content" }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `${total} bản ghi`,
-            }}
+            pagination={tablePagination({ unit: "bản ghi", defaultPageSize: 10 })}
           />
         </div>
       </section>
@@ -623,12 +655,14 @@ export default function AdminResourcePage({
             {Object.entries(detailRecord || {})
               .filter(([, value]) => typeof value !== "object" || value === null)
               .map(([key, value]) => (
-                <Descriptions.Item key={key} label={key}>
+                <Descriptions.Item key={key} label={detailFieldMeta[key]?.label || key}>
                   {typeof value === "boolean"
                     ? value ? "Có" : "Không"
                     : /(?:At|Date)$/i.test(key)
                       ? formatDate(value)
-                      : value === null || value === "" ? "—" : String(value)}
+                      : value === null || value === ""
+                        ? "—"
+                        : describeDetailValue(detailFieldMeta[key], value)}
                 </Descriptions.Item>
               ))}
           </Descriptions>

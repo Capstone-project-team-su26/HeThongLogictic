@@ -50,6 +50,7 @@ import useSubmitReviewData from "@shared/components/SubmitReview/useSubmitReview
 import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
 import { countPurchaseRecords, isPurchaseRecord } from "@shared/components/OrderTypeTag/orderType";
 import "@features/operations/styles/OperationsPage.css";
+import { textOr } from "@shared/utils/statusLabel";
 
 const { Text, Title } = Typography;
 
@@ -369,7 +370,7 @@ export default function OperationsWroPage({ requireReason = false }) {
           const meta = getWroStatusMeta(value);
           return (
             <Space direction="vertical" size={2}>
-              <Tag color={meta.color}>{row.statusText || meta.label}</Tag>
+              <Tag color={meta.color}>{textOr(row.statusText, meta.label)}</Tag>
               {row.shipmentCode ? <Text type="secondary">Lô {row.shipmentCode}</Text> : null}
             </Space>
           );
@@ -601,7 +602,7 @@ export default function OperationsWroPage({ requireReason = false }) {
         {detail ? (
           <>
             <Space wrap style={{ marginBottom: 12 }}>
-              <Tag color={detailStatus.color}>{detail.statusText || detailStatus.label}</Tag>
+              <Tag color={detailStatus.color}>{textOr(detail.statusText, detailStatus.label)}</Tag>
               {detail.splitFromCode ? <Tag>Tách từ {detail.splitFromCode}</Tag> : null}
               {detail.shipmentCode ? <Tag color="geekblue">Lô {detail.shipmentCode}</Tag> : null}
             </Space>

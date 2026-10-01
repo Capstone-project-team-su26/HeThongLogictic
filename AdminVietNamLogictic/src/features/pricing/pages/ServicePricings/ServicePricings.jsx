@@ -923,7 +923,7 @@ export default function ServicePricings() {
                           <h3>1 {code}</h3>
                           <span>{countryName}</span>
                         </div>
-                        <Tag color="green">Active</Tag>
+                        <Tag color="green">Đang áp dụng</Tag>
                       </div>
 
                       <div className="rate-card-body">

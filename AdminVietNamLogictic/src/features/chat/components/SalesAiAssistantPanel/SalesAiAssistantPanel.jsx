@@ -31,6 +31,7 @@ import {
 import { getConsignmentsApi } from "@features/consignment/api/consignmentService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "./SalesAiAssistantPanel.css";
+import { getParcelStatusLabel } from "@shared/utils/statusLabel";
 
 const normalizeText = (value) => String(value ?? "").trim();
 
@@ -595,36 +596,36 @@ export default function SalesAiAssistantPanel({
             children: result ? (
               <div className="sale-ai-panel__internal-body">
                 <p>
-                  <span>Order code</span>
+                  <span>Mã đơn</span>
                   <strong>{effectiveOrderCode || "—"}</strong>
                 </p>
                 <p>
-                  <span>Order status</span>
-                  <strong>{result.currentStatus || "—"}</strong>
+                  <span>Trạng thái đơn</span>
+                  <strong>{mapStatusLabel(result.currentStatus) || "—"}</strong>
                 </p>
                 <p>
-                  <span>Payment status</span>
-                  <strong>{result.paymentStatus || "—"}</strong>
+                  <span>Thanh toán</span>
+                  <strong>{mapStatusLabel(result.paymentStatus, "payment") || "—"}</strong>
                 </p>
                 <p>
-                  <span>Warehouse / WRO</span>
-                  <strong>{result.warehouseStatus || "—"}</strong>
+                  <span>Kho / phiếu xuất</span>
+                  <strong>{mapStatusLabel(result.warehouseStatus) || "—"}</strong>
                 </p>
                 <p>
-                  <span>Shipment</span>
-                  <strong>{result.shipmentStatus || "—"}</strong>
+                  <span>Lô vận chuyển</span>
+                  <strong>{mapStatusLabel(result.shipmentStatus) || "—"}</strong>
                 </p>
                 {result.relatedParcels.map((parcel) => (
                   <p key={parcel.parcelId || parcel.packageCode}>
-                    <span>Parcel</span>
+                    <span>Kiện</span>
                     <strong>
-                      {parcel.packageCode || "—"} · {parcel.status || "—"}
+                      {parcel.packageCode || "—"} · {getParcelStatusLabel(parcel.status)}
                     </strong>
                   </p>
                 ))}
                 {result.dataSources?.length > 0 && (
                   <p>
-                    <span>Data sources</span>
+                    <span>Nguồn dữ liệu</span>
                     <strong>{result.dataSources.join(", ")}</strong>
                   </p>
                 )}

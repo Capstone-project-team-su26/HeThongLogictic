@@ -35,6 +35,7 @@ import {
 } from "@features/payment/api/orderPaymentService";
 import {
   getOrderStatusLabel,
+  getQuotationStatusLabel,
   normalizeOrderStatus,
 } from "@features/consignment";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
@@ -43,6 +44,12 @@ import {
   isAwaitingManualReview,
   isPaymentPaid,
 } from "@shared/utils/paymentStatus";
+
+import {
+  getInstallmentTypeLabel as getSharedInstallmentTypeLabel,
+  getPaymentMethodLabel as getSharedPaymentMethodLabel,
+  labelOf,
+} from "@shared/utils/statusLabel";
 
 import "./OrderPaymentHistory.css";
 
@@ -113,29 +120,6 @@ const ORDER_STATUS_CLASS_NAMES = {
   CANCELLED: "is-danger",
 };
 
-const QUOTATION_STATUS_MAP = {
-  PENDING: "Chờ xác nhận",
-  SENT: "Đã gửi",
-  ACCEPTED: "Đã chấp nhận",
-  REJECTED: "Đã từ chối",
-  EXPIRED: "Đã hết hạn",
-};
-
-const INSTALLMENT_TYPE_MAP = {
-  DEPOSIT: "Thanh toán đặt cọc",
-  REMAINING: "Thanh toán phần còn lại",
-  FULL_PAYMENT: "Thanh toán toàn bộ",
-  FINAL_PAYMENT: "Thanh toán phần còn lại",
-};
-
-const PAYMENT_METHOD_MAP = {
-  SEPAY: "Chuyển khoản SePay",
-  BANK_TRANSFER: "Chuyển khoản ngân hàng",
-  CASH: "Tiền mặt",
-  VNPAY: "VNPay",
-  MOMO: "MoMo",
-};
-
 const getOrderStatus = (value) => {
   const code = normalizeUpperText(
     normalizeOrderStatus(value)
@@ -167,24 +151,12 @@ const PAYMENT_TONE_ICONS = {
   danger: <CloseCircleOutlined />,
 };
 
-const getInstallmentTypeLabel = (value) => {
-  const code = normalizeUpperText(value);
+/* Loại khoản / phương thức: bảng dùng chung của app (@shared/utils/statusLabel). */
+const getInstallmentTypeLabel = (value) =>
+  normalizeText(value) ? getSharedInstallmentTypeLabel(value) : "Khoản thanh toán";
 
-  return (
-    INSTALLMENT_TYPE_MAP[code] ||
-    "Khoản thanh toán"
-  );
-};
-
-const getPaymentMethodLabel = (value) => {
-  const code = normalizeUpperText(value);
-
-  return (
-    PAYMENT_METHOD_MAP[code] ||
-    normalizeText(value) ||
-    "Chưa xác định"
-  );
-};
+const getPaymentMethodLabel = (value) =>
+  normalizeText(value) ? getSharedPaymentMethodLabel(value) : "Chưa xác định";
 
 const copyText = async (value) => {
   const text = normalizeText(value);
@@ -612,27 +584,18 @@ export default function OrderPaymentHistory({
               <div className="payment-detail-item">
                 <span>Loại báo giá</span>
                 <strong>
-                  {normalizeUpperText(
-                    history?.quotation?.quoteType
-                  ) === "OFFICIAL"
-                    ? "Báo giá chính thức"
-                    : history?.quotation
-                      ?.quoteType || "—"}
+                  {history?.quotation?.quoteType
+                    ? labelOf(null, history.quotation.quoteType, { generic: "Loại báo giá khác" })
+                    : "—"}
                 </strong>
               </div>
 
               <div className="payment-detail-item">
                 <span>Trạng thái báo giá</span>
                 <strong>
-                  {QUOTATION_STATUS_MAP[
-                    normalizeUpperText(
-                      history?.quotation
-                        ?.status
-                    )
-                  ] ||
-                    history?.quotation
-                      ?.status ||
-                    "—"}
+                  {history?.quotation?.status
+                    ? getQuotationStatusLabel(history.quotation.status)
+                    : "—"}
                 </strong>
               </div>
 
@@ -820,11 +783,11 @@ export default function OrderPaymentHistory({
                         <div>
                           <strong>
                             {normalizeUpperText(payment?.status) === "PENDING_RECONCILIATION"
-                              ? "Khách chọn chuyển khoản tay — khoản này chờ Admin đối soát sao kê."
+                              ? "Khách chọn thanh toán tiền mặt — khoản này chờ Admin xác nhận đã nhận tiền mặt."
                               : "Đã phát hành link thanh toán, chưa nhận được xác nhận từ cổng thanh toán."}
                           </strong>
                           <span>
-                            Admin duyệt hoặc từ chối tại Dòng tiền → Duyệt thủ công.
+                            Admin duyệt hoặc từ chối tại Dòng tiền → Duyệt thanh toán tiền mặt.
                           </span>
                         </div>
                       </div>

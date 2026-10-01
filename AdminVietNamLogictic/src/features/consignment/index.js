@@ -124,6 +124,8 @@ export { getConsignmentReceiptApi } from "./api/consignmentReceiptService";
  */
 export {
   QUOTATION_STATUS,
+  QUOTATION_STATUS_LABELS,
+  getQuotationStatusLabel,
   PRICE_APPROVAL_STATUS,
   PRICE_APPROVAL_DECISION,
   REQUOTE_STATE,

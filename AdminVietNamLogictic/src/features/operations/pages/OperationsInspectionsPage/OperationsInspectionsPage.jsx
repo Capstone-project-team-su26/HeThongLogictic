@@ -13,6 +13,7 @@ import {
 } from "antd";
 import {
   AlertOutlined,
+  CameraOutlined,
   ClockCircleOutlined,
   FileSearchOutlined,
   ReloadOutlined,
@@ -25,6 +26,7 @@ import {
   getShipmentInspectionOverview,
   listParcelInspections,
 } from "@features/operations/api/parcelInspectionService";
+import { AttachmentThumbnails } from "@features/attachments";
 import "@features/operations/styles/OperationsPage.css";
 import "@features/operations/styles/OperationsWroPage.css";
 
@@ -190,6 +192,21 @@ export default function OperationsInspectionsPage() {
           const meta = getConditionMeta(value);
           return <Tag color={meta.tone}>{meta.label}</Tag>;
         },
+      },
+      {
+        // Ảnh kho VN chụp lúc tiếp nhận — mở biên bản (bấm mã kiện) để xem ảnh.
+        title: "Ảnh",
+        key: "photos",
+        width: 90,
+        align: "center",
+        render: (_, row) =>
+          row.photos?.length ? (
+            <Button size="small" type="text" icon={<CameraOutlined />} onClick={() => setDetail(row)}>
+              {row.photos.length}
+            </Button>
+          ) : (
+            <Text type="secondary">—</Text>
+          ),
       },
       {
         title: "Kết luận",
@@ -462,6 +479,14 @@ export default function OperationsInspectionsPage() {
                   },
                 },
                 {
+                  title: "Ảnh tiếp nhận",
+                  key: "photos",
+                  width: 110,
+                  render: (_, row) => (
+                    <AttachmentThumbnails items={row.photos} size={36} emptyText="—" />
+                  ),
+                },
+                {
                   title: "Kết luận",
                   render: (_, row) => {
                     if (!row.inspection) {
@@ -482,7 +507,7 @@ export default function OperationsInspectionsPage() {
                   render: (_, row) => row.inspection?.note || "—",
                 },
               ]}
-              scroll={{ x: 1000 }}
+              scroll={{ x: 1100 }}
               locale={{ emptyText: "Lô này chưa có kiện nào." }}
             />
           </>
@@ -531,6 +556,16 @@ export default function OperationsInspectionsPage() {
               <Descriptions.Item label="Người đếm">
                 {detail.inspectedByName || "—"} · {formatDateTime(detail.inspectedAt)}
               </Descriptions.Item>
+              {/* Backend cũ không trả `photos` → ẩn hẳn dòng này. */}
+              {Array.isArray(detail.photos) && (
+                <Descriptions.Item label="Ảnh tiếp nhận">
+                  <AttachmentThumbnails
+                    items={detail.photos}
+                    size={96}
+                    emptyText="Kho chưa chụp ảnh kiện này (nhận trước khi bắt buộc ảnh)."
+                  />
+                </Descriptions.Item>
+              )}
             </Descriptions>
           </>
         )}

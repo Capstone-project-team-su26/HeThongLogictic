@@ -22,6 +22,7 @@ import {
   DEFAULT_PAGE_SIZE,
   PRODUCT_NAME_SEPARATOR,
 } from "./PendingConsignmentList.constants";
+import { labelOf, textOr } from "@shared/utils/statusLabel";
 
 /* =========================================================
    CHUẨN HOÁ VĂN BẢN & TÊN SẢN PHẨM
@@ -316,17 +317,10 @@ export const getConsignmentStatus = (
   /* Mã đơn đích luôn hiện nhãn thống nhất; statusDisplayName chỉ dùng cho mã lạ. */
   const label =
     configuredStatus?.label ||
-    (statusDisplayName && statusDisplayName !== "string"
-      ? statusDisplayName
-      : null) ||
-      (code
-        ? code
-          .replace(/_/g, " ")
-          .toLocaleLowerCase("vi-VN")
-          .replace(/(^|\s)\S/g, (character) =>
-            character.toLocaleUpperCase("vi-VN")
-          )
-        : "Chưa xác định");
+    textOr(
+      statusDisplayName !== "string" ? statusDisplayName : "",
+      code ? labelOf(null, code) : "Chưa xác định"
+    );
 
   return {
     code: code || "UNKNOWN",

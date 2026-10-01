@@ -65,17 +65,17 @@ const normalizeRole = (role) => {
 
 const ROLE_INFO = {
   admin: {
-    label: "Administrator",
+    label: "Quản trị viên",
     shortLabel: "Admin",
   },
 
   operationsmanager: {
-    label: "Operations Manager",
+    label: "Quản lý vận hành",
     shortLabel: "Operations",
   },
 
   sale: {
-    label: "Sales Staff",
+    label: "Nhân viên kinh doanh",
     shortLabel: "Sale",
   },
 };

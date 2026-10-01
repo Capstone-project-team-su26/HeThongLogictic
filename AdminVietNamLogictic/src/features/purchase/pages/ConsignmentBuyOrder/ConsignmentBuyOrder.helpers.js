@@ -12,18 +12,29 @@ import {
 
 import {
   MAX_IMAGE_SIZE,
-  MAX_PURCHASE_ITEM_QUANTITY,
-  MAX_PURCHASE_ITEMS,
   PURCHASE_FIELD_MAX_LENGTH,
   PURCHASE_SERVICE_NOTES,
   STAFF_CREATED_NOTE,
 } from "./ConsignmentBuyOrder.constants";
 
-/** Câu báo lỗi dùng chung cho ô Số lượng. */
-export const PURCHASE_QUANTITY_RANGE_MESSAGE = `Số lượng từ 1 đến ${MAX_PURCHASE_ITEM_QUANTITY}.`;
+/*
+ * `purchaseLimits` dưới đây là nhánh `purchase` của giới hạn Admin cấu hình
+ * ({ maxItems, maxItemQuantity }; null = không giới hạn / chưa tải được → không chặn,
+ * backend vẫn kiểm và báo 400 nêu đúng giới hạn).
+ */
+export const hasPurchaseLimit = (value) => Number.isFinite(value) && value > 0;
 
-/** Câu giải thích khi đã đủ số dòng sản phẩm tối đa. */
-export const MAX_PURCHASE_ITEMS_MESSAGE = `Mỗi yêu cầu mua hộ tối đa ${MAX_PURCHASE_ITEMS} sản phẩm. Cần mua thêm thì tạo yêu cầu mới.`;
+/** Câu báo lỗi dùng chung cho ô Số lượng. */
+export const getPurchaseQuantityRangeMessage = (purchaseLimits) =>
+  hasPurchaseLimit(purchaseLimits?.maxItemQuantity)
+    ? `Số lượng từ 1 đến ${purchaseLimits.maxItemQuantity}.`
+    : "Số lượng phải là số nguyên từ 1 trở lên.";
+
+/** Câu giải thích khi đã đủ số dòng sản phẩm tối đa ("" nếu không giới hạn). */
+export const getMaxPurchaseItemsMessage = (purchaseLimits) =>
+  hasPurchaseLimit(purchaseLimits?.maxItems)
+    ? `Mỗi yêu cầu mua hộ tối đa ${purchaseLimits.maxItems} sản phẩm. Cần mua thêm thì tạo yêu cầu mới.`
+    : "";
 
 /** "" nếu `value` (sau khi trim) không vượt `max` ký tự, ngược lại là câu báo lỗi. */
 const validateMaxLength = (value, max, label) =>
@@ -551,7 +562,7 @@ export const getClientTimePayload = () => {
   };
 };
 
-export const validateItem = (item) => {
+export const validateItem = (item, purchaseLimits) => {
   const errors = {};
 
   const limits = PURCHASE_FIELD_MAX_LENGTH;
@@ -588,9 +599,10 @@ export const validateItem = (item) => {
   } else if (
     !Number.isInteger(quantity) ||
     quantity < 1 ||
-    quantity > MAX_PURCHASE_ITEM_QUANTITY
+    (hasPurchaseLimit(purchaseLimits?.maxItemQuantity) &&
+      quantity > purchaseLimits.maxItemQuantity)
   ) {
-    errors.quantity = PURCHASE_QUANTITY_RANGE_MESSAGE;
+    errors.quantity = getPurchaseQuantityRangeMessage(purchaseLimits);
   }
 
   errors.attributes = !item.attributes.trim()
@@ -609,7 +621,7 @@ export const validateItem = (item) => {
   );
 };
 
-export const validateBuyOrderForm = ({ form, items }) => {
+export const validateBuyOrderForm = ({ form, items, purchaseLimits }) => {
   const formErrors = createEmptyFormErrors();
 
   if (!form.route) {
@@ -668,12 +680,12 @@ export const validateBuyOrderForm = ({ form, items }) => {
     formErrors.generalNote = `Ghi chú chung quá dài: khi ghép với các dịch vụ đã chọn và câu "${STAFF_CREATED_NOTE}" sẽ thành ${storedGeneralNoteLength}/${limits.generalNote} ký tự. Vui lòng rút gọn ghi chú (tối đa ${getGeneralNoteMaxLength(form.optionalServices)} ký tự).`;
   }
 
-  if (items.length > MAX_PURCHASE_ITEMS) {
-    formErrors.items = `Yêu cầu đang có ${items.length} sản phẩm. ${MAX_PURCHASE_ITEMS_MESSAGE}`;
+  if (hasPurchaseLimit(purchaseLimits?.maxItems) && items.length > purchaseLimits.maxItems) {
+    formErrors.items = `Yêu cầu đang có ${items.length} sản phẩm. ${getMaxPurchaseItemsMessage(purchaseLimits)}`;
   }
 
   const itemErrors = Object.fromEntries(
-    items.map((item) => [item.id, validateItem(item)]),
+    items.map((item) => [item.id, validateItem(item, purchaseLimits)]),
   );
 
   const isValid =

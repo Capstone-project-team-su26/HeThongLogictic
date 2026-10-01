@@ -46,8 +46,16 @@ import {
 import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
 /* Khách (kèm mã) + hàng khai của đơn cho hai hộp xác nhận — hành trình không mang mấy thứ này. */
-import { OrderReviewPanel, useOrderReview } from "@features/consignment";
+import { getOrderStatusLabel, OrderReviewPanel, useOrderReview } from "@features/consignment";
+import { getShipmentStatusMeta } from "@features/shipment";
 import "@features/operations/styles/OperationsPage.css";
+import {
+  getInstallmentTypeLabel,
+  getParcelStatusLabel,
+  getPaymentMethodLabel,
+  textOr,
+  translateCodesInText,
+} from "@shared/utils/statusLabel";
 
 const { Text, Title } = Typography;
 
@@ -179,10 +187,10 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
         <ReviewFacts
           items={[
             { label: "Mã đơn", value: <Text strong>{tracking.consignmentCode || "—"}</Text> },
-            { label: "Trạng thái đơn", value: tracking.orderStatus },
+            { label: "Trạng thái đơn", value: textOr(tracking.orderStatusText, getOrderStatusLabel(tracking.orderStatus)) },
             {
               label: "Chặng hiện tại",
-              value: `${tracking.currentStageText || getStageMeta(tracking.currentStage).label}${
+              value: `${textOr(tracking.currentStageText, getStageMeta(tracking.currentStage).label)}${
                 tracking.isSplitAcrossStages ? " · kiện đi tách chuyến" : ""
               }`,
             },
@@ -228,10 +236,10 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
               title: "Chặng",
               dataIndex: "stage",
               render: (v, row) => (
-                <Tag color={getStageMeta(v).color}>{row.stageText || getStageMeta(v).label}</Tag>
+                <Tag color={getStageMeta(v).color}>{textOr(row.stageText, getStageMeta(v).label)}</Tag>
               ),
             },
-            { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => v || "—" },
+            { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v, row) => textOr(row.packageStatusText, getParcelStatusLabel(v)) },
             { title: "Chuyến", dataIndex: "shipmentCode", render: (v) => v || "—" },
           ]}
         />
@@ -331,10 +339,12 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
           <>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="Chặng hiện tại">
-                <Tag color={stageMeta.color}>{tracking.currentStageText || stageMeta.label}</Tag>
+                <Tag color={stageMeta.color}>{textOr(tracking.currentStageText, stageMeta.label)}</Tag>
                 {tracking.isSplitAcrossStages ? <Tag color="orange">Kiện đi tách chuyến</Tag> : null}
               </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái đơn">{tracking.orderStatus || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Trạng thái đơn">
+                {textOr(tracking.orderStatusText, getOrderStatusLabel(tracking.orderStatus))}
+              </Descriptions.Item>
               <Descriptions.Item label="Giữ hàng tại kho nguồn" span={2}>
                 {tracking.exportHold ? (
                   <Text type="danger">Đang giữ — {tracking.exportHoldReason || "không ghi lý do"}</Text>
@@ -357,11 +367,11 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
                         content: (
                           <Space direction="vertical" size={0}>
                             <Space wrap>
-                              <Text strong>{event.title || getStageMeta(event.stage).label}</Text>
+                              <Text strong>{textOr(event.title, getStageMeta(event.stage).label)}</Text>
                               <Text type="secondary">{formatDateTime(event.time)}</Text>
                               {event.shipmentCode ? <Tag>{event.shipmentCode}</Tag> : null}
                             </Space>
-                            {event.message ? <Text>{event.message}</Text> : null}
+                            {event.message ? <Text>{translateCodesInText(event.message)}</Text> : null}
                             {event.location ? <Text type="secondary">{event.location}</Text> : null}
                           </Space>
                         ),
@@ -386,9 +396,9 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
                         {
                           title: "Chặng",
                           dataIndex: "stage",
-                          render: (v, row) => <Tag color={getStageMeta(v).color}>{row.stageText || getStageMeta(v).label}</Tag>,
+                          render: (v, row) => <Tag color={getStageMeta(v).color}>{textOr(row.stageText, getStageMeta(v).label)}</Tag>,
                         },
-                        { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => v || "—" },
+                        { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v, row) => textOr(row.packageStatusText, getParcelStatusLabel(v)) },
                         { title: "Chuyến", dataIndex: "shipmentCode", render: (v) => v || "—" },
                       ]}
                     />
@@ -405,7 +415,7 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
                       dataSource={tracking.shipments || []}
                       columns={[
                         { title: "Mã lô", dataIndex: "shipmentCode" },
-                        { title: "Trạng thái", dataIndex: "statusText", render: (v, row) => v || row.status },
+                        { title: "Trạng thái", dataIndex: "statusText", render: (v, row) => textOr(v, getShipmentStatusMeta(row.status).label) },
                         {
                           title: "Hãng / mã tra cứu",
                           key: "carrier",
@@ -430,7 +440,7 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
                       columns={[
                         { title: "Mã", dataIndex: "incidentCode" },
                         { title: "Kiện", dataIndex: "packageCode" },
-                        { title: "Loại", dataIndex: "incidentType", render: (v, row) => row.incidentTypeText || getIncidentTypeLabel(v) },
+                        { title: "Loại", dataIndex: "incidentType", render: (v, row) => textOr(row.incidentTypeText, getIncidentTypeLabel(v)) },
                         {
                           title: "Trạng thái",
                           dataIndex: "status",
@@ -458,10 +468,14 @@ export default function OrderTrackingDetailPage({ basePath = "/sale", canComplet
                         pagination={false}
                         dataSource={payments.payments || []}
                         columns={[
-                          { title: "Loại", dataIndex: "installmentType" },
+                          { title: "Loại", dataIndex: "installmentType", render: (v) => getInstallmentTypeLabel(v) },
                           { title: "Số tiền", dataIndex: "amount", align: "right", render: formatMoney },
-                          { title: "Phương thức", dataIndex: "paymentMethod" },
-                          { title: "Trạng thái", dataIndex: "paymentStatus", render: (v) => <Tag>{v || "—"}</Tag> },
+                          { title: "Phương thức", dataIndex: "paymentMethod", render: (v) => getPaymentMethodLabel(v) },
+                          {
+                            title: "Trạng thái",
+                            dataIndex: "paymentStatus",
+                            render: (v) => <Tag color={getPaymentStatusMeta(v).color}>{getPaymentStatusMeta(v).label}</Tag>,
+                          },
                           { title: "Trả lúc", dataIndex: "paidAt", render: formatDateTime },
                         ]}
                       />

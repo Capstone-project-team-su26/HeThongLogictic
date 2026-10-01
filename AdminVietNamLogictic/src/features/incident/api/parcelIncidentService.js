@@ -18,6 +18,7 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getPagedData, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { labelOf, metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getIncidentApiError };
 
@@ -42,13 +43,13 @@ export const RESOLUTION_LABELS = Object.freeze({
 });
 
 export const getIncidentStatusMeta = (status) =>
-  INCIDENT_STATUS_META[String(status || "").toUpperCase()] || { label: status || "—", color: "default" };
+  metaOf(INCIDENT_STATUS_META, status, { color: "default" });
 
 export const getIncidentTypeLabel = (type) =>
-  INCIDENT_TYPE_LABELS[String(type || "").toUpperCase()] || type || "—";
+  labelOf(INCIDENT_TYPE_LABELS, type, { generic: "Sự cố khác" });
 
 export const getResolutionLabel = (value) =>
-  RESOLUTION_LABELS[String(value || "").toUpperCase()] || value || "—";
+  labelOf(RESOLUTION_LABELS, value, { generic: "Cách xử lý khác" });
 
 /**
  * Hướng quyết định hợp lệ theo loại sự cố (bảng mục E):
@@ -143,7 +144,7 @@ export const resolveIncident = async (
   }
   /* Cân lệch do hệ thống tự mở, không có ảnh hiện trạng — backend chỉ bắt ảnh với các loại còn lại. */
   if (requiresIncidentPhoto(incident) && !hasDocument(incident, "INCIDENT_PHOTO")) {
-    throw new Error("Phải có ảnh hiện trạng (INCIDENT_PHOTO) gắn vào sự cố trước khi quyết định.");
+    throw new Error("Phải có ảnh hiện trạng sự cố gắn vào sự cố trước khi quyết định.");
   }
 
   const amount = Number(compensationAmount);
@@ -174,7 +175,7 @@ export const resolveIncident = async (
 export const markCompensationPaid = async (incident, { reference, note = "" } = {}) => {
   if (!trimText(reference)) throw new Error("Phải ghi mã giao dịch chi bồi thường.");
   if (!hasDocument(incident, "COMPENSATION_RECEIPT")) {
-    throw new Error("Phải tải chứng từ chi (COMPENSATION_RECEIPT) vào sự cố trước.");
+    throw new Error("Phải tải chứng từ chi bồi thường vào sự cố trước.");
   }
 
   const response = await httpClient.post(

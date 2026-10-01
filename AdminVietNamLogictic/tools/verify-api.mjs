@@ -144,6 +144,14 @@ try {
     customerSvc: await load("/src/features/customer/api/customerService.js"),
     address: await load("/src/shared/api/vietnamAddressService.js"),
     purchaseRequest: await load("/src/features/purchase/api/purchaseRequestService.js"),
+    /* Ảnh tiếp nhận kho VN (30/09/2026): biên bản kiểm kiện + lô trả kèm ảnh VN_ARRIVAL_PROOF. */
+    inspection: await load("/src/features/operations/api/parcelInspectionService.js"),
+    attachmentSvc: await load("/src/features/attachments/api/attachmentService.js"),
+    /* Giới hạn tạo đơn do Admin cấu hình (30/09/2026): API + helper form Sale + mục Admin. */
+    orderLimits: await load("/src/shared/api/orderLimitsApi.js"),
+    orderLimitsSection: await load("/src/features/pricing/components/OrderLimitsSection/OrderLimitsSection.helpers.js"),
+    consignmentOrderHelpers: await load("/src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.helpers.js"),
+    buyOrderHelpers: await load("/src/features/purchase/pages/ConsignmentBuyOrder/ConsignmentBuyOrder.helpers.js"),
   };
 } catch (error) {
   loadError = error;
@@ -534,6 +542,12 @@ if (loadError) {
     customerSvc,
     address,
     purchaseRequest,
+    inspection,
+    attachmentSvc,
+    orderLimits,
+    orderLimitsSection,
+    consignmentOrderHelpers,
+    buyOrderHelpers,
   } = mods;
 
   const httpClient = httpMod.default;
@@ -554,11 +568,11 @@ if (loadError) {
   );
 
   await check(
-    "httpClient: base URL mặc định https://vcl.henrytech.cloud, timeout 30 giây",
+    "httpClient: base URL mặc định https://api-vcl.vnlogistic.click, timeout 30 giây",
     () =>
       all(
-        expectEqual("API_BASE_URL", httpMod.API_BASE_URL, "https://vcl.henrytech.cloud"),
-        expectEqual("defaults.baseURL", httpClient.defaults.baseURL, "https://vcl.henrytech.cloud"),
+        expectEqual("API_BASE_URL", httpMod.API_BASE_URL, "https://api-vcl.vnlogistic.click"),
+        expectEqual("defaults.baseURL", httpClient.defaults.baseURL, "https://api-vcl.vnlogistic.click"),
         expectEqual("defaults.timeout", httpClient.defaults.timeout, 30000),
       ),
   );
@@ -1412,6 +1426,83 @@ if (loadError) {
     },
   );
 
+  /*
+   * Lỗi thật đã gặp: Sale chọn "Thùng cỡ vừa" → toast "Kiện 1: packageConfigurationId
+   * không đúng định dạng UUID." Id lấy từ GET /api/package-configurations là id SEED
+   * 99999999-2222-2222-2222-222222222222 (không theo version/variant RFC 4122) và regex
+   * cũ chặn nó ngay ở FE. Body phải mang đúng GUID đó; không chọn thùng → null.
+   */
+  const SEED_PACKAGE_CONFIGURATION_ID = "99999999-2222-2222-2222-222222222222";
+  const GUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  await check(
+    "createConsignmentApi + previewConsignmentApi: packageConfigurationId là GUID seed của thùng (không RFC 4122) vẫn đi nguyên trong body; trống → null",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [
+        {
+          method: "POST",
+          url: "/api/staff/consignments/preview",
+          reply: () => ok({ message: "Ước tính chi phí đơn ký gửi thành công.", data: { totalEstimatedCost: 1 } }),
+        },
+        {
+          method: "POST",
+          url: "/api/staff/consignments",
+          reply: () =>
+            ok(
+              {
+                message: "Tạo yêu cầu ký gửi thay khách hàng thành công.",
+                data: { orderId: ORDER_ID, status: "APPROVED", itemCount: 2 },
+              },
+              201,
+            ),
+        },
+      ];
+
+      const payload = {
+        ...STAFF_PAYLOAD,
+        items: [
+          { ...STAFF_ITEM, packageConfigurationId: ` ${SEED_PACKAGE_CONFIGURATION_ID} ` },
+          { ...STAFF_ITEM, productName: "Không đóng thùng", packageConfigurationId: "" },
+        ],
+      };
+
+      await consignment.previewConsignmentApi(payload);
+      await consignment.createConsignmentApi(payload);
+
+      const [previewReq, createReq] = requests;
+      const sentIds = (req) => (req?.body?.items ?? []).map((item) => item.packageConfigurationId);
+
+      return all(
+        expectEqual("gọi preview rồi tạo", [previewReq?.url, createReq?.url], ["/api/staff/consignments/preview", "/api/staff/consignments"]),
+        expectEqual("preview mang đúng GUID thùng, kiện không thùng = null", sentIds(previewReq), [SEED_PACKAGE_CONFIGURATION_ID, null]),
+        expectEqual("tạo đơn mang đúng GUID thùng, kiện không thùng = null", sentIds(createReq), [SEED_PACKAGE_CONFIGURATION_ID, null]),
+        expectEqual("giá trị gửi đi có dạng GUID", GUID_SHAPE.test(sentIds(createReq)[0] ?? ""), true),
+      );
+    },
+  );
+
+  await check(
+    "createConsignmentApi: packageConfigurationId là mã thùng (MEDIUM) thay vì GUID → chặn tại FE, không gọi mạng",
+    async () => {
+      resetState({ token: "tok" });
+      routes = [];
+
+      const { resolved, error } = await rejection(
+        consignment.createConsignmentApi({
+          ...STAFF_PAYLOAD,
+          items: [{ ...STAFF_ITEM, packageConfigurationId: "MEDIUM" }],
+        }),
+      );
+
+      return all(
+        expectEqual("phải ném lỗi", resolved, false),
+        expectEqual("câu lỗi", error?.message, "Kiện 1: packageConfigurationId không đúng định dạng UUID."),
+        expectEqual("không gửi request nào", requests.length, 0),
+      );
+    },
+  );
+
   await check(
     "createConsignmentApi: thiếu cả ba khoá tra khách → chặn tại FE, không gọi mạng",
     async () => {
@@ -1893,6 +1984,127 @@ if (loadError) {
     );
   });
 
+  /* ---------- Giới hạn tạo đơn do Admin cấu hình ---------- */
+
+  const ORDER_LIMIT_ITEMS = [
+    { key: "ORDER_MAX_TOTAL_WEIGHT_KG", scope: "CONSIGNMENT", label: "Tổng cân nặng tối đa của đơn ký gửi", unit: "kg", value: 5, defaultValue: 5, allowUnlimited: true, isInteger: false, minValue: 0.01, maxValue: 100000, updatedAt: "2026-09-30T08:00:00Z", updatedByName: "Admin A" },
+    { key: "ORDER_MAX_PACKAGES", scope: "CONSIGNMENT", label: "Số kiện tối đa của một đơn ký gửi", unit: "kiện", value: 50, defaultValue: 50, allowUnlimited: false, isInteger: true, minValue: 1, maxValue: 500 },
+    { key: "PURCHASE_MAX_ITEM_QUANTITY", scope: "PURCHASE", label: "Số lượng tối đa mỗi sản phẩm mua hộ", unit: "cái", value: 999, defaultValue: 999, allowUnlimited: true, isInteger: true, minValue: 1, maxValue: 1000000 },
+  ];
+  const orderLimitsBody = (overrides = {}) => ({
+    message: "Lấy cấu hình giới hạn đơn hàng thành công.",
+    data: {
+      consignment: { maxParcelWeightKg: 3, maxParcelLengthCm: 100, maxParcelWidthCm: 200, maxParcelHeightCm: 50, maxParcelQuantity: 5, maxItemDeclaredValue: 6000000, maxTotalWeightKg: 5, maxTotalDeclaredValue: 10000000, maxPackages: 50, ...overrides },
+      purchase: { maxItems: 50, maxItemQuantity: 999 },
+      items: ORDER_LIMIT_ITEMS,
+      updatedAt: "2026-09-30T08:00:00Z",
+      updatedByName: "Admin A",
+    },
+  });
+
+  await check("Giới hạn tạo đơn: form Sale đọc GET /api/system-settings/order-limits, null = không giới hạn", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "GET", url: "/api/system-settings/order-limits", reply: () => ok(orderLimitsBody({ maxTotalWeightKg: null })) }];
+    const got = await orderLimits.getOrderLimitsApi();
+    return all(
+      expectEqual("GET đúng endpoint + token", [onlyRequest()?.method, onlyRequest()?.url, onlyRequest()?.authorization], ["GET", "/api/system-settings/order-limits", "Bearer tok"]),
+      expectEqual("đã tải", got.loaded, true),
+      expectEqual("ký gửi", [got.consignment.maxTotalWeightKg, got.consignment.maxTotalDeclaredValue, got.consignment.maxParcelWeightKg], [null, 10000000, 3]),
+      expectEqual("mua hộ", [got.purchase.maxItems, got.purchase.maxItemQuantity], [50, 999]),
+    );
+  });
+
+  await check("Giới hạn tạo đơn: tải lỗi → form Sale không chặn bằng số cũ (backend kiểm)", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "GET", url: "/api/system-settings/order-limits", reply: () => fail(500, { message: "Lỗi" }) }];
+    const got = await orderLimits.getOrderLimitsApi();
+    const heavy = [{ weight: "40", declaredValue: "90000000" }];
+    return all(
+      expectEqual("loaded = false", got.loaded, false),
+      expectEqual("tổng đơn không bị chặn", consignmentOrderHelpers.getOrderTotalsError(heavy, got.consignment), ""),
+      expectEqual("cân 1 kiện không bị chặn", consignmentOrderHelpers.validatePackageField("weight", { weight: "40" }, got.consignment), ""),
+      expectEqual("số lượng mua hộ không bị chặn", buyOrderHelpers.getPurchaseQuantityRangeMessage(got.purchase), "Số lượng phải là số nguyên từ 1 trở lên."),
+    );
+  });
+
+  await check("Giới hạn tạo đơn: form Sale kiểm theo số Admin đặt (8 kg / 4 kg / 20tr / SL 3)", async () => {
+    const limits = { ...orderLimits.NO_ORDER_LIMITS.consignment, maxTotalWeightKg: 8, maxParcelWeightKg: 4, maxTotalDeclaredValue: 20000000, maxPackages: 50 };
+    const seven = [{ weight: "3.5", declaredValue: "1" }, { weight: "3.5", declaredValue: "1" }];
+    const nine = [{ weight: "3", declaredValue: "1" }, { weight: "3", declaredValue: "1" }, { weight: "3", declaredValue: "1" }];
+    const rich = new Array(4).fill({ weight: "1", declaredValue: "6000000" });
+    const item = { productLink: "https://shop.example/a", sourceWebsite: "shop", productType: "x", productName: "a", quantity: "4", attributes: "đỏ", note: "", images: [] };
+    return all(
+      expectEqual("7 kg ≤ 8 → không lỗi (trước đây trần 5 kg)", consignmentOrderHelpers.getOrderTotalsError(seven, limits), ""),
+      expectTrue("9 kg > 8 → lỗi nêu 8 kg", consignmentOrderHelpers.getOrderTotalsError(nine, limits).includes("8 kg")),
+      expectTrue("24tr > 20tr → lỗi nêu 20.000.000 đ", consignmentOrderHelpers.getOrderTotalsError(rich, limits).includes("20.000.000 đ")),
+      expectTrue("51 kiện → lỗi nêu 50", consignmentOrderHelpers.getOrderTotalsError(new Array(51).fill({}), limits).includes("50")),
+      expectTrue("kiện 4,5 kg > 4 → lỗi nêu 4 kg", consignmentOrderHelpers.validatePackageField("weight", { weight: "4.5" }, limits).includes("4 kg")),
+      expectEqual("kiện 4 kg → không lỗi", consignmentOrderHelpers.validatePackageField("weight", { weight: "4" }, limits), ""),
+      expectTrue("mua hộ SL 4 > 3 → lỗi", String(buyOrderHelpers.validateItem(item, { maxItems: 50, maxItemQuantity: 3 }).quantity).includes("3")),
+      expectEqual("mua hộ SL 3 → không lỗi", buyOrderHelpers.validateItem({ ...item, quantity: "3" }, { maxItems: 50, maxItemQuantity: 3 }).quantity ?? "", ""),
+    );
+  });
+
+  await check("Giới hạn tạo đơn (Admin): đọc đủ nhãn/đơn vị/người sửa; PUT { items:[{key,value}], note }; nhật ký", async () => {
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: "/api/system-settings/order-limits", reply: () => ok(orderLimitsBody()) },
+      {
+        method: "PUT",
+        url: "/api/system-settings/order-limits",
+        reply: (req) => ok({ message: "Đã cập nhật giới hạn đơn hàng.", data: { ...orderLimitsBody().data, items: ORDER_LIMIT_ITEMS.map((i) => (i.key === req.body.items[0].key ? { ...i, value: req.body.items[0].value } : i)) } }),
+      },
+      {
+        method: "GET",
+        url: "/api/system-settings/order-limits/history",
+        reply: () => ok({ message: "ok", data: [{ id: "h1", key: "ORDER_MAX_TOTAL_WEIGHT_KG", label: "Tổng cân nặng", unit: "kg", oldValue: 5, newValue: null, changedAt: "2026-09-30T08:00:00Z", changedByName: "Admin A", note: "Tết" }] }),
+      },
+    ];
+    const settings = await orderLimits.getOrderLimitSettingsApi();
+    requests = [];
+    const saved = await orderLimits.updateOrderLimitSettingsApi({ ORDER_MAX_TOTAL_WEIGHT_KG: null }, "  Mùa cao điểm ");
+    const put = onlyRequest();
+    requests = [];
+    const history = await orderLimits.getOrderLimitHistoryApi(10);
+    const histReq = onlyRequest();
+    return all(
+      expectEqual("đọc 3 dòng + người sửa", [settings.items.length, settings.items[0].updatedByName, settings.updatedByName], [3, "Admin A", "Admin A"]),
+      expectEqual("PUT body", [put?.method, put?.url, JSON.stringify(put?.body)], ["PUT", "/api/system-settings/order-limits", JSON.stringify({ items: [{ key: "ORDER_MAX_TOTAL_WEIGHT_KG", value: null }], note: "Mùa cao điểm" })]),
+      expectEqual("sau lưu: không giới hạn", saved.items.find((i) => i.key === "ORDER_MAX_TOTAL_WEIGHT_KG")?.value, null),
+      expectEqual("nhật ký: take + null→không giới hạn", [histReq?.params?.take, history[0]?.newValue, history[0]?.changedByName], [10, null, "Admin A"]),
+    );
+  });
+
+  await check("Giới hạn tạo đơn (Admin): 403 / 400 → câu tiếng Việt của backend", async () => {
+    resetState({ token: "tok" });
+    routes = [{ method: "PUT", url: "/api/system-settings/order-limits", reply: () => fail(400, { message: "\"Số kiện tối đa của một đơn ký gửi\" bắt buộc phải có giới hạn." }) }];
+    let message = "";
+    try {
+      await orderLimits.updateOrderLimitSettingsApi({ ORDER_MAX_PACKAGES: null });
+    } catch (error) {
+      message = orderLimits.getOrderLimitsApiError(error);
+    }
+    return expectTrue("hiện đúng câu backend", message.includes("bắt buộc phải có giới hạn"));
+  });
+
+  await check("Giới hạn tạo đơn (Admin): kiểm ô nhập cùng luật backend", () => {
+    const { validateOrderLimitDraft, parseDraftNumber, formatOrderLimit } = orderLimitsSection;
+    const weight = ORDER_LIMIT_ITEMS[0];
+    const packages = ORDER_LIMIT_ITEMS[1];
+    return all(
+      expectEqual("đọc 10.000.000 / 2,5", [parseDraftNumber("10.000.000"), parseDraftNumber("2,5"), parseDraftNumber("")], [10000000, 2.5, ""]),
+      expectEqual("2,5 kg hợp lệ", validateOrderLimitDraft(weight, { text: "2,5", unlimited: false }), ""),
+      expectEqual("2,55 kg hợp lệ (không lỗi làm tròn)", validateOrderLimitDraft(weight, { text: "2,55", unlimited: false }), ""),
+      expectTrue("0 → lỗi", validateOrderLimitDraft(weight, { text: "0", unlimited: false }) !== ""),
+      expectTrue("âm/chữ → lỗi", validateOrderLimitDraft(weight, { text: "-3", unlimited: false }) !== ""),
+      expectEqual("không giới hạn được phép", validateOrderLimitDraft(weight, { text: "", unlimited: true }), ""),
+      expectTrue("số kiện không được bỏ giới hạn", validateOrderLimitDraft(packages, { text: "", unlimited: true }) !== ""),
+      expectTrue("số kiện lẻ → lỗi", validateOrderLimitDraft(packages, { text: "2,5", unlimited: false }) !== ""),
+      expectTrue("số kiện > 500 → lỗi", validateOrderLimitDraft(packages, { text: "501", unlimited: false }) !== ""),
+      expectEqual("hiển thị", [formatOrderLimit(10000000, "đ"), formatOrderLimit(2.5, "kg"), formatOrderLimit(null, "kg")], ["10.000.000 đ", "2,5 kg", "Không giới hạn"]),
+    );
+  });
+
   await check("package-configurations: MẢNG TRẦN, lọc ACTIVE", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -2225,6 +2437,111 @@ if (loadError) {
       expectEqual("nút chính của Sale", saleMain, [["Gửi duyệt"], [], ["Đã đặt NCC"], ["NCC đã xác nhận đơn"], ["NCC đã phát hàng"], [], []]),
       expectEqual("SUPPLIER_CONFIRMED không có giao thiếu", [can("SUPPLIER_CONFIRMED").progress, can("SUPPLIER_CONFIRMED").closeShortage], [true, false]),
       expectEqual("Admin duyệt chỉ ở chờ duyệt", steps.map((status) => can(status, "admin").decide), [false, true, false, false, false, false, false]),
+    );
+  });
+
+  /*
+   * CHẶNG THẬT CỦA YÊU CẦU MUA HỘ (30/09/2026): Sale thấy "Hoàn tất nghiệp vụ" (nhãn server của
+   * PURCHASE_REQUESTS.status = COMPLETED) trên cả yêu cầu mới tất toán đợt cuối đời cũ, đơn kho
+   * còn WAREHOUSE_RECEIVED. Dữ liệu mẫu chép từ production 30/09 (4 yêu cầu COMPLETED: 2 hoàn tất
+   * thật, 2 đời cũ). "Đơn đã hoàn tất" chỉ khi mọi đơn kho COMPLETED và không còn khoản hoàn chờ.
+   */
+  await check("Chặng mua hộ: COMPLETED đời cũ (đơn kho còn ở kho nguồn) KHÔNG là \"Đơn đã hoàn tất\"; bảng chặng + ô lọc không còn \"Hoàn tất nghiệp vụ\"", async () => {
+    const stageMod = await load("/src/features/purchase/api/purchaseRequestStage.js");
+    const po = (requestId, status, warehouseOrderStatus, extra = {}) => ({ purchaseRequestId: requestId, status, warehouseOrderStatus, refunds: [], ...extra });
+    const ctx = stageMod.buildPurchaseStageContext({
+      purchaseOrders: [
+        po("REQ-DONE", "SUPPLIER_SHIPPED", "COMPLETED", { orderedAt: "2026-09-27T16:34:05Z", supplierShippedAt: "2026-09-27T16:35:00Z" }),
+        po("REQ-SHIP", "SUPPLIER_SHIPPED", "DEPOSIT_PAID"),
+        po("REQ-ORIGIN", "SUPPLIER_SHIPPED", "WAREHOUSE_RECEIVED"),
+        po("REQ-ORDER", "ORDERED", "DEPOSIT_PAID"),
+        po("REQ-REFUND", "SUPPLIER_SHIPPED", "COMPLETED", { refunds: [{ status: "PENDING", amount: 5000 }] }),
+        po("REQ-SPLIT", "SUPPLIER_SHIPPED", "AT_DESTINATION_WAREHOUSE"),
+        po("REQ-SPLIT", "SUPPLIER_SHIPPED", "DELIVERED"),
+        po("REQ-SPLIT", "CANCELLED", "CANCELLED"),
+        po("REQ-OPEN", "SUPPLIER_SHIPPED", "COMPLETED"),
+      ],
+      warehouseOrders: [
+        { consignmentCode: "PUR-LEGACY", status: "WAREHOUSE_RECEIVED" },
+        { consignmentCode: "PUR-LEGACY-OK", status: "COMPLETED" },
+        { consignmentCode: "PUR-DONE-1", status: "COMPLETED" },
+      ],
+    });
+    const stage = (request, context = ctx) => stageMod.derivePurchaseStage(request, context).stage;
+    const S = stageMod.PURCHASE_STAGE;
+    const done = stageMod.derivePurchaseStage({ purchaseRequestId: "REQ-DONE", purchaseCode: "PUR-DONE", status: "COMPLETED" }, ctx);
+    const legacy = stageMod.derivePurchaseStage({ purchaseRequestId: "REQ-LEGACY", purchaseCode: "PUR-LEGACY", status: "COMPLETED" }, ctx);
+    const labels = stageMod.PURCHASE_STAGE_FILTER_OPTIONS.map((option) => option.label);
+    const detailHelpers = await load("/src/features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.helpers.js");
+    const shown = [
+      detailHelpers.getQuotationStatusInfo("PENDING_CUSTOMER_REVIEW").label,
+      detailHelpers.getFeeTypeLabel("SOME_NEW_FEE"),
+      detailHelpers.getStatusInfo("WAITING_SOMETHING", "WAITING_SOMETHING").label,
+      detailHelpers.getStatusInfo("COMPLETED", "Hoàn tất nghiệp vụ").label,
+      detailHelpers.getStatusInfo("PAID", "Đã trả trước, chờ đặt mua").label,
+    ];
+    const englishLike = shown.filter((label) => /^[A-Za-z ]+$/.test(label) || /_/.test(label));
+    const detailLabelsCheck = expectEqual("chi tiết: mã lạ không thành chữ Anh / mã thô; COMPLETED không còn \"Hoàn tất nghiệp vụ\"", [englishLike, shown[3], shown[4]], [[], "Đã đóng yêu cầu", "Đã trả trước, chờ đặt mua"]);
+
+    return all(
+      expectEqual("hoàn tất thật", [done.stage, done.label, done.isFullyCompleted, Boolean(done.milestones.orderedAt)], [S.COMPLETED, "Đơn đã hoàn tất", true, true]),
+      expectEqual("COMPLETED đời cũ, đơn kho WAREHOUSE_RECEIVED", [legacy.stage, legacy.label, legacy.isFullyCompleted], [S.IN_TRANSIT, "Đang vận chuyển", false]),
+      expectEqual("đời cũ đơn kho COMPLETED", stage({ purchaseRequestId: "X", purchaseCode: "PUR-LEGACY-OK", status: "COMPLETED" }), S.COMPLETED),
+      expectEqual("mã → chặng trước khi có đơn mua", ["PENDING_REVIEW", "IN_REVIEW", "NEED_MORE_INFO", "QUOTED", "WAITING_PAYMENT", "PAID", "CANCELLED", "REJECTED", "QUOTATION_REJECTED"].map((status) => stage({ purchaseRequestId: "none", purchaseCode: "PUR-NONE", status })),
+        [S.AWAITING_QUOTE, S.AWAITING_QUOTE, S.NEED_MORE_INFO, S.AWAITING_PAYMENT, S.AWAITING_PAYMENT, S.PREPAID, S.CANCELLED, S.REJECTED, S.REJECTED]),
+      expectEqual("theo đơn mua NCC / đơn kho", [
+        stage({ purchaseRequestId: "REQ-ORDER", status: "PURCHASING" }),
+        stage({ purchaseRequestId: "REQ-SHIP", status: "PURCHASING" }),
+        stage({ purchaseRequestId: "REQ-ORIGIN", status: "PURCHASING" }),
+        stage({ purchaseRequestId: "REQ-SPLIT", status: "PURCHASING" }),
+      ], [S.ORDERING_SUPPLIER, S.IN_TRANSIT, S.IN_TRANSIT, S.ARRIVED_VN]),
+      expectEqual("còn khoản hoàn chờ chuyển", stage({ purchaseRequestId: "REQ-REFUND", status: "COMPLETED" }), S.AWAITING_REFUND),
+      expectEqual("đơn kho xong nhưng yêu cầu chưa chốt", stage({ purchaseRequestId: "REQ-OPEN", status: "PURCHASING" }), S.DELIVERED),
+      expectEqual("còn dòng chưa lập đơn mua", stage({ purchaseRequestId: "REQ-OPEN", status: "COMPLETED", openLineCount: 1 }), S.ORDERING_SUPPLIER),
+      expectEqual("không tải được đối chiếu → không tự nhận hoàn tất", [stage({ purchaseRequestId: "REQ-DONE", status: "COMPLETED" }, null), stage({ purchaseRequestId: "REQ-DONE", status: "PAID" }, null)], [S.UNVERIFIED, S.PREPAID]),
+      expectEqual("lọc", [stageMod.matchesPurchaseStage(done, "COMPLETED"), stageMod.matchesPurchaseStage(legacy, "COMPLETED"), stageMod.matchesPurchaseStage(legacy, "ALL")], [true, false, true]),
+      expectTrue("ô lọc có \"Đơn đã hoàn tất\", không có \"Hoàn tất nghiệp vụ\"", labels.includes("Đơn đã hoàn tất") && !labels.some((label) => /nghiệp vụ/i.test(label))),
+      expectEqual("nhãn theo mã COMPLETED", stageMod.getPurchaseRequestStatusLabel("COMPLETED", "Hoàn tất nghiệp vụ"), "Đã đóng yêu cầu"),
+      /* Backend mới trả overallStage (suy từ đủ dữ liệu) → FE tin backend; mã lạ thì tự suy. */
+      detailLabelsCheck,
+      expectEqual("ưu tiên overallStage của backend", [
+        stage({ purchaseRequestId: "REQ-DONE", purchaseCode: "PUR-DONE", status: "COMPLETED", overallStage: "AWAITING_REFUND" }),
+        stage({ purchaseRequestId: "x", status: "COMPLETED", overallStage: "COMPLETED" }, null),
+        stage({ purchaseRequestId: "x", status: "COMPLETED", overallStage: "WEIRD" }, null),
+      ], [S.AWAITING_REFUND, S.COMPLETED, S.UNVERIFIED]),
+    );
+  });
+
+  await check("Chặng mua hộ: getPurchaseStageContextApi đọc GET /api/purchase-orders + GET /api/orders/consignments?orderType=PURCHASE; một nguồn lỗi → không ném, COMPLETED thành \"Chưa đối chiếu\"", async () => {
+    resetState({ token: "tok" });
+    const REQ = "cccccccc-1111-4222-8333-444444444444";
+    const stageMod = await load("/src/features/purchase/api/purchaseRequestStage.js");
+    routes = [
+      { method: "GET", url: "/api/purchase-orders", reply: () => ok({ message: "OK", data: { items: [{ purchaseRequestId: REQ.toUpperCase(), status: "SUPPLIER_SHIPPED", warehouseOrderStatus: "COMPLETED", refunds: [] }], totalCount: 1 } }) },
+      { method: "GET", url: "/api/orders/consignments", reply: () => ok({ message: "OK", data: { items: [{ orderId: "o1", consignmentCode: "PUR-OLD", status: "WAREHOUSE_RECEIVED" }], totalCount: 1 } }) },
+    ];
+    const ctx = await purchaseRequest.getPurchaseStageContextApi();
+    const listCalls = requests.map((req) => [req.url, req.params?.orderType ?? null, req.params?.pageSize ?? null]);
+    routes.push({ method: "GET", url: "/api/purchase-requests", reply: () => ok({ message: "OK", data: { items: [], totalCount: 0 } }) });
+    await purchaseRequest.getPurchaseRequestsApi({ stage: " completed ", pageSize: 1000 });
+    const stageParam = requests.find((req) => req.url === "/api/purchase-requests")?.params?.stage;
+    const fullDone = stageMod.derivePurchaseStage({ purchaseRequestId: REQ, purchaseCode: "PUR-NEW", status: "COMPLETED" }, ctx).stage;
+    const legacy = stageMod.derivePurchaseStage({ purchaseRequestId: "other", purchaseCode: "PUR-OLD", status: "COMPLETED" }, ctx).stage;
+
+    resetState({ token: "tok" });
+    routes = [
+      { method: "GET", url: `/api/purchase-requests/${REQ}/purchase-orders`, reply: () => ok({ message: "OK", data: [] }) },
+      { method: "GET", url: "/api/orders/consignments", reply: () => fail(500, { message: "lỗi" }) },
+    ];
+    const scoped = await purchaseRequest.getPurchaseStageContextApi({ purchaseRequestId: REQ, purchaseCode: "PUR-OLD" });
+    const scopedParams = requests.find((req) => req.url === "/api/orders/consignments")?.params;
+
+    return all(
+      expectEqual("hai nguồn", listCalls, [["/api/purchase-orders", null, 100], ["/api/orders/consignments", "PURCHASE", 500]]),
+      expectEqual("gửi stage cho backend mới", stageParam, "COMPLETED"),
+      expectEqual("suy chặng", [ctx.loaded, fullDone, legacy], [true, stageMod.PURCHASE_STAGE.COMPLETED, stageMod.PURCHASE_STAGE.IN_TRANSIT]),
+      expectEqual("chi tiết: đọc theo yêu cầu + searchCode", [scopedParams?.searchCode, scopedParams?.orderType], ["PUR-OLD", "PURCHASE"]),
+      expectEqual("nguồn lỗi → null, không ném", [scoped.purchaseOrdersLoaded, scoped.warehouseOrdersLoaded, stageMod.derivePurchaseStage({ purchaseRequestId: REQ, purchaseCode: "PUR-OLD", status: "COMPLETED" }, scoped).stage], [true, false, stageMod.PURCHASE_STAGE.UNVERIFIED]),
     );
   });
 
@@ -2796,6 +3113,62 @@ if (loadError) {
     );
   });
 
+  await check("Ảnh tiếp nhận kho VN — GET /api/parcel-inspections trả photos[]; toàn cảnh lô ghép arrivalPhotos của lô (kể cả kiện chưa đếm); backend cũ thiếu trường → mảng rỗng", async () => {
+    resetState({ token: "tok" });
+    const SHIP = "5a1e0000-0000-0000-0000-00000000aa01";
+    const P1 = "5a1e0000-0000-0000-0000-00000000bb01";
+    const P2 = "5a1e0000-0000-0000-0000-00000000bb02";
+    const photo = (id, entityId) => ({
+      id,
+      entityType: "PARCEL",
+      entityId,
+      documentType: "VN_ARRIVAL_PROOF",
+      fileName: "anh.jpg",
+      contentType: "image/jpeg",
+      downloadUrl: `/api/attachments/${id}/download`,
+    });
+    routes = [
+      {
+        method: "GET",
+        url: "/api/parcel-inspections",
+        reply: () =>
+          ok({
+            message: "Lấy biên bản kiểm đếm thành công.",
+            data: {
+              summary: { total: 1, withDiscrepancy: 1, recentDiscrepancy: 1, damagedParcels: 1 },
+              items: [{ inspectionId: "i1", parcelId: P1, packageCode: "PCL-1", shipmentId: SHIP, hasDiscrepancy: true, photos: [photo("f1", P1)] }],
+            },
+          }),
+      },
+      {
+        method: "GET",
+        url: `/api/international-shipments/${SHIP}`,
+        reply: () =>
+          ok({
+            message: "ok",
+            data: {
+              shipmentId: SHIP,
+              shipmentCode: "INTL-1",
+              arrivalPhotos: [],
+              parcels: [
+                { parcelId: P1, packageCode: "PCL-1", weight: 2, arrivalPhotos: [photo("f1", P1)] },
+                { parcelId: P2, packageCode: "PCL-2", weight: 1 },
+              ],
+            },
+          }),
+      },
+    ];
+    const list = await inspection.listParcelInspections({ onlyDiscrepancy: true });
+    const overview = await inspection.getShipmentInspectionOverview(SHIP);
+    return all(
+      expectEqual("params", requests[0]?.params, { onlyDiscrepancy: true }),
+      expectEqual("ảnh biên bản", list.items[0].photos.map((p) => [p.id, p.documentType]), [["f1", "VN_ARRIVAL_PROOF"]]),
+      expectEqual("ảnh theo kiện trong lô", overview.parcels.map((p) => [p.packageCode, p.photos.length]), [["PCL-1", 1], ["PCL-2", 0]]),
+      expectEqual("nhãn loại giấy tờ", attachmentSvc.getDocumentTypeLabel("VN_ARRIVAL_PROOF"), "Ảnh tiếp nhận kho VN"),
+      expectTrue("ảnh là ảnh", attachmentSvc.isImageAttachment(list.items[0].photos[0])),
+    );
+  });
+
   await check("Danh mục Admin: loại hàng — GET /api/product-types/all; POST /api/product-types; PUT/DELETE /{id}; lỗi 400 khi xoá hiện nguyên câu backend", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -2909,8 +3282,8 @@ if (loadError) {
     return all(
       expectEqual("blob pdf", [blob instanceof Blob, blob.type], [true, "application/pdf"]),
       expectEqual("message backend", error?.message, "Đơn chưa có phiếu."),
-      expectEqual("đổi host", receiptUrl.toPublicReceiptUrl(legacy), "https://vcl.henrytech.cloud/api/public/receipts/abc"),
-      expectEqual("tải về", receiptUrl.toPublicReceiptUrl(legacy, { download: true }), "https://vcl.henrytech.cloud/api/public/receipts/abc?download=true"),
+      expectEqual("đổi host", receiptUrl.toPublicReceiptUrl(legacy), "https://api-vcl.vnlogistic.click/api/public/receipts/abc"),
+      expectEqual("tải về", receiptUrl.toPublicReceiptUrl(legacy, { download: true }), "https://api-vcl.vnlogistic.click/api/public/receipts/abc?download=true"),
     );
   });
 

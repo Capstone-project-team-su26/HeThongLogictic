@@ -1,5 +1,6 @@
 import { Alert, Button, Card, Col, Popconfirm, Row, Typography } from "antd";
 import { AppstoreOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
+import { labelOf } from "@shared/utils/statusLabel";
 
 const { Text } = Typography;
 
@@ -68,7 +69,7 @@ export default function WarehouseLayoutGridView({
                       <div>
                         <div>Tọa độ: Hàng {formatCoord(item.gridRow)}, Cột {formatCoord(item.gridColumn)}</div>
                         <div>
-                          {LAYOUT_TYPE_LABEL[item.layoutType] || item.layoutType || "Ô sơ đồ"}: {describeLink(item)}
+                          {labelOf(LAYOUT_TYPE_LABEL, item.layoutType, { generic: "Ô sơ đồ", empty: "Ô sơ đồ" })}: {describeLink(item)}
                         </div>
                         {item.isActive === false && <Text type="secondary">Ngừng sử dụng</Text>}
                       </div>

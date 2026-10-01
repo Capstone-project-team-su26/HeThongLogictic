@@ -32,7 +32,13 @@ import {
 
 import {
   getPurchaseRequestsApi,
+  getPurchaseStageContextApi,
 } from "@features/purchase/api/purchaseRequestService";
+import {
+  PURCHASE_STAGE_FILTER_OPTIONS,
+  derivePurchaseStage,
+  matchesPurchaseStage,
+} from "@features/purchase/api/purchaseRequestStage";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 
 import {
@@ -48,89 +54,22 @@ const { RangePicker } = DatePicker;
 const DEFAULT_PAGE_SIZE = 10;
 const ALL_STATUS = "ALL";
 
-const STATUS_CONFIG = {
-  DRAFT: {
-    label: "Bản nháp",
-    className: "is-info",
-  },
-  QUOTATION_CONFIRMED: {
-    label: "Đã xác nhận báo giá",
-    className: "is-success",
-  },
-  PENDING_REVIEW: {
-    label: "Chờ xác nhận",
-    className: "is-warning",
-  },
-  IN_REVIEW: {
-    label: "Đang xem xét",
-    className: "is-info",
-  },
-  APPROVED: {
-    label: "Đã duyệt",
-    className: "is-success",
-  },
-  QUOTED: {
-    label: "Đã báo giá",
-    className: "is-info",
-  },
-  QUOTATION_SENT: {
-    label: "Đã gửi báo giá",
-    className: "is-info",
-  },
-  WAITING_PAYMENT: {
-    label: "Chờ thanh toán",
-    className: "is-warning",
-  },
-  WAITING_DEPOSIT: {
-    label: "Chờ đặt cọc",
-    className: "is-warning",
-  },
-  DEPOSIT_PAID: {
-    label: "Đã đặt cọc",
-    className: "is-success",
-  },
-  PAID: {
-    label: "Đã thanh toán",
-    className: "is-success",
-  },
-  PURCHASED: {
-    label: "Xác nhận mua hàng",
-    className: "is-success",
-  },
-  SELLER_SHIPPED: {
-    label: "NCC đã phát hàng",
-    className: "is-info",
-  },
-  ARRIVED_ORIGIN_WAREHOUSE: {
-    label: "Đã về kho nước ngoài",
-    className: "is-info",
-  },
-  WAITING_STORED: {
-    label: "Chờ nhập kho",
-    className: "is-warning",
-  },
-  STORED: {
-    label: "Đã nhập kho",
-    className: "is-success",
-  },
-  COMPLETED: {
-    label: "Hoàn thành",
-    className: "is-success",
-  },
-  NEED_MORE_INFO: {
-    label: "Cần bổ sung thông tin",
-    className: "is-warning",
-  },
-  REJECTED: {
-    label: "Đã từ chối",
-    className: "is-danger",
-  },
-  CANCELLED: {
-    label: "Đã hủy",
-    className: "is-danger",
-  },
-};
+/*
+ * Trạng thái hiển thị cho Sale là CHẶNG THẬT của yêu cầu (purchaseRequestStage.js), không phải
+ * nhãn server `statusDisplayName`: mã COMPLETED của server mang nhãn "Hoàn tất nghiệp vụ" nhưng
+ * có thể chỉ là "đã tất toán đợt cuối" đời cũ trong khi hàng còn ở kho nước ngoài.
+ */
+const STATUS_FILTER_OPTIONS = [
+  { value: ALL_STATUS, label: "Tất cả trạng thái" },
+  ...PURCHASE_STAGE_FILTER_OPTIONS,
+];
 
+/*
+ * Lọc theo chặng phải suy chặng cho TỪNG yêu cầu (backend chỉ lọc được theo một mã status của
+ * yêu cầu), nên khi đang lọc thì đọc hết danh sách rồi lọc + chia trang tại chỗ. Bỏ khi backend
+ * có tham số lọc `stage` (xem báo cáo backend: overallStage / isFullyCompleted).
+ */
+const STAGE_FILTER_FETCH_SIZE = 1000;
 
 const normalizeText = (value) =>
   String(value ?? "").trim();
@@ -138,24 +77,14 @@ const normalizeText = (value) =>
 const normalizeUpperText = (value) =>
   normalizeText(value).toUpperCase();
 
-const getStatusInfo = (status, statusDisplayName) => {
-  const code = normalizeUpperText(status);
+const toTime = (value) => new Date(value || 0).getTime() || 0;
 
-  const config = STATUS_CONFIG[code] || {
-    label: code.replace(/_/g, " ").toLocaleLowerCase("vi-VN"),
-    className: "is-default",
-  };
-
-  const label =
-    statusDisplayName && statusDisplayName !== "string"
-      ? statusDisplayName
-      : config.label;
-
-  return {
-    label,
-    className: config.className || "is-default",
-  };
-};
+const sortNewestFirst = (list) =>
+  [...list].sort(
+    (a, b) =>
+      toTime(b?.createdAt || b?.statusUpdatedAt || b?.quotationCreatedAt) -
+      toTime(a?.createdAt || a?.statusUpdatedAt || a?.quotationCreatedAt)
+  );
 
 /*
  * API trả thời gian UTC.
@@ -408,44 +337,97 @@ export default function PurchaseRequestList() {
       try {
         setLoading(true);
 
-        const data =
-          await getPurchaseRequestsApi({
-            pageNumber,
-            pageSize,
-            status:
-              statusFilter ===
-              ALL_STATUS
-                ? undefined
-                : statusFilter,
-            search:
-              searchInput.trim() ||
-              undefined,
-            fromDate:
-              dateRange?.[0]
-                ? dateRange[0]
-                    .startOf("day")
-                    .toISOString()
-                : undefined,
-            toDate:
-              dateRange?.[1]
-                ? dateRange[1]
-                    .endOf("day")
-                    .toISOString()
-                : undefined,
-          });
+        const isStageFilter =
+          statusFilter !== ALL_STATUS;
 
-        const rawItems = Array.isArray(data?.items)
-          ? data.items.map(normalizePurchaseRequestTime)
-          : [];
+        const commonFilters = {
+          search:
+            searchInput.trim() ||
+            undefined,
+          fromDate:
+            dateRange?.[0]
+              ? dateRange[0]
+                  .startOf("day")
+                  .toISOString()
+              : undefined,
+          toDate:
+            dateRange?.[1]
+              ? dateRange[1]
+                  .endOf("day")
+                  .toISOString()
+              : undefined,
+        };
+
+        /*
+         * Chặng thật cần thêm đơn mua NCC + đơn kho; nguồn phụ lỗi thì context trả null cho
+         * nguồn đó và yêu cầu nào không đối chiếu được sẽ hiện "Chưa đối chiếu được tiến độ".
+         */
+        const [data, stageContext] =
+          await Promise.all([
+            getPurchaseRequestsApi(
+              isStageFilter
+                ? {
+                    ...commonFilters,
+                    stage: statusFilter,
+                    pageNumber: 1,
+                    pageSize:
+                      STAGE_FILTER_FETCH_SIZE,
+                  }
+                : {
+                    ...commonFilters,
+                    pageNumber,
+                    pageSize,
+                  }
+            ),
+            getPurchaseStageContextApi().catch(
+              () => null
+            ),
+          ]);
+
+        const rawItems = (
+          Array.isArray(data?.items)
+            ? data.items
+            : []
+        ).map((item) => ({
+          ...normalizePurchaseRequestTime(
+            item
+          ),
+          stageInfo: derivePurchaseStage(
+            item,
+            stageContext
+          ),
+        }));
+
+        if (isStageFilter) {
+          const matched = sortNewestFirst(
+            rawItems.filter((item) =>
+              matchesPurchaseStage(
+                item.stageInfo,
+                statusFilter
+              )
+            )
+          );
+
+          setItems(
+            matched.slice(
+              (pageNumber - 1) * pageSize,
+              pageNumber * pageSize
+            )
+          );
+          setTotalCount(matched.length);
+          setTotalPages(
+            Math.max(
+              1,
+              Math.ceil(
+                matched.length / pageSize
+              )
+            )
+          );
+          return;
+        }
 
         // Sap xep uu tien theo ngay tao/ngay cap nhat moi nhat len dau danh sach
-        const sortedItems = [...rawItems].sort((a, b) => {
-          const timeA = new Date(a?.createdAt || a?.statusUpdatedAt || a?.quotationCreatedAt || 0).getTime();
-          const timeB = new Date(b?.createdAt || b?.statusUpdatedAt || b?.quotationCreatedAt || 0).getTime();
-          return timeB - timeA;
-        });
-
-        setItems(sortedItems);
+        setItems(sortNewestFirst(rawItems));
 
         setTotalCount(
           Number(data?.totalCount) ||
@@ -496,43 +478,6 @@ export default function PurchaseRequestList() {
     return () =>
       window.clearTimeout(timer);
   }, [loadData]);
-
-  const [availableStatusOptions, setAvailableStatusOptions] = useState([
-    { value: ALL_STATUS, label: "Tất cả trạng thái" },
-  ]);
-
-  // Load all unique status codes & statusDisplayName from entire system API dataset
-  useEffect(() => {
-    getPurchaseRequestsApi({ pageNumber: 1, pageSize: 1000 })
-      .then((res) => {
-        const raw = Array.isArray(res?.items) ? res.items : [];
-        const map = new Map();
-        map.set(ALL_STATUS, "Tất cả trạng thái");
-
-        raw.forEach((item) => {
-          const code = item?.status;
-          if (code && !map.has(code)) {
-            const displayName =
-              item?.statusDisplayName && item.statusDisplayName !== "string"
-                ? item.statusDisplayName
-                : getStatusInfo(code).label;
-            map.set(code, displayName);
-          }
-        });
-
-        const options = Array.from(map.entries()).map(([value, label]) => ({
-          value,
-          label,
-        }));
-
-        if (options.length > 1) {
-          setAvailableStatusOptions(options);
-        }
-      })
-      .catch((err) => {
-        console.error("FETCH ALL SYSTEM STATUSES ERROR:", err);
-      });
-  }, [refreshKey]);
 
   const pageSummary = useMemo(() => {
     if (totalCount <= 0) {
@@ -696,7 +641,7 @@ export default function PurchaseRequestList() {
 
               <Select
                 value={statusFilter}
-                options={availableStatusOptions}
+                options={STATUS_FILTER_OPTIONS}
                 onChange={(value) => {
                   setStatusFilter(
                     value
@@ -760,10 +705,8 @@ export default function PurchaseRequestList() {
             <div className="purchase-card-list">
               {items.map((item) => {
                 const status =
-                  getStatusInfo(
-                    item?.status,
-                    item?.statusDisplayName
-                  );
+                  item?.stageInfo ||
+                  derivePurchaseStage(item);
 
                 const products =
                   Array.isArray(
@@ -835,11 +778,13 @@ export default function PurchaseRequestList() {
                       </div>
 
                       <div className="purchase-card-actions">
-                        <Tag
-                          className={`purchase-status-tag ${status.className}`}
-                        >
-                          {status.label}
-                        </Tag>
+                        <Tooltip title={status.hint || ""}>
+                          <Tag
+                            className={`purchase-status-tag ${status.className}`}
+                          >
+                            {status.label}
+                          </Tag>
+                        </Tooltip>
 
                         <Button
                           variant="outlined"
@@ -1050,6 +995,37 @@ export default function PurchaseRequestList() {
                               </strong>
                             </div>
                           )}
+
+                        {/* Mốc sau báo giá lấy từ đơn mua NCC — trước đây thẻ chỉ có "Tạo đơn" + "Báo giá". */}
+                        {[
+                          ["Đặt NCC:", status.milestones?.orderedAt],
+                          ["NCC phát hàng:", status.milestones?.supplierShippedAt],
+                        ]
+                          .filter(([, value]) => normalizeApiTimeToUtc(value))
+                          .map(([title, value]) => (
+                            <div
+                              key={title}
+                              className="purchase-date-pill"
+                              title={formatDateUtcTitle(value)}
+                            >
+                              <span className="purchase-pill-dot is-updated" />
+                              <span className="purchase-pill-title">{title}</span>
+                              <strong className="purchase-pill-time">
+                                {formatDateTime(value)}
+                              </strong>
+                            </div>
+                          ))}
+
+                        <div
+                          className="purchase-date-pill"
+                          title={status.hint || ""}
+                        >
+                          <span className="purchase-pill-dot is-quoted" />
+                          <span className="purchase-pill-title">Hiện tại:</span>
+                          <strong className="purchase-pill-time">
+                            {status.label}
+                          </strong>
+                        </div>
                       </div>
                     </div>
                   </article>

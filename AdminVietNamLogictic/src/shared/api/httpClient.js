@@ -3,7 +3,7 @@
 
    Hợp đồng (README mục "Cắm API thật trở lại" + đợt nối API luồng BÁO GIÁ KÝ GỬI):
    - baseURL đọc VITE_API_BASE_URL (cắt "/" thừa ở cuối), mặc định
-     https://vcl.henrytech.cloud. KHÔNG dùng api-vcl.zushin.io.vn: đó là một bản
+     https://api-vcl.vnlogistic.click. KHÔNG dùng api-vcl.zushin.io.vn: đó là một bản
      deploy khác chạy code cũ, thiếu các API dịch vụ theo kiện / duyệt giá.
    - timeout 30 giây.
    - Request: gắn Authorization: Bearer <accessToken> đọc từ sessionStorage
@@ -27,7 +27,7 @@ import axios from "axios";
 
 import { expireAuthSession } from "@shared/utils/authSession";
 
-export const DEFAULT_API_BASE_URL = "https://vcl.henrytech.cloud";
+export const DEFAULT_API_BASE_URL = "https://api-vcl.vnlogistic.click";
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 

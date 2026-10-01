@@ -79,6 +79,7 @@ import {
   roundMoney,
 } from "./CreatePurchaseRequestQuotationModal.helpers";
 
+import { getRouteLabel } from "@shared/utils/statusLabel";
 import "./CreatePurchaseRequestQuotationModal.css";
 
 const { TextArea } = Input;
@@ -951,7 +952,7 @@ export default function CreatePurchaseRequestQuotationModal({
                   ? `Khách: ${purchaseRequest.customerName}`
                   : null,
                 purchaseRequest?.route
-                  ? `Tuyến: ${purchaseRequest.route}`
+                  ? `Tuyến: ${getRouteLabel(purchaseRequest.route)}`
                   : null,
                 purchaseRequest?.receiverName
                   ? `Nhận: ${[

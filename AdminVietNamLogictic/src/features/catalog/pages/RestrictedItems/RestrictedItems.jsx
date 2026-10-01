@@ -36,6 +36,10 @@ import {
   getRestrictedItemsApi,
 } from "@features/catalog/api/restrictedItemService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  TABLE_PAGE_SIZE_OPTIONS,
+  formatTableRange,
+} from "@shared/utils/tablePagination";
 
 import "./RestrictedItems.css";
 
@@ -153,7 +157,8 @@ const TYPE_OPTIONS = [
   },
 ];
 
-const RESTRICTED_ITEMS_PAGE_SIZE = 5;
+/* Cỡ trang mặc định; nhân viên đổi được 10/20/50/100 (quy ước chung tablePagination). */
+const RESTRICTED_ITEMS_DEFAULT_PAGE_SIZE = 10;
 
 const normalizeText = (value) =>
   String(value ?? "").trim();
@@ -215,6 +220,9 @@ export default function RestrictedItems() {
   const [selectedItem, setSelectedItem] =
     useState(null);
 
+  const [pageSize, setPageSize] = useState(
+    RESTRICTED_ITEMS_DEFAULT_PAGE_SIZE
+  );
   const [currentPage, setCurrentPage] =
     useState(1);
 
@@ -312,7 +320,7 @@ export default function RestrictedItems() {
     1,
     Math.ceil(
       filteredItems.length /
-        RESTRICTED_ITEMS_PAGE_SIZE
+        pageSize
     )
   );
 
@@ -337,28 +345,29 @@ export default function RestrictedItems() {
   const paginatedItems = useMemo(() => {
     const startIndex =
       (currentPage - 1) *
-      RESTRICTED_ITEMS_PAGE_SIZE;
+      pageSize;
 
     return filteredItems.slice(
       startIndex,
       startIndex +
-        RESTRICTED_ITEMS_PAGE_SIZE
+        pageSize
     );
   }, [
     filteredItems,
     currentPage,
+    pageSize,
   ]);
 
   const visibleStart =
     filteredItems.length === 0
       ? 0
       : (currentPage - 1) *
-          RESTRICTED_ITEMS_PAGE_SIZE +
+          pageSize +
         1;
 
   const visibleEnd = Math.min(
     currentPage *
-      RESTRICTED_ITEMS_PAGE_SIZE,
+      pageSize,
     filteredItems.length
   );
 
@@ -681,7 +690,7 @@ export default function RestrictedItems() {
                         <td>
                           <span className="restricted-items-index">
                             {(currentPage - 1) *
-                              RESTRICTED_ITEMS_PAGE_SIZE +
+                              pageSize +
                               index +
                               1}
                           </span>
@@ -777,15 +786,23 @@ export default function RestrictedItems() {
           <Pagination
             current={currentPage}
             pageSize={
-              RESTRICTED_ITEMS_PAGE_SIZE
+              pageSize
             }
             total={filteredItems.length}
-            showSizeChanger={false}
+            showSizeChanger
+            pageSizeOptions={TABLE_PAGE_SIZE_OPTIONS.map(String)}
             showLessItems
             responsive
-            onChange={handlePageChange}
+            onChange={(page, size) => {
+              if (size !== pageSize) {
+                setPageSize(size);
+                handlePageChange(1);
+                return;
+              }
+              handlePageChange(page);
+            }}
             showTotal={(total, range) =>
-              `${range[0]}–${range[1]} trong ${total} mặt hàng`
+              formatTableRange(total, range, "mặt hàng")
             }
           />
         </div>

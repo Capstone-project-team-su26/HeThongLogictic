@@ -6,6 +6,8 @@ import {
   PhoneOutlined,
 } from "@ant-design/icons";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
+import { getParcelStatusLabel, metaOf } from "@shared/utils/statusLabel";
+import { INVENTORY_STATUS_META } from "@features/operations";
 
 const { Text, Title } = Typography;
 
@@ -96,13 +98,12 @@ export default function BinInventoryModal({
       key: "status",
       width: 140,
       render: (status) => {
-        if (status === "RESERVED") {
-          return <Tag color="gold" style={{ fontWeight: 700 }}>Đã Giữ Chỗ (RESERVED)</Tag>;
-        }
-        if (status === "AVAILABLE") {
-          return <Tag color="green" style={{ fontWeight: 700 }}>Sẵn Sàng (AVAILABLE)</Tag>;
-        }
-        return <Tag color="blue" style={{ fontWeight: 700 }}>{status || "LƯU KHO"}</Tag>;
+        if (!status) return <Tag color="blue" style={{ fontWeight: 700 }}>Lưu kho</Tag>;
+        /* Ô kệ trả trạng thái tồn (AVAILABLE / RESERVED…) — bảng nhãn tồn kho dùng chung. */
+        const meta = metaOf(INVENTORY_STATUS_META, status, { color: "blue" }, {
+          fallback: getParcelStatusLabel(status),
+        });
+        return <Tag color={meta.color} style={{ fontWeight: 700 }}>{meta.label}</Tag>;
       },
     },
     {

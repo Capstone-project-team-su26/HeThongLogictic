@@ -116,7 +116,24 @@ export const LEGACY_ORDER_STATUS_MAP = Object.freeze({
   RETURNING: "DELIVERING",
 });
 
+/**
+ * Mã backend đang ghi (hoặc còn trong DB) nhưng KHÔNG thuộc 19 mã đích và không có mã đích
+ * tương đương để chuẩn hoá mà không mất nghĩa (mất cọc, khách đã xác nhận…). Chỉ dùng cho NHÃN —
+ * không vào bộ lọc, không đổi logic. Nhãn bám `OrderService.Queries.cs` của backend.
+ */
+export const EXTRA_ORDER_STATUS_LABELS = Object.freeze({
+  AT_DESTINATION_WAREHOUSE: "Đã lưu kho tại kho đích",
+  CUSTOMER_CONFIRMED: "Khách đã xác nhận nhận hàng",
+  CANCELLED_FORFEITED: "Huỷ do quá hạn thanh toán, mất cọc",
+  CANCELED: "Đã hủy",
+  SHIPPED: "Đang vận chuyển quốc tế",
+  OUT_FOR_DELIVERY: "Đang giao hàng",
+  NEW: "Chờ duyệt",
+  PREVIEW: "Bản xem trước",
+});
+
 const EMPTY_LABEL = "—";
+const UNKNOWN_ORDER_STATUS_LABEL = "Trạng thái khác";
 
 /**
  * Chuẩn hóa một mã trạng thái đơn về mã đích.
@@ -138,11 +155,18 @@ export const normalizeOrderStatus = (status) => {
   return raw;
 };
 
-/** Nhãn tiếng Việt của một mã đơn (mã cũ được chuẩn hóa trước; mã lạ trả chính nó; rỗng → "—"). */
+/**
+ * Nhãn tiếng Việt của một mã đơn (mã cũ được chuẩn hóa trước; rỗng → "—").
+ * Mã lạ KHÔNG in nguyên mã: ra "Trạng thái khác".
+ */
 export const getOrderStatusLabel = (status) => {
   const normalized = normalizeOrderStatus(status);
   if (normalized === null) return EMPTY_LABEL;
-  return ORDER_STATUS_LABELS[normalized] || normalized;
+  const known = ORDER_STATUS_LABELS[normalized] || EXTRA_ORDER_STATUS_LABELS[normalized.toUpperCase()];
+  if (known) return known;
+  /* Chuỗi toàn ký tự ASCII (mã máy, chữ tiếng Anh) không bao giờ được hiện ra; chữ tiếng Việt
+     (dữ liệu nhập tay) thì giữ. File này cố ý không import gì để ba bản chép nạp được độc lập. */
+  return /^[\x20-\x7E]+$/.test(normalized) ? UNKNOWN_ORDER_STATUS_LABEL : normalized;
 };
 
 /** Danh sách { value, label } theo thứ tự đích, dùng cho filter/select/tab. */

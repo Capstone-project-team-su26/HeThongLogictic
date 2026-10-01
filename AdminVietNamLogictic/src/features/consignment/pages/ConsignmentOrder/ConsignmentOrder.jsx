@@ -84,10 +84,11 @@ import {
   getOrderTotals,
   getOrderTotalsError,
   FORM_FIELD_VALIDATORS,
-  MAX_PACKAGES_MESSAGE,
-  ORDER_LIMITS,
-  PACKAGE_LIMITS,
+  formatLimitNumber,
+  getMaxPackagesMessage,
+  hasLimit,
 } from "./ConsignmentOrder.helpers";
+import useOrderLimits from "@shared/hooks/useOrderLimits";
 
 const uploadPackageImage = async (file) => {
   if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
@@ -130,12 +131,14 @@ const LimitMeter = ({ label, value, max, text }) => {
 
       <strong>{text}</strong>
 
-      <span className="order-limit-bar__track">
-        <span
-          className="order-limit-bar__fill"
-          style={{ width: `${Math.min(100, Math.max(0, ratio * 100))}%` }}
-        />
-      </span>
+      {max > 0 && (
+        <span className="order-limit-bar__track">
+          <span
+            className="order-limit-bar__fill"
+            style={{ width: `${Math.min(100, Math.max(0, ratio * 100))}%` }}
+          />
+        </span>
+      )}
     </div>
   );
 };
@@ -226,6 +229,13 @@ export default function ConsignmentOrder() {
   const [packages, setPackages] = useState([createEmptyPackage()]);
   const [formErrors, setFormErrors] = useState(createEmptyFormErrors());
   const [packageErrors, setPackageErrors] = useState({});
+
+  /*
+   * Giới hạn tạo đơn do Admin cấu hình (không còn số cứng). Chưa tải / tải lỗi thì mọi
+   * giới hạn là null: màn hình không chặn trần, backend kiểm và báo lỗi nêu đúng giới hạn.
+   */
+  const { consignment: limits } = useOrderLimits();
+  const maxPackagesMessage = getMaxPackagesMessage(limits);
 
   /*
    * Ô nào đã rời con trỏ một lần. Giá trị SAI (quá cân, quá kích thước, quá số lượng) báo
@@ -862,7 +872,8 @@ export default function ConsignmentOrder() {
 
   /* Số liệu cộng dồn để vẽ thanh giới hạn — cập nhật theo từng phím gõ. */
   const orderTotals = useMemo(() => getOrderTotals(packages), [packages]);
-  const isPackageLimitReached = packages.length >= ORDER_LIMITS.maxPackages;
+  const isPackageLimitReached =
+    hasLimit(limits.maxPackages) && packages.length >= limits.maxPackages;
 
   const scrollToFirstError = () => {
     window.setTimeout(() => {
@@ -1012,7 +1023,7 @@ export default function ConsignmentOrder() {
 
     /*
      * Kiểm ngay từng phím gõ, đồng thời cộng lại trần CẢ ĐƠN: một kiện nặng thêm có thể làm
-     * cả đơn vượt 5 kg dù kiện đó vẫn hợp lệ.
+     * cả đơn vượt tổng cân nặng Admin cho phép dù kiện đó vẫn hợp lệ.
      */
     const nextPackages = packages.map((item) =>
       item.id === packageId ? { ...item, [field]: value } : item,
@@ -1026,7 +1037,7 @@ export default function ConsignmentOrder() {
       [packageId]: {
         ...(previous[packageId] || {}),
         [field]: resolveLiveError(
-          validatePackageField(field, changedPackage),
+          validatePackageField(field, changedPackage, limits),
           value,
           touchedPackageFields[`${packageId}:${field}`],
           false,
@@ -1036,7 +1047,7 @@ export default function ConsignmentOrder() {
 
     setFormErrors((previous) => ({
       ...previous,
-      packages: getOrderTotalsError(nextPackages),
+      packages: getOrderTotalsError(nextPackages, limits),
     }));
 
     if (!shouldResetWoodCrateConfiguration) {
@@ -1312,7 +1323,7 @@ export default function ConsignmentOrder() {
       ...previous,
       [packageId]: {
         ...(previous[packageId] || {}),
-        [field]: validatePackageField(field, target),
+        [field]: validatePackageField(field, target, limits),
       },
     }));
   };
@@ -1365,7 +1376,7 @@ export default function ConsignmentOrder() {
   };
 
   const handleAddPackage = () => {
-    if (isSubmitting || packages.length >= ORDER_LIMITS.maxPackages) {
+    if (isSubmitting || isPackageLimitReached) {
       return;
     }
 
@@ -1721,6 +1732,7 @@ export default function ConsignmentOrder() {
     const result = validateConsignmentForm({
       form,
       packages,
+      limits,
     });
 
     setFormErrors(result.formErrors);
@@ -2527,26 +2539,35 @@ export default function ConsignmentOrder() {
               <div className="order-limit-bar__item">
                 <span className="order-limit-bar__label">Số kiện</span>
                 <strong>
-                  {orderTotals.packageCount} / {ORDER_LIMITS.maxPackages}
+                  {orderTotals.packageCount}
+                  {hasLimit(limits.maxPackages) ? ` / ${limits.maxPackages}` : ""}
                 </strong>
               </div>
 
               <LimitMeter
                 label="Tổng cân nặng"
                 value={orderTotals.totalWeight}
-                max={ORDER_LIMITS.maxTotalWeight}
-                text={`${orderTotals.totalWeight.toFixed(2)} / ${
-                  ORDER_LIMITS.maxTotalWeight
-                } kg`}
+                max={limits.maxTotalWeightKg}
+                text={
+                  hasLimit(limits.maxTotalWeightKg)
+                    ? `${formatLimitNumber(orderTotals.totalWeight)} / ${formatLimitNumber(
+                        limits.maxTotalWeightKg,
+                      )} kg`
+                    : `${formatLimitNumber(orderTotals.totalWeight)} kg`
+                }
               />
 
               <LimitMeter
                 label="Tổng giá trị"
                 value={orderTotals.totalValue}
-                max={ORDER_LIMITS.maxTotalValue}
-                text={`${orderTotals.totalValue.toLocaleString("vi-VN")} / ${
-                  ORDER_LIMITS.maxTotalValue.toLocaleString("vi-VN")
-                } đ`}
+                max={limits.maxTotalDeclaredValue}
+                text={
+                  hasLimit(limits.maxTotalDeclaredValue)
+                    ? `${orderTotals.totalValue.toLocaleString("vi-VN")} / ${limits.maxTotalDeclaredValue.toLocaleString(
+                        "vi-VN",
+                      )} đ`
+                    : `${orderTotals.totalValue.toLocaleString("vi-VN")} đ`
+                }
               />
             </div>
 
@@ -2703,9 +2724,11 @@ export default function ConsignmentOrder() {
                           SỐ LƯỢNG SẢN PHẨM
                         </label>
 
-                        <span className="field-limit-hint">
-                          tối đa {PACKAGE_LIMITS.maxQuantity}
-                        </span>
+                        {hasLimit(limits.maxParcelQuantity) && (
+                          <span className="field-limit-hint">
+                            tối đa {limits.maxParcelQuantity}
+                          </span>
+                        )}
                       </div>
 
                       <input
@@ -2738,9 +2761,11 @@ export default function ConsignmentOrder() {
                           GIÁ TRỊ KIỆN HÀNG (VND)
                         </label>
 
-                        <span className="field-limit-hint">
-                          tối đa {PACKAGE_LIMITS.maxDeclaredValue.toLocaleString("vi-VN")} đ
-                        </span>
+                        {hasLimit(limits.maxItemDeclaredValue) && (
+                          <span className="field-limit-hint">
+                            tối đa {limits.maxItemDeclaredValue.toLocaleString("vi-VN")} đ / kiện
+                          </span>
+                        )}
                       </div>
 
                       <input
@@ -2771,19 +2796,29 @@ export default function ConsignmentOrder() {
                   </div>
 
                   <div className="form-row-4col">
-                    {PACKAGE_NUMBER_FIELDS.map((fieldItem) => (
+                    {PACKAGE_NUMBER_FIELDS.map((fieldItem) => {
+                      const fieldLimit = limits[fieldItem.limitKey];
+                      const limitText = hasLimit(fieldLimit)
+                        ? `tối đa ${formatLimitNumber(fieldLimit)} ${fieldItem.unit}${fieldItem.hintSuffix}`
+                        : "";
+
+                      return (
                       <div key={fieldItem.field} className="input-field-group">
                         <div className="field-label-with-hint">
                           <FieldLabelTooltip
                             label={fieldItem.label}
                             required
-                            tooltip={fieldItem.tooltip}
+                            tooltip={
+                              limitText
+                                ? `${fieldItem.tooltip} (${limitText}).`
+                                : `${fieldItem.tooltip}.`
+                            }
                             className="package-dimension-label"
                           />
 
-                          <span className="field-limit-hint">
-                            {fieldItem.hint}
-                          </span>
+                          {limitText && (
+                            <span className="field-limit-hint">{limitText}</span>
+                          )}
                         </div>
 
                         <input
@@ -2815,7 +2850,8 @@ export default function ConsignmentOrder() {
 
                         <FieldError message={errors[fieldItem.field]} />
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div
@@ -2984,7 +3020,7 @@ export default function ConsignmentOrder() {
             </button>
 
             {isPackageLimitReached && (
-              <FieldError message={MAX_PACKAGES_MESSAGE} />
+              <FieldError message={maxPackagesMessage} />
             )}
 
             <div

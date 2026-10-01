@@ -16,6 +16,7 @@
 import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getResponseData } from "@shared/api/apiEnvelope";
+import { textOr } from "@shared/utils/statusLabel";
 
 const toNumber = (value) => {
   const num = Number(value);
@@ -28,7 +29,8 @@ const toArray = (value, map) => (Array.isArray(value) ? value.map(map) : []);
 
 const normalizeCount = (row = {}) => ({
   key: toText(row?.key),
-  label: toText(row?.label || row?.key),
+  /* Nhãn server là mã thô (hoặc thiếu) → dịch mã `key`, không in mã. */
+  label: textOr(toText(row?.label), toText(row?.key)),
   count: toNumber(row?.count),
   percent: toNumber(row?.percent),
 });
@@ -83,6 +85,10 @@ const normalizeSaleDashboard = (data = {}) => ({
     totalQuantity: toNumber(r?.totalQuantity),
     status: toText(r?.status),
     statusText: toText(r?.statusText),
+    /* Chặng thật (backend mới); backend cũ không có → rỗng, màn tự suy. */
+    overallStage: toText(r?.overallStage),
+    overallStageText: toText(r?.overallStageText),
+    isFullyCompleted: Boolean(r?.isFullyCompleted),
     createdAt: r?.createdAt ?? null,
   })),
   recentConsignments: toArray(data?.recentConsignments, (r) => ({
@@ -134,7 +140,7 @@ const normalizeOperationsDashboard = (data = {}) => ({
   incidentsByStatus: toArray(data?.incidentsByStatus, normalizeCount),
   incidentsByType: toArray(data?.incidentsByType, (t) => ({
     type: toText(t?.type),
-    label: toText(t?.label || t?.type),
+    label: textOr(toText(t?.label), toText(t?.type)),
     open: toNumber(t?.open),
     total: toNumber(t?.total),
   })),

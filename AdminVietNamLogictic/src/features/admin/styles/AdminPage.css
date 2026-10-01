@@ -80,24 +80,58 @@
   line-height: 1.55;
 }
 
+/*
+ * Hero có ô số liệu bên phải: cho phép xuống dòng. Khối chữ lấy nền 320px rồi giãn ra,
+ * nên ô số chỉ rơi xuống dưới tiêu đề khi banner hẹp không đủ chỗ cho cả hai — thay vì
+ * bị ép và tràn khỏi banner (overflow: hidden cắt mất chữ "₫").
+ */
+.admin-page__hero:has(> .admin-page__hero-count) {
+  flex-wrap: wrap;
+}
+
+.admin-page__hero:has(> .admin-page__hero-count) > div:first-child {
+  flex: 1 1 320px;
+}
+
+/*
+ * Ô số liệu co giãn theo nội dung (không còn khoá cứng 112px): số dài như
+ * "1.234.567.890.123 ₫" nới rộng ô chứ không tràn ra hai bên mép ô.
+ */
 .admin-page__hero-count {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  width: 112px;
-  height: 96px;
-  flex: 0 0 112px;
+  flex: 0 0 auto;
+  min-width: 112px;
+  max-width: 100%;
+  min-height: 96px;
+  padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 17px;
+  text-align: center;
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(8px);
+}
+
+.admin-page__hero-count > .anticon {
+  margin: 0 0 7px;
+  color: #bfdbfe;
+  font-size: 18px;
 }
 
 .admin-page__hero-count strong {
   color: #fff;
   font-size: 29px;
   line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ô số tiền: chuỗi dài hơn hẳn một con đếm nên chữ nhỏ hơn, co theo bề rộng màn hình. */
+.admin-page__hero-count--money strong {
+  font-size: clamp(18px, 12px + 0.8vw, 24px);
+  letter-spacing: -0.2px;
 }
 
 .admin-page__hero-count span {
@@ -116,12 +150,9 @@
   text-transform: uppercase;
 }
 
-/* Ô tổng của Quản lý người dùng: thêm dòng "N tài khoản · M khách" nên cần rộng hơn 112px. */
+/* Ô tổng của Quản lý người dùng: thêm dòng "N tài khoản · M khách" (ô gốc đã tự co giãn). */
 .admin-page__hero-count--wide {
-  width: auto;
-  min-width: 112px;
-  flex: 0 0 auto;
-  padding: 0 14px;
+  padding-inline: 14px;
 }
 
 .admin-page__hero-count--wide small {
@@ -667,7 +698,31 @@
 @media (max-width: 620px) {
   .admin-page { padding: 9px; }
   .admin-page__hero { padding: 18px; border-radius: 17px; }
-  .admin-page__hero-count, .admin-dashboard__shield { display: none; }
+  .admin-dashboard__shield { display: none; }
+  /* Màn hẹp: ô số liệu nằm dưới tiêu đề thành một hàng gọn (biểu tượng · số · chú thích). */
+  .admin-page__hero-count {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 2px 10px;
+    min-height: 0;
+    padding: 10px 14px;
+    border-radius: 14px;
+    text-align: left;
+  }
+  /* Có biểu tượng: biểu tượng một cột bên trái, số và chú thích thẳng hàng ở cột phải. */
+  .admin-page__hero-count:has(> .anticon) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+  .admin-page__hero-count > .anticon { grid-row: span 2; margin: 0; font-size: 22px; }
+  .admin-page__hero-count:has(> .anticon) > :not(.anticon) { grid-column: 2; }
+  .admin-page__hero-count strong { font-size: 22px; }
+  .admin-page__hero-count--money strong { font-size: 19px; }
+  .admin-page__hero-count span,
+  .admin-page__hero-count small { margin-top: 0; }
   .admin-page__panel { border-radius: 15px; }
   .admin-page__toolbar > .ant-btn { flex: 1 1 auto; }
   .admin-page__toolbar .admin-page__search,

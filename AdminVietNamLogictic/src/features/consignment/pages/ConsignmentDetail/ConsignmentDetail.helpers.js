@@ -17,6 +17,7 @@ import {
   QUOTATION_STATUS_CONFIG,
   STATUS_LABEL_MAP,
 } from "./ConsignmentDetail.constants";
+import { labelOf } from "@shared/utils/statusLabel";
 
 /* =========================
    BASIC HELPERS
@@ -169,7 +170,7 @@ export const translateStatusLabel = (
     STATUS_LABEL_MAP[
     normalizedStatus
     ] ||
-    "Trạng thái khác"
+    labelOf(null, normalizedStatus)
   );
 };
 
@@ -304,7 +305,8 @@ export const translateQuoteType = (
 };
 
 export const isUuid = (value) => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+  /* Dạng GUID hex bất kỳ: id loại hàng seed (11111111-0000-…) không theo RFC 4122. */
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     normalizeText(value)
   );
 };

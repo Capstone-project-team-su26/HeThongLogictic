@@ -8,6 +8,8 @@ import {
   hasPendingRefund,
 } from "@features/purchase/api/purchaseOrderService";
 import { STATUS_CONFIG as PURCHASE_REQUEST_STATUS_CONFIG } from "@features/purchase/pages/PurchaseRequestDetail/PurchaseRequestDetail.constants";
+import { getPurchaseRequestStatusLabel } from "@features/purchase/api/purchaseRequestStage";
+import { labelOf, textOr } from "@shared/utils/statusLabel";
 
 const upper = (value) => String(value ?? "").trim().toUpperCase();
 
@@ -191,12 +193,16 @@ const EXTRA_REQUEST_STATUS = Object.freeze({
 
 /**
  * Nhãn + màu trạng thái YÊU CẦU mua hộ. Ưu tiên `statusDisplayName` backend đã dịch; không có thì
- * tra bảng trạng thái của trang chi tiết yêu cầu; mã lạ thì hiện nguyên mã.
+ * tra bảng trạng thái của trang chi tiết yêu cầu; mã lạ thì ra nhãn chung (không in mã thô).
  */
 export const getPurchaseRequestStatusView = (status, statusDisplayName = "") => {
   const code = upper(status);
   const config = PURCHASE_REQUEST_STATUS_CONFIG[code] || EXTRA_REQUEST_STATUS[code] || null;
-  const label = String(statusDisplayName || "").trim() || config?.label || code || "—";
+  /* COMPLETED: server gọi "Hoàn tất nghiệp vụ" kể cả khi chỉ tất toán đời cũ — ở mức mã chỉ nói "đã đóng". */
+  const label =
+    code === "COMPLETED"
+      ? getPurchaseRequestStatusLabel(code)
+      : textOr(statusDisplayName, config?.label || (code ? labelOf(null, code) : "—"));
 
   return { code, label, color: REQUEST_TONE_BY_CLASS[config?.className] || "default" };
 };

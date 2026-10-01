@@ -86,4 +86,6 @@ export { default as purchaseRequestService } from "./api/purchaseRequestService"
 /* Luồng mua hộ chuẩn (API thật) — màn đơn mua nhà cung cấp và tầng gọi API của nó. */
 export { default as SupplierOrdersPage } from "./pages/SupplierOrdersPage/SupplierOrdersPage";
 export * from "./api/purchaseOrderService";
+/* Nhãn trạng thái YÊU CẦU mua hộ (kèm fallback an toàn) cho màn ngoài feature (Dòng tiền…). */
+export { getPurchaseRequestStatusView } from "./pages/SupplierOrdersPage/SupplierOrdersPage.helpers";
 export * from "./api/purchaseCatalogService";

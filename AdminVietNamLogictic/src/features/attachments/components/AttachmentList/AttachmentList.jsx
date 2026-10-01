@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { Button, Empty, Image, List, Space, Tag, Typography } from "antd";
-import { DownloadOutlined, EyeOutlined, FileOutlined } from "@ant-design/icons";
+import { useState } from "react";
+import { Button, Empty, List, Space, Tag, Typography } from "antd";
+import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 
+import { AuthorizedThumbnail } from "@features/attachments/components/AttachmentThumbnails/AttachmentThumbnails";
 import {
   downloadAttachment,
-  fetchAttachmentBlob,
   getAttachmentApiError,
   getDocumentTypeLabel,
   isImageAttachment,
@@ -26,52 +26,6 @@ const formatSize = (bytes) => {
   if (number < 1024 * 1024) return `${Math.round(number / 1024)} KB`;
   return `${(number / 1024 / 1024).toFixed(1)} MB`;
 };
-
-/**
- * Ảnh thu nhỏ tải bằng Blob có Authorization — thẻ <img src="/api/..."> trần sẽ bị 401.
- * Object URL được thu hồi khi component rời màn để không rò bộ nhớ.
- */
-function AuthorizedThumbnail({ attachment }) {
-  const [src, setSrc] = useState("");
-
-  useEffect(() => {
-    let objectUrl = "";
-    let cancelled = false;
-
-    fetchAttachmentBlob(attachment)
-      .then(({ blob }) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {
-        /* Ảnh lỗi thì chỉ mất phần xem trước; nút Xem vẫn báo lỗi rõ ràng. */
-      });
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [attachment]);
-
-  if (!src) {
-    return (
-      <div className="attachment-thumb attachment-thumb--empty">
-        <FileOutlined />
-      </div>
-    );
-  }
-
-  return (
-    <Image
-      src={src}
-      width={72}
-      height={72}
-      style={{ objectFit: "cover", borderRadius: 8 }}
-      alt={attachment?.fileName || "Ảnh đính kèm"}
-    />
-  );
-}
 
 /**
  * Danh sách giấy tờ đính kèm dùng chung: nhãn loại giấy tờ, người tải, nút xem / tải về.

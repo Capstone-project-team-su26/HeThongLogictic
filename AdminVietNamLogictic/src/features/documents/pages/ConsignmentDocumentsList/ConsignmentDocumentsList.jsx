@@ -34,9 +34,11 @@ import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_ORDER,
+  getOrderStatusLabel,
   normalizeOrderStatus,
 } from "@features/consignment";
 import "./ConsignmentDocumentsList.css";
+import { textOr } from "@shared/utils/statusLabel";
 
 const { Option } = Select;
 
@@ -76,7 +78,7 @@ const CONSIGNMENT_STATUS_MAP = Object.fromEntries(
 const getStatusBadge = (statusKey, statusDisplayName) => {
   const code = String(normalizeOrderStatus(statusKey) || "").toUpperCase();
   const config = CONSIGNMENT_STATUS_MAP[code] || {
-    label: statusDisplayName || statusKey || "Đang xử lý",
+    label: statusKey || statusDisplayName ? textOr(statusDisplayName, getOrderStatusLabel(statusKey)) : "Đang xử lý",
     color: "blue",
     bg: "#eff6ff",
     border: "#bfdbfe",
@@ -241,7 +243,7 @@ export default function ConsignmentDocumentsList() {
         const mapped = CONSIGNMENT_STATUS_MAP[code];
         statusMap.set(code, {
           value: code,
-          label: mapped ? mapped.label : item.statusDisplayName || code,
+          label: mapped ? mapped.label : textOr(item.statusDisplayName, getOrderStatusLabel(code)),
         });
       }
     });

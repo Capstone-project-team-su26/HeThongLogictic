@@ -13,6 +13,8 @@ import {
   listDeliveryRequests,
 } from "@features/operations/api/destinationApprovalService";
 import "@features/operations/styles/OperationsPage.css";
+import { textOr } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text } = Typography;
 
@@ -123,7 +125,7 @@ export default function AdminDeliveriesPage() {
         dataIndex: "status",
         render: (value, row) => {
           const meta = getDeliveryStatusMeta(value);
-          return <Tag color={meta.tone}>{row.statusText || meta.label}</Tag>;
+          return <Tag color={meta.tone}>{textOr(row.statusText, meta.label)}</Tag>;
         },
       },
     ],
@@ -248,12 +250,7 @@ export default function AdminDeliveriesPage() {
           loading={loading}
           sticky={{ offsetHeader: 0 }}
           scroll={{ x: 1500, y: "calc(100vh - 460px)" }}
-          pagination={{
-            pageSize: 15,
-            showSizeChanger: true,
-            pageSizeOptions: ["10", "15", "25", "50"],
-            showTotal: (total) => `Tổng ${total} phiếu`,
-          }}
+          pagination={tablePagination({ unit: "phiếu" })}
           locale={{ emptyText: "Không có phiếu giao nào." }}
         />
       </div>

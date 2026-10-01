@@ -13,6 +13,8 @@ import {
 } from "@features/warehouse/api/warehouseZoneService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "@features/operations/styles/OperationsPage.css";
+import { getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text, Title } = Typography;
 
@@ -102,7 +104,7 @@ export default function WarehouseZonesPage({ eyebrow = "BỘ PHẬN VẬN HÀNH 
       dataIndex: "zoneType",
       width: 170,
       render: (value, row) => (
-        <Tag color={getZoneTypeMeta(value).color}>{row.zoneTypeText || getZoneTypeMeta(value).label}</Tag>
+        <Tag color={getZoneTypeMeta(value).color}>{textOr(row.zoneTypeText, getZoneTypeMeta(value).label)}</Tag>
       ),
     },
     {
@@ -154,7 +156,11 @@ export default function WarehouseZonesPage({ eyebrow = "BỘ PHẬN VẬN HÀNH 
   const misplacedColumns = [
     { title: "Mã kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
     { title: "Đơn", dataIndex: "consignmentCode", render: (v) => v || "—" },
-    { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => <Tag>{v || "—"}</Tag> },
+    {
+      title: "Trạng thái kiện",
+      dataIndex: "packageStatus",
+      render: (v, row) => <Tag>{textOr(row.packageStatusText, getParcelStatusLabel(v))}</Tag>,
+    },
     { title: "Ô kệ", dataIndex: "binCode" },
     {
       title: "Khu hiện tại",
@@ -205,7 +211,7 @@ export default function WarehouseZonesPage({ eyebrow = "BỘ PHẬN VẬN HÀNH 
         loading={loading}
         columns={zoneColumns}
         dataSource={zones}
-        pagination={false}
+        pagination={tablePagination({ unit: "khu", hideOnSinglePage: true })}
         scroll={{ x: 1100 }}
         rowClassName={(row) => (row.acceptsStorage ? "ops-row--storage" : "")}
         locale={{ emptyText: <Empty description="Kho chưa khai khu nào." /> }}
@@ -225,7 +231,7 @@ export default function WarehouseZonesPage({ eyebrow = "BỘ PHẬN VẬN HÀNH 
         loading={loading}
         columns={misplacedColumns}
         dataSource={misplaced}
-        pagination={{ pageSize: 10, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "kiện" })}
         locale={{ emptyText: <Empty description="Không có kiện nào nằm sai khu." /> }}
       />
 

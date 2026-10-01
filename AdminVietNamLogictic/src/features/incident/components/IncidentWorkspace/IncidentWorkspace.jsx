@@ -42,6 +42,8 @@ import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReview
  */
 import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/operations/styles/OperationsPage.css";
+import { textOr } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text, Title } = Typography;
 
@@ -53,6 +55,9 @@ const formatDateTime = (value) => {
 
 const formatMoney = (value) =>
   value == null ? "—" : `${Number(value).toLocaleString("vi-VN")}đ`;
+
+/* Chặn vòng đọc trang: 20 × 100 sự cố mỗi tab là quá đủ; backend kẹp pageSize tối đa 100. */
+const MAX_INCIDENT_PAGES = 20;
 
 /* Tab ảo "chờ chi bồi thường" — không phải status của backend (xem listAwaitingCompensation). */
 const AWAITING_COMPENSATION_TAB = "AWAITING_COMPENSATION";
@@ -118,8 +123,16 @@ export default function IncidentWorkspace({
       if (statusTab === AWAITING_COMPENSATION_TAB) {
         setRows(await listAwaitingCompensation());
       } else {
-        const page = await listIncidents({ status: statusTab, pageSize: 100 });
-        setRows(page.items);
+        /* Trước đây chỉ đọc trang đầu (100 — trần pageSize backend): sự cố thứ 101 trở đi
+           không bao giờ hiện. Đọc hết các trang (chặn MAX_INCIDENT_PAGES), rồi bảng tự
+           phân trang + ô tìm lọc tại chỗ như cũ. */
+        const collected = [];
+        for (let pageNumber = 1; pageNumber <= MAX_INCIDENT_PAGES; pageNumber += 1) {
+          const page = await listIncidents({ status: statusTab, pageNumber, pageSize: 100 });
+          collected.push(...page.items);
+          if (page.items.length === 0 || pageNumber * page.pageSize >= page.totalCount) break;
+        }
+        setRows(collected);
       }
     } catch (error) {
       setErrorMessage(getIncidentApiError(error, "Không tải được danh sách sự cố."));
@@ -231,7 +244,7 @@ export default function IncidentWorkspace({
         title: "Loại",
         dataIndex: "incidentType",
         width: 150,
-        render: (value, row) => <Tag color="volcano">{row.incidentTypeText || getIncidentTypeLabel(value)}</Tag>,
+        render: (value, row) => <Tag color="volcano">{textOr(row.incidentTypeText, getIncidentTypeLabel(value))}</Tag>,
       },
       {
         title: "Kiện / đơn",
@@ -345,7 +358,7 @@ export default function IncidentWorkspace({
         columns={columns}
         dataSource={visibleRows}
         scroll={{ x: 1150 }}
-        pagination={{ pageSize: 15, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "sự cố" })}
         locale={{ emptyText: <Empty description="Không có sự cố nào." /> }}
       />
 
@@ -364,7 +377,7 @@ export default function IncidentWorkspace({
               <Tag color={getIncidentStatusMeta(detail.status).color}>
                 {getIncidentStatusMeta(detail.status).label}
               </Tag>
-              <Tag color="volcano">{detail.incidentTypeText || getIncidentTypeLabel(detail.incidentType)}</Tag>
+              <Tag color="volcano">{textOr(detail.incidentTypeText, getIncidentTypeLabel(detail.incidentType))}</Tag>
               {detail.stage ? <Tag>{detail.stage === "AFTER_DELIVERY" ? "Sau khi giao" : "Lúc tiếp nhận"}</Tag> : null}
             </Space>
 
@@ -588,7 +601,7 @@ export default function IncidentWorkspace({
                 { label: "Sự cố", value: <Text strong>{detail.incidentCode}</Text> },
                 {
                   label: "Loại · chặng",
-                  value: `${detail.incidentTypeText || getIncidentTypeLabel(detail.incidentType)} · ${
+                  value: `${textOr(detail.incidentTypeText, getIncidentTypeLabel(detail.incidentType))} · ${
                     detail.stage === "AFTER_DELIVERY" ? "Sau khi giao" : "Lúc tiếp nhận"
                   }`,
                 },

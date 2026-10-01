@@ -45,14 +45,9 @@ import {
   toRegionKey,
 } from "@features/admin/api/adminUserService";
 import "./UserWarehouseAssignModal.css";
+import { getRoleLabel, getWarehouseTypeLabel } from "@shared/utils/statusLabel";
 
 const { Text } = Typography;
-
-const WAREHOUSE_TYPE_LABELS = {
-  ORIGIN: "Kho nguồn",
-  DESTINATION: "Kho đích (VN)",
-  DOMESTIC: "Kho nội địa",
-};
 
 const formatDate = (value) => formatVietnamDateTime(value, { fallback: "—" });
 
@@ -128,7 +123,7 @@ export default function UserWarehouseAssignModal({ user, onClose, onSaved }) {
 
   const currentRegion = String(detail?.region ?? user?.region ?? "").trim();
   const currentRegionKey = toRegionKey(currentRegion);
-  const roleLabel = detail?.role || user?.role || "—";
+  const roleLabel = getRoleLabel(detail?.role || user?.role);
   const canAssign = detail ? detail.isWarehouseRole : isWarehouseRole(user?.role);
 
   /* Thông tin kho theo id: ưu tiên danh mục, thiếu thì lấy từ bản ghi gán hiện tại. */
@@ -402,8 +397,7 @@ export default function UserWarehouseAssignModal({ user, onClose, onSaved }) {
                             {[
                               warehouse.code,
                               warehouse.region || "chưa khai vùng",
-                              WAREHOUSE_TYPE_LABELS[String(warehouse.warehouseType || "").toUpperCase()] ||
-                                warehouse.warehouseType,
+                              warehouse.warehouseType ? getWarehouseTypeLabel(warehouse.warehouseType) : "",
                             ]
                               .filter(Boolean)
                               .join(" · ")}

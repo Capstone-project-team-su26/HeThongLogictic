@@ -33,6 +33,9 @@ import {
 } from "@shared/utils/timeUtc";
 
 import "./PendingPurchaseRequestListHistory.css";
+import { getRouteLabel, labelOf } from "@shared/utils/statusLabel";
+/* Nhãn mã COMPLETED theo chặng mua hộ mới (không dùng "Hoàn thành" chung chung — xem purchaseRequestStage). */
+import { getPurchaseRequestStatusLabel } from "@features/purchase/api/purchaseRequestStage";
 
 const { RangePicker } = DatePicker;
 
@@ -74,7 +77,7 @@ const PURCHASE_STATUS_CONFIG = {
     className: "status-processing",
   },
   COMPLETED: {
-    label: "Hoàn thành",
+    label: getPurchaseRequestStatusLabel("COMPLETED"),
     className: "status-completed",
   },
   CANCELLED: {
@@ -238,13 +241,7 @@ const getPurchaseStatus = (itemOrStatus) => {
   }
 
   const fallbackLabel = code
-    ? code
-        .replace(/_/g, " ")
-        .toLocaleLowerCase("vi-VN")
-        .replace(
-          /(^|\s)\S/g,
-          (character) => character.toLocaleUpperCase("vi-VN")
-        )
+    ? labelOf(null, code)
     : "Chưa xác định";
 
   return {
@@ -833,7 +830,7 @@ export default function PendingPurchaseRequestListHistory() {
                             </span>
 
                             <span className="tag-count">
-                              Tuyến {item.route || "-"}
+                              Tuyến {getRouteLabel(item.route, "-")}
                             </span>
 
                             <span

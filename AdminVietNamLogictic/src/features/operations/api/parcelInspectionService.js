@@ -3,6 +3,7 @@
  *
  *   GET /api/parcel-inspections?onlyDiscrepancy=&shipmentId=
  *       → { message, data: { summary: { total, withDiscrepancy, recentDiscrepancy, damagedParcels }, items } }
+ *       items[].photos: ảnh kho VN chụp lúc tiếp nhận (VN_ARRIVAL_PROOF) — tải kèm token qua downloadUrl.
  *
  * Hệ thống chỉ GHI NHẬN chênh lệch; kiện lỗi / cân lệch > 10% đã tự mở SỰ CỐ để quản lý kho
  * quyết ở màn "Sự cố hàng hoá". Màn này chỉ đọc và lọc.
@@ -13,6 +14,7 @@ import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getArrayItems, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
 import { getShipmentDetail } from "@features/shipment";
+import { labelOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getInspectionApiError };
 
@@ -33,7 +35,7 @@ export const CONDITION_META = Object.freeze({
 
 export const getConditionMeta = (condition) =>
   CONDITION_META[String(condition || "").toUpperCase()] || {
-    label: condition || "Không ghi nhận",
+    label: condition ? labelOf(CONDITION_META, condition, { generic: "Tình trạng khác" }) : "Không ghi nhận",
     tone: "default",
   };
 
@@ -94,6 +96,8 @@ export const getShipmentInspectionOverview = async (shipmentId) => {
         orderCode: parcel.orderCode || inspection?.orderCode || "",
         customerName: parcel.customerName || inspection?.customerName || "",
         customerPhone: inspection?.customerPhone || "",
+        /* Ảnh tiếp nhận kho VN: lấy từ lô (có cả kiện chưa đếm) hoặc từ biên bản. */
+        photos: parcel.arrivalPhotos || inspection?.photos || [],
         inspection,
       };
     }),

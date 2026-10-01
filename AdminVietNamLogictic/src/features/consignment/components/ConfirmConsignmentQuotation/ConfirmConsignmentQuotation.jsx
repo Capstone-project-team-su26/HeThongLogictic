@@ -17,6 +17,7 @@ import {
   ReviewItemsTable,
 } from "@shared/components/SubmitReview/SubmitReview";
 
+import { getRouteLabel } from "@shared/utils/statusLabel";
 import "./ConfirmConsignmentQuotation.css";
 
 export default function ConfirmConsignmentQuotation({
@@ -97,7 +98,7 @@ export default function ConfirmConsignmentQuotation({
           <div>
             <span>Tuyến vận chuyển</span>
             <strong>
-              {data.route}
+              {getRouteLabel(data.route, "—")}
             </strong>
           </div>
         </div>

@@ -14,6 +14,7 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getPagedData, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { labelOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getTrackingApiError };
 
@@ -42,7 +43,7 @@ export const TRACKING_STAGES = Object.freeze([
 export const getStageMeta = (stage) =>
   TRACKING_STAGES.find((item) => item.value === String(stage || "").toUpperCase()) || {
     value: stage,
-    label: stage || "—",
+    label: labelOf(TRACKING_STAGES, stage),
     color: "default",
   };
 

@@ -30,6 +30,8 @@ import {
 } from "@features/warehouse/api/warehouseManagerService";
 import { getAdminApiError } from "@features/admin/api/adminService";
 import "@features/admin/styles/AdminPage.css";
+import { getRoleLabel, getUserStatusLabel, getWarehouseTypeLabel } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text } = Typography;
 
@@ -37,12 +39,6 @@ const formatDateTime = (value) => {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("vi-VN");
-};
-
-const WAREHOUSE_TYPE_LABELS = {
-  ORIGIN: "Kho nguồn (nước ngoài)",
-  DESTINATION: "Kho đích (VN)",
-  DOMESTIC: "Kho nội địa",
 };
 
 /* 403 body rỗng / 404 body rỗng (server chưa có route) → câu tiếng Việt thay vì câu axios. */
@@ -187,7 +183,7 @@ export default function AdminWarehouseManagersPage() {
       title: "Loại kho",
       dataIndex: "warehouseType",
       width: 190,
-      render: (value) => WAREHOUSE_TYPE_LABELS[String(value || "").toUpperCase()] || value || "—",
+      render: (value) => getWarehouseTypeLabel(value),
     },
     {
       title: "Trạng thái",
@@ -288,9 +284,9 @@ export default function AdminWarehouseManagersPage() {
       width: 150,
       render: (value, member) => (
         <Space size={4} wrap>
-          <Tag color="blue">{value || "—"}</Tag>
+          <Tag color="blue">{getRoleLabel(value)}</Tag>
           {member.status && String(member.status).toUpperCase() !== "ACTIVE" ? (
-            <Tag color="warning">{member.status}</Tag>
+            <Tag color="warning">{getUserStatusLabel(member.status)}</Tag>
           ) : null}
         </Space>
       ),
@@ -348,7 +344,7 @@ export default function AdminWarehouseManagersPage() {
         loading={loading}
         columns={columns}
         dataSource={rows}
-        pagination={false}
+        pagination={tablePagination({ unit: "kho", hideOnSinglePage: true })}
         scroll={{ x: 1250 }}
         locale={{ emptyText: <Empty description="Chưa có kho nào." /> }}
       />

@@ -24,28 +24,33 @@ import {
 } from "@shared/api/apiEnvelope";
 import { openFileInNewTab } from "@shared/api/fileDownload";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getShipmentApiError };
 
-/* Bộ trạng thái lô MỚI. Bỏ hẳn CREATED / MANIFESTED / READY_TO_SHIP của luồng cũ. */
+/*
+ * Bộ trạng thái lô MỚI (ExportShipmentStatuses) + mốc chỉ xuất hiện trên dòng thời gian lô.
+ * Bỏ hẳn CREATED / MANIFESTED / READY_TO_SHIP của luồng cũ. Nhãn trùng câu `StaffText` của
+ * backend (ShipmentMilestones.cs) để chỗ nào hiện cũng một câu.
+ */
 export const SHIPMENT_STATUS_META = Object.freeze({
   DRAFT: { label: "Lô nháp", color: "default" },
-  HANDED_OVER: { label: "Đã bàn giao cho hãng", color: "blue" },
+  HANDED_OVER: { label: "Đã bàn giao cho hãng vận chuyển", color: "blue" },
   DEPARTED: { label: "Đã khởi hành", color: "processing" },
   IN_TRANSIT: { label: "Đang vận chuyển", color: "processing" },
   DELAYED: { label: "Trễ lịch", color: "warning" },
   ON_HOLD: { label: "Tạm giữ / sự cố", color: "error" },
   CUSTOMS_CLEARED: { label: "Đã thông quan nhập", color: "cyan" },
   ARRIVED_VN: { label: "Đã về Việt Nam", color: "geekblue" },
-  ARRIVED_DESTINATION: { label: "Đã tới kho đích", color: "success" },
+  /* Lô tới kho đích (PUT /arrive) — kho chưa mở lô kiểm kiện. */
+  ARRIVED_DESTINATION: { label: "Đã về kho đích", color: "success" },
+  /* Chỉ có trên dòng thời gian: kho VN mở lô, kiểm và nhận từng kiện (InternationalShipmentService). */
+  RECEIVED_AT_DESTINATION: { label: "Kho đích đã nhận lô", color: "success" },
   CANCELLED: { label: "Đã huỷ", color: "default" },
 });
 
 export const getShipmentStatusMeta = (status) =>
-  SHIPMENT_STATUS_META[String(status || "").toUpperCase()] || {
-    label: status || "—",
-    color: "default",
-  };
+  metaOf(SHIPMENT_STATUS_META, status, { color: "default" });
 
 /* `statusTab` backend trả để chia tab. */
 export const SHIPMENT_STATUS_TABS = Object.freeze([

@@ -42,6 +42,7 @@ import WarehouseLayoutGridView from "@features/warehouse/components/WarehouseLay
 import WarehouseLocationModal from "@features/warehouse/components/WarehouseLocationModal/WarehouseLocationModal";
 import WarehouseLayoutModal from "@features/warehouse/components/WarehouseLayoutModal/WarehouseLayoutModal";
 import BinInventoryModal from "@features/warehouse/components/BinInventoryModal/BinInventoryModal";
+import { tablePagination } from "@shared/utils/tablePagination";
 import "@features/admin/styles/AdminPage.css";
 
 const { Text, Title, Paragraph } = Typography;
@@ -645,7 +646,7 @@ export default function WarehouseLocationsPage() {
                     rowKey={getLocationId}
                     columns={tableColumns}
                     dataSource={filteredLocations}
-                    pagination={{ pageSize: 15, showSizeChanger: true }}
+                    pagination={tablePagination({ unit: "vị trí" })}
                     scroll={{ x: 1000 }}
                   />
                 </div>

@@ -14,6 +14,9 @@ import {
   formatVietnamDateTime,
 } from "@shared/utils/timeUtc";
 
+import { labelOf } from "@shared/utils/statusLabel";
+import { getPurchaseRequestStatusLabel } from "@features/purchase/api/purchaseRequestStage";
+
 import {
   FEE_TYPE_LABELS,
   QUOTATION_STATUS_CONFIG,
@@ -26,6 +29,10 @@ export const normalizeText = (value) =>
 export const normalizeUpperText = (value) =>
   normalizeText(value).toUpperCase();
 
+/*
+ * Mã lạ KHÔNG được biến thành chữ tiếng Anh viết thường ("Pending payment"): đi qua labelOf của
+ * shared/utils/statusLabel.js — bảng chung, đoán theo tiền tố/hậu tố, hoặc "Trạng thái khác".
+ */
 export const getQuotationStatusInfo = (
   value
 ) => {
@@ -36,21 +43,9 @@ export const getQuotationStatusInfo = (
     QUOTATION_STATUS_CONFIG[
     code
     ] || {
-      label:
-        code
-          .replace(/_/g, " ")
-          .toLocaleLowerCase(
-            "vi-VN"
-          )
-          .replace(
-            /(^|\s)\S/g,
-            (character) =>
-              character
-                .toLocaleUpperCase(
-                  "vi-VN"
-                )
-          ) ||
-        "Chưa xác định",
+      label: code
+        ? labelOf(null, code)
+        : "Chưa xác định",
 
       className:
         "is-default",
@@ -66,20 +61,9 @@ export const getFeeTypeLabel = (
 
   return (
     FEE_TYPE_LABELS[code] ||
-    code
-      .replace(/_/g, " ")
-      .toLocaleLowerCase(
-        "vi-VN"
-      )
-      .replace(
-        /(^|\s)\S/g,
-        (character) =>
-          character
-            .toLocaleUpperCase(
-              "vi-VN"
-            )
-      ) ||
-    "Phụ phí"
+    (code
+      ? labelOf(null, code, { generic: "Phụ phí" })
+      : "Phụ phí")
   );
 };
 
@@ -121,29 +105,34 @@ export const formatFeeCalculation = (fee) => {
   return "Cố định";
 };
 
+/*
+ * `statusDisplayName` của server chỉ được dùng khi là chữ người đọc được (không phải mã thô) —
+ * labelOf lo phần đó. Trang chi tiết mua hộ hiện dùng chặng thật (purchaseRequestStage.js) cho
+ * badge; hàm này giữ cho các chỗ còn cần nhãn theo mã.
+ */
 export const getStatusInfo = (value, statusDisplayName) => {
   const code = normalizeUpperText(value);
   const matched = STATUS_CONFIG[code];
 
+  /* COMPLETED: server gọi "Hoàn tất nghiệp vụ" kể cả khi chỉ tất toán đời cũ — ở mức mã chỉ nói "đã đóng". */
+  if (code === "COMPLETED") {
+    return {
+      ...matched,
+      label: getPurchaseRequestStatusLabel(code),
+    };
+  }
+
   if (matched) {
     return {
       ...matched,
-      label: statusDisplayName || matched.label,
+      label: labelOf(STATUS_CONFIG, code, { preferred: statusDisplayName }),
     };
   }
 
   return {
-    label:
-      statusDisplayName ||
-      code
-        .replace(/_/g, " ")
-        .toLocaleLowerCase("vi-VN")
-        .replace(
-          /(^|\s)\S/g,
-          (character) =>
-            character.toLocaleUpperCase("vi-VN")
-        ) ||
-      "Chưa xác định",
+    label: code || statusDisplayName
+      ? labelOf(null, code, { preferred: statusDisplayName })
+      : "Chưa xác định",
     className: "is-default",
   };
 };

@@ -50,6 +50,7 @@ import {
 import {
   closeUnfulfilledPurchase,
   getPurchaseOrderApiError,
+  getPurchaseOrderStatusMeta,
   getPurchaseRequestRefunds,
   listPurchaseOrdersOfRequest,
 } from "@features/purchase/api/purchaseOrderService";
@@ -57,6 +58,7 @@ import { getPurchaseRequestDetail } from "@features/purchase/api/purchaseCatalog
 
 import { estimateOpenQuantities, getRecordedShortage } from "./purchaseRefundFormat";
 import { RefundDetail, RefundSummaryMoney } from "./PurchaseRefundViews";
+import { getPurchaseRequestStatusView } from "@features/purchase/pages/SupplierOrdersPage/SupplierOrdersPage.helpers";
 
 const { Text } = Typography;
 
@@ -225,11 +227,11 @@ export default function CloseUnfulfilledModal({
     ? [
         { label: "Yêu cầu mua hộ", value: <Text strong>{detail.purchaseCode}</Text> },
         { label: "Khách hàng", value: detail.customerName },
-        { label: "Trạng thái", value: detail.statusDisplayName || detail.status },
+        { label: "Trạng thái", value: getPurchaseRequestStatusView(detail.status, detail.statusDisplayName).label },
         {
           label: "Đơn mua",
           value: orders.length
-            ? orders.map((order) => `${order.purchaseOrderCode} (${order.statusMeta?.label || order.status})`).join(" · ")
+            ? orders.map((order) => `${order.purchaseOrderCode} (${order.statusMeta?.label || getPurchaseOrderStatusMeta(order.status).label})`).join(" · ")
             : "Chưa có đơn mua",
         },
       ]

@@ -20,6 +20,7 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getArrayItems, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getApprovalApiError };
 
@@ -41,10 +42,10 @@ export const DELIVERY_STATUS_META = Object.freeze({
 });
 
 export const getInboundStatusMeta = (status) =>
-  INBOUND_STATUS_META[String(status || "").toUpperCase()] || { label: status || "—", tone: "default" };
+  metaOf(INBOUND_STATUS_META, status, { tone: "default" });
 
 export const getDeliveryStatusMeta = (status) =>
-  DELIVERY_STATUS_META[String(status || "").toUpperCase()] || { label: status || "—", tone: "default" };
+  metaOf(DELIVERY_STATUS_META, status, { tone: "default" });
 
 const trimText = (value) => String(value ?? "").trim();
 

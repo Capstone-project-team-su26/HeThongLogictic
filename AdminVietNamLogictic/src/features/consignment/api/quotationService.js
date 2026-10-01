@@ -28,6 +28,7 @@
 
 import httpClient from "@shared/api/httpClient";
 import { getArrayItems, getResponseData } from "@shared/api/apiEnvelope";
+import { labelOf } from "@shared/utils/statusLabel";
 
 /* =========================
    HẰNG SỐ
@@ -43,6 +44,23 @@ export const QUOTATION_STATUS = Object.freeze({
   REJECTED: "REJECTED",
   SUPERSEDED: "SUPERSEDED",
 });
+
+/** Nhãn trạng thái báo giá — bảng DUY NHẤT của app cho họ mã này. */
+export const QUOTATION_STATUS_LABELS = Object.freeze({
+  DRAFT: "Nháp",
+  PENDING: "Chờ khách xác nhận",
+  SENT: "Đã gửi khách",
+  ACCEPTED: "Khách đã chấp nhận",
+  REJECTED: "Khách từ chối",
+  EXPIRED: "Đã hết hạn",
+  PENDING_PRICE_APPROVAL: "Chờ Admin duyệt giá",
+  PRICE_REJECTED: "Admin từ chối giá",
+  SUPERSEDED: "Đã được thay bằng báo giá mới",
+  CANCELLED: "Đã huỷ",
+});
+
+export const getQuotationStatusLabel = (status) =>
+  labelOf(QUOTATION_STATUS_LABELS, status, { generic: "Trạng thái báo giá khác" });
 
 /** Trạng thái duyệt giá ngoại lệ. */
 export const PRICE_APPROVAL_STATUS = Object.freeze({

@@ -36,6 +36,7 @@ import {
 } from "@ant-design/icons";
 
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import OrderLimitsSection from "@features/pricing/components/OrderLimitsSection/OrderLimitsSection";
 import {
   findParameterRecord,
   getSystemParameterApiError,
@@ -406,6 +407,9 @@ export default function SystemParameters() {
           </section>
         ))
       )}
+
+      {/* Giới hạn tạo đơn ký gửi / mua hộ — bảng riêng (SYSTEM_SETTINGS), tải / lưu độc lập. */}
+      <OrderLimitsSection />
     </div>
   );
 }

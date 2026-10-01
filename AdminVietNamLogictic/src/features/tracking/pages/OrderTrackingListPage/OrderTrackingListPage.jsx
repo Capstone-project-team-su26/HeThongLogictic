@@ -10,6 +10,9 @@ import {
   TRACKING_STAGES,
 } from "@features/tracking/api/orderTrackingService";
 import "@features/operations/styles/OperationsPage.css";
+import { displayCode, textOr } from "@shared/utils/statusLabel";
+import { SHIPMENT_STATUS_META } from "@features/shipment";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text } = Typography;
 
@@ -37,6 +40,8 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
   const [keyword, setKeyword] = useState("");
   const [includeFinished, setIncludeFinished] = useState(false);
   const [pageNumber, setPageNumber] = useState(1);
+  /* Phân trang phía server (GET /api/orders/consignments/tracking, backend kẹp tối đa 100). */
+  const [pageSize, setPageSize] = useState(20);
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -51,7 +56,7 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
         search: keyword.trim(),
         includeFinished,
         pageNumber,
-        pageSize: 20,
+        pageSize,
       });
       setRows(result.items);
       setTotalCount(result.totalCount);
@@ -60,7 +65,7 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
     } finally {
       setLoading(false);
     }
-  }, [stages, keyword, includeFinished, pageNumber]);
+  }, [stages, keyword, includeFinished, pageNumber, pageSize]);
 
   useEffect(() => {
     load();
@@ -82,7 +87,7 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
       title: "Chặng hiện tại",
       dataIndex: "currentStage",
       width: 220,
-      render: (value, row) => <Tag color={getStageMeta(value).color}>{row.currentStageText || getStageMeta(value).label}</Tag>,
+      render: (value, row) => <Tag color={getStageMeta(value).color}>{textOr(row.currentStageText, getStageMeta(value).label)}</Tag>,
     },
     { title: "Kiện", dataIndex: "parcelCount", align: "center", width: 80 },
     {
@@ -97,7 +102,7 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
       width: 240,
       render: (_, row) => (
         <Space direction="vertical" size={0}>
-          <Text>{row.lastEventTitle || "—"}</Text>
+          <Text>{row.lastEventTitle ? displayCode(row.lastEventTitle, SHIPMENT_STATUS_META) : "—"}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
             {formatDateTime(row.lastEventAt)}
           </Text>
@@ -164,13 +169,16 @@ export default function OrderTrackingListPage({ basePath = "/sale", eyebrow = "K
         columns={columns}
         dataSource={rows}
         scroll={{ x: 1150 }}
-        pagination={{
+        pagination={tablePagination({
+          unit: "đơn",
           current: pageNumber,
-          pageSize: 20,
+          pageSize,
           total: totalCount,
-          showSizeChanger: false,
-          onChange: setPageNumber,
-        }}
+          onChange: (page, size) => {
+            setPageNumber(size !== pageSize ? 1 : page);
+            setPageSize(size);
+          },
+        })}
         locale={{ emptyText: <Empty description="Không có đơn nào." /> }}
       />
     </div>

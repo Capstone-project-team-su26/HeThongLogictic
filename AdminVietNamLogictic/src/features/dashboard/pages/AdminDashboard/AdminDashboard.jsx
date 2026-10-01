@@ -190,9 +190,9 @@ function AdminStats({ stats }) {
           hint={`${formatCount(finance.unpaidOrderCount)} đơn chưa trả · ${formatCount(finance.partialOrderCount)} trả một phần`}
         />
         <StatTile
-          label="Khoản chờ đối soát"
+          label="Khoản chờ xác nhận thu"
           value={formatCount(finance.pendingApprovalCount)}
-          hint="Chờ Admin xác nhận ở trang Dòng tiền"
+          hint="Tiền mặt / khoản treo chờ Admin xác nhận ở Dòng tiền → Duyệt thanh toán tiền mặt"
           tone={finance.pendingApprovalCount > 0 ? "warning" : "default"}
         />
         <StatTile

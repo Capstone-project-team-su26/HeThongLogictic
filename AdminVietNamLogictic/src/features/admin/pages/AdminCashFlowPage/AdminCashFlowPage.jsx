@@ -44,11 +44,14 @@ import {
   isAwaitingManualReview,
 } from "@shared/utils/paymentStatus";
 import "@features/admin/styles/AdminPage.css";
+import { tablePagination } from "@shared/utils/tablePagination";
+import { getInstallmentTypeLabel, getPaymentMethodLabel } from "@shared/utils/statusLabel";
+import { getPurchaseRequestStatusView } from "@features/purchase";
 
 /* Trạng thái đơn ký gửi hiện nhãn thống nhất; đơn mua hộ (PUR-) giữ mã riêng của nó. */
 const formatOrderStatus = (value, source) => {
   if (!value) return "—";
-  return source === "PURCHASE" ? value : getOrderStatusLabel(value);
+  return source === "PURCHASE" ? getPurchaseRequestStatusView(value).label : getOrderStatusLabel(value);
 };
 
 const { RangePicker } = DatePicker;
@@ -103,25 +106,19 @@ const PENDING_SOURCE_OPTIONS = [
   { value: "PURCHASE", label: "Mua hộ" },
 ];
 
-const INSTALLMENT_LABELS = {
-  DEPOSIT: "Tiền cọc",
-  FINAL_PAYMENT: "Tất toán",
-  FULL_PAYMENT: "Trả trọn gói",
-  STORAGE_FEE: "Phí lưu kho",
-};
-
 /**
- * PENDING_RECONCILIATION là khách chọn chuyển khoản tay, hệ thống không hề phát hành link cổng
- * thanh toán — bắt buộc có người đối soát. PENDING là đã phát hành link mà webhook chưa về, có thể
- * do khách chưa trả, cũng có thể do webhook rớt. Hai ca này cần Admin đọc sao kê khác nhau.
+ * PENDING_RECONCILIATION là khách chọn "Thanh toán tiền mặt" (mã OFFLINE), hệ thống không hề phát
+ * hành link cổng thanh toán — bắt buộc có người xác nhận đã nhận tiền. PENDING là đã phát hành link
+ * mà webhook chưa về, có thể do khách chưa trả, cũng có thể do webhook rớt. Hai ca này cần Admin
+ * kiểm tra khác nhau: tiền mặt hỏi Sale / thủ quỹ, cổng thanh toán đọc sao kê.
  */
 const getPendingStatusMeta = (status) => {
   const key = String(status || "").toUpperCase();
   if (key === "PENDING_RECONCILIATION")
     return {
       color: "purple",
-      label: "Chờ đối soát",
-      hint: "Khách chọn chuyển khoản tay. Không có link cổng thanh toán nào, chỉ đối chiếu sao kê mới biết tiền đã về.",
+      label: "Chờ xác nhận đã nhận tiền mặt",
+      hint: "Khách chọn thanh toán tiền mặt. Không có link cổng thanh toán nào, chỉ duyệt khi VCL đã thực nhận tiền mặt.",
     };
   return {
     color: "gold",
@@ -129,6 +126,11 @@ const getPendingStatusMeta = (status) => {
     hint: "Đã phát hành link cổng thanh toán nhưng chưa nhận được xác nhận. Kiểm tra sao kê trước khi duyệt tay.",
   };
 };
+
+/** Khoản khách chọn "Thanh toán tiền mặt" (backend ghi mã OFFLINE, chờ ở PENDING_RECONCILIATION). */
+const isCashPayment = (row) =>
+  String(row?.paymentMethod || "").toUpperCase() === "OFFLINE" ||
+  String(row?.status || "").toUpperCase() === "PENDING_RECONCILIATION";
 
 /** Trạng thái công nợ của một đơn (PAID / PARTIAL / UNPAID); còn lại là trạng thái khoản thu. */
 const getPaymentStatusMeta = (status) => {
@@ -162,7 +164,7 @@ export default function AdminCashFlowPage() {
   const [txPageSize, setTxPageSize] = useState(20);
   const [txTotalCount, setTxTotalCount] = useState(0);
 
-  // Tab duyệt thủ công
+  // Tab duyệt thanh toán tiền mặt (và khoản cổng thanh toán treo)
   const [pending, setPending] = useState([]);
   const [pendingError, setPendingError] = useState("");
   const [pendingSource, setPendingSource] = useState("");
@@ -315,7 +317,7 @@ export default function AdminCashFlowPage() {
     setRejectOpen(true);
   };
 
-  /* Duyệt được từ tab "Duyệt thủ công" lẫn từ "Giao dịch gần đây" — tải lại đúng tab đang mở. */
+  /* Duyệt được từ tab "Duyệt thanh toán tiền mặt" lẫn từ "Giao dịch gần đây" — tải lại đúng tab đang mở. */
   const reloadAfterReview = () => {
     if (activeTab === "pending") loadPending({ refresh: true });
     else loadTransactions({ refresh: true });
@@ -324,7 +326,11 @@ export default function AdminCashFlowPage() {
   const handleApprove = async () => {
     if (!activeRow) return;
     if (!(Number(receivedAmount) > 0)) {
-      message.warning("Nhập số tiền thực nhận theo sao kê ngân hàng.");
+      message.warning(
+        isCashPayment(activeRow)
+          ? "Nhập số tiền mặt thực nhận."
+          : "Nhập số tiền thực nhận theo sao kê ngân hàng."
+      );
       return;
     }
     setSubmitting(true);
@@ -341,8 +347,10 @@ export default function AdminCashFlowPage() {
       } else {
         message.success(
           result.orderStatusAfter && result.orderStatusAfter !== result.orderStatusBefore
-            ? `Đã ghi nhận thu tiền. Đơn chuyển ${formatOrderStatus(result.orderStatusBefore, activeRow.source)} → ${formatOrderStatus(result.orderStatusAfter, activeRow.source)}.`
-            : "Đã ghi nhận thu tiền."
+            ? `${isCashPayment(activeRow) ? "Đã ghi nhận nhận tiền mặt" : "Đã ghi nhận thu tiền"}. Đơn chuyển ${formatOrderStatus(result.orderStatusBefore, activeRow.source)} → ${formatOrderStatus(result.orderStatusAfter, activeRow.source)}.`
+            : isCashPayment(activeRow)
+              ? "Đã ghi nhận nhận tiền mặt."
+              : "Đã ghi nhận thu tiền."
         );
       }
       setApproveOpen(false);
@@ -436,7 +444,7 @@ export default function AdminCashFlowPage() {
       title: "Mã đơn",
       dataIndex: "consignmentCode",
       fixed: "left",
-      width: 170,
+      width: 220,
       render: (value, row) => (
         <div>
           <strong>{value || "—"}</strong>
@@ -514,7 +522,8 @@ export default function AdminCashFlowPage() {
       title: "Xem",
       key: "actions",
       fixed: "right",
-      width: 90,
+      /* Nút "Lịch sử" + icon + đệm ô ~110px: 90 làm cột cố định bên phải bị cắt chữ. */
+      width: 124,
       render: (_, row) =>
         row.orderId ? (
           <Link
@@ -561,7 +570,7 @@ export default function AdminCashFlowPage() {
     {
       title: "Phương thức",
       dataIndex: "paymentMethod",
-      render: (value) => value || "—",
+      render: (value) => getPaymentMethodLabel(value),
     },
     {
       title: "Trạng thái",
@@ -593,7 +602,7 @@ export default function AdminCashFlowPage() {
                 icon={<CheckCircleOutlined />}
                 onClick={() => openApprove(row)}
               >
-                Duyệt
+                {isCashPayment(row) ? "Đã nhận tiền mặt" : "Duyệt"}
               </Button>
               <Button
                 size="small"
@@ -646,7 +655,7 @@ export default function AdminCashFlowPage() {
       title: "Đợt",
       dataIndex: "installmentType",
       width: 120,
-      render: (value) => INSTALLMENT_LABELS[value] || value || "—",
+      render: (value) => getInstallmentTypeLabel(value),
     },
     {
       title: "Số tiền",
@@ -661,7 +670,7 @@ export default function AdminCashFlowPage() {
       title: "Phương thức",
       dataIndex: "paymentMethod",
       width: 120,
-      render: (value) => value || "—",
+      render: (value) => getPaymentMethodLabel(value),
     },
     {
       title: "Tình trạng",
@@ -697,7 +706,7 @@ export default function AdminCashFlowPage() {
       title: "Xử lý",
       key: "manual-actions",
       fixed: "right",
-      width: 170,
+      width: 230,
       render: (_, row) => (
         <Space>
           <Button
@@ -706,7 +715,7 @@ export default function AdminCashFlowPage() {
             icon={<CheckCircleOutlined />}
             onClick={() => openApprove(row)}
           >
-            Duyệt
+            {isCashPayment(row) ? "Đã nhận tiền mặt" : "Duyệt"}
           </Button>
           <Button
             size="small"
@@ -756,10 +765,10 @@ export default function AdminCashFlowPage() {
           <span>VIETNAM LOGISTICS</span>
           <h1>Dòng tiền</h1>
           <p>
-            Tổng quan công nợ và tình trạng thanh toán toàn bộ đơn ký gửi.
+            Tổng quan công nợ và tình trạng thanh toán toàn bộ đơn ký gửi và mua hộ.
           </p>
         </div>
-        <div className="admin-page__hero-count">
+        <div className="admin-page__hero-count admin-page__hero-count--money">
           <WalletOutlined />
           <strong>
             {summary ? formatCurrency(summary.totalPaid) : "—"}
@@ -849,7 +858,8 @@ export default function AdminCashFlowPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              /* 200px đủ chứa số 13 chữ số ("1.234.567.890.123 ₫"); min(100%) để màn hẹp không tràn. */
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))",
               gap: 12,
               marginBottom: 16,
             }}
@@ -858,6 +868,7 @@ export default function AdminCashFlowPage() {
               <div
                 key={item.label}
                 style={{
+                  minWidth: 0,
                   padding: 16,
                   border: "1px solid #e2e8f0",
                   borderRadius: 12,
@@ -869,13 +880,22 @@ export default function AdminCashFlowPage() {
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    gap: 8,
                     marginBottom: 8,
                   }}
                 >
                   <span style={{ color: "#64748b" }}>{item.label}</span>
                   <span style={{ color: "#2563eb" }}>{item.icon}</span>
                 </div>
-                <strong style={{ fontSize: 18 }}>
+                <strong
+                  style={{
+                    display: "block",
+                    fontSize: "clamp(16px, 13px + 0.3vw, 18px)",
+                    fontVariantNumeric: "tabular-nums",
+                    /* Chỉ là chốt an toàn: bình thường số nằm gọn một dòng, không bao giờ tràn thẻ. */
+                    overflowWrap: "anywhere",
+                  }}
+                >
                   {loading && !summary ? "…" : item.value}
                 </strong>
               </div>
@@ -912,18 +932,18 @@ export default function AdminCashFlowPage() {
                       columns={orderColumns}
                       dataSource={orders}
                       loading={loading && activeTab === "orders"}
-                      pagination={{
+                      pagination={tablePagination({
+                        unit: "đơn",
                         current: pageNumber,
                         pageSize,
                         total: totalCount,
-                        showSizeChanger: true,
-                        showTotal: (total) => `Tổng ${total} đơn`,
                         onChange: (page, size) => {
-                          setPageNumber(page);
+                          setPageNumber(size !== pageSize ? 1 : page);
                           setPageSize(size);
                         },
-                      }}
-                      scroll={{ x: 1100 }}
+                      })}
+                      /* Tổng bề rộng cột ≈ 1200: đủ chỗ cho cột "Xem" cố định bên phải. */
+                      scroll={{ x: 1240 }}
                       locale={{
                         emptyText:
                           "Không có dữ liệu thanh toán theo bộ lọc.",
@@ -958,17 +978,16 @@ export default function AdminCashFlowPage() {
                       columns={transactionColumns}
                       dataSource={transactions}
                       loading={loading && activeTab === "transactions"}
-                      pagination={{
+                      pagination={tablePagination({
+                        unit: "giao dịch",
                         current: txPageNumber,
                         pageSize: txPageSize,
                         total: txTotalCount,
-                        showSizeChanger: true,
-                        showTotal: (total) => `Tổng ${total} giao dịch`,
                         onChange: (page, size) => {
-                          setTxPageNumber(page);
+                          setTxPageNumber(size !== txPageSize ? 1 : page);
                           setTxPageSize(size);
                         },
-                      }}
+                      })}
                       scroll={{ x: 900 }}
                       locale={{
                         emptyText: "Chưa có giao dịch thanh toán.",
@@ -979,7 +998,7 @@ export default function AdminCashFlowPage() {
             },
             {
               key: "pending",
-              label: `Duyệt thủ công (${pendingTotalCount})`,
+              label: `Duyệt thanh toán tiền mặt (${pendingTotalCount})`,
               children:
                 pendingError && !pending.length ? (
                   <Alert
@@ -999,8 +1018,8 @@ export default function AdminCashFlowPage() {
                       type="info"
                       showIcon
                       style={{ marginBottom: 12 }}
-                      message="Đối chiếu sao kê ngân hàng trước khi bấm duyệt"
-                      description="Duyệt là ghi nhận đã thu tiền thật: đơn sẽ nhảy trạng thái y như khi cổng thanh toán báo về, và Sale lập được phiếu tiếp theo. Thao tác này không có nút hoàn tác."
+                      message="Chỉ bấm khi VCL đã thực nhận tiền"
+                      description="Khoản tiền mặt: xác nhận với Sale / thủ quỹ đã nhận đủ tiền mặt rồi mới bấm “Đã nhận tiền mặt”. Khoản cổng thanh toán còn treo (Chờ webhook): đối chiếu sao kê ngân hàng trước khi duyệt. Duyệt là ghi nhận đã thu tiền thật: đơn sẽ nhảy trạng thái y như khi cổng thanh toán báo về, và Sale lập được phiếu tiếp theo. Thao tác này không có nút hoàn tác."
                     />
                     <div className="admin-page__table">
                       <Table
@@ -1008,20 +1027,19 @@ export default function AdminCashFlowPage() {
                         columns={pendingColumns}
                         dataSource={pending}
                         loading={loading && activeTab === "pending"}
-                        pagination={{
+                        pagination={tablePagination({
+                          unit: "khoản chờ duyệt",
                           current: pendingPageNumber,
                           pageSize: pendingPageSize,
                           total: pendingTotalCount,
-                          showSizeChanger: true,
-                          showTotal: (total) => `Tổng ${total} khoản chờ duyệt`,
                           onChange: (page, size) => {
-                            setPendingPageNumber(page);
+                            setPendingPageNumber(size !== pendingPageSize ? 1 : page);
                             setPendingPageSize(size);
                           },
-                        }}
+                        })}
                         scroll={{ x: 1300 }}
                         locale={{
-                          emptyText: "Không có khoản nào đang chờ đối soát.",
+                          emptyText: "Không có khoản tiền mặt hay khoản treo nào đang chờ duyệt.",
                         }}
                       />
                     </div>
@@ -1035,8 +1053,14 @@ export default function AdminCashFlowPage() {
       <Modal
         {...REVIEW_MODAL_PROPS}
         open={approveOpen}
-        title="Xác nhận đã nhận được tiền"
-        okText={orderReview.loading ? "Đang tải thông tin…" : "Ghi nhận đã thu"}
+        title={isCashPayment(activeRow) ? "Xác nhận đã nhận tiền mặt" : "Xác nhận đã nhận được tiền"}
+        okText={
+          orderReview.loading
+            ? "Đang tải thông tin…"
+            : isCashPayment(activeRow)
+              ? "Xác nhận đã nhận tiền mặt"
+              : "Ghi nhận đã thu"
+        }
         okButtonProps={{ disabled: orderReview.loading }}
         cancelText="Huỷ"
         confirmLoading={submitting}
@@ -1056,15 +1080,13 @@ export default function AdminCashFlowPage() {
                 <strong>{formatCurrency(activeRow.amount)}</strong>
               </Descriptions.Item>
               <Descriptions.Item label="Đợt">
-                {INSTALLMENT_LABELS[activeRow.installmentType] ||
-                  activeRow.installmentType ||
-                  "—"}
+                {getInstallmentTypeLabel(activeRow.installmentType)}
               </Descriptions.Item>
-              <Descriptions.Item label="Nội dung CK">
+              <Descriptions.Item label={isCashPayment(activeRow) ? "Mã khoản thu" : "Nội dung CK"}>
                 {activeRow.orderCode ?? "—"}
               </Descriptions.Item>
               <Descriptions.Item label="Phương thức · trạng thái">
-                {activeRow.paymentMethod || "—"} ·{" "}
+                {getPaymentMethodLabel(activeRow.paymentMethod)} ·{" "}
                 {getTransactionStatusMeta(activeRow.status).label}
               </Descriptions.Item>
               <Descriptions.Item label="Tạo / trả lúc">
@@ -1089,9 +1111,12 @@ export default function AdminCashFlowPage() {
 
             <div style={{ marginBottom: 12 }}>
               <div style={{ marginBottom: 4 }}>
-                Số tiền thực nhận <span style={{ color: "#dc2626" }}>*</span>{" "}
+                {isCashPayment(activeRow) ? "Số tiền mặt thực nhận" : "Số tiền thực nhận"}{" "}
+                <span style={{ color: "#dc2626" }}>*</span>{" "}
                 <span style={{ color: "#64748b" }}>
-                  (theo sao kê; nhỏ hơn số cần thu sẽ bị từ chối)
+                  {isCashPayment(activeRow)
+                    ? "(nhỏ hơn số cần thu sẽ bị từ chối)"
+                    : "(theo sao kê; nhỏ hơn số cần thu sẽ bị từ chối)"}
                 </span>
               </div>
               <InputNumber
@@ -1112,13 +1137,13 @@ export default function AdminCashFlowPage() {
 
             <div style={{ marginBottom: 12 }}>
               <div style={{ marginBottom: 4 }}>
-                Mã giao dịch trên sao kê{" "}
+                {isCashPayment(activeRow) ? "Số phiếu thu / mã tham chiếu" : "Mã giao dịch trên sao kê"}{" "}
                 <span style={{ color: "#64748b" }}>(nên nhập để đối chiếu về sau)</span>
               </div>
               <Input
                 value={bankReference}
                 onChange={(event) => setBankReference(event.target.value)}
-                placeholder="VD: FT26081712345678"
+                placeholder={isCashPayment(activeRow) ? "VD: PT-0917-001" : "VD: FT26081712345678"}
               />
             </div>
 
@@ -1128,7 +1153,11 @@ export default function AdminCashFlowPage() {
                 rows={2}
                 value={approveNote}
                 onChange={(event) => setApproveNote(event.target.value)}
-                placeholder="Ai xác nhận, đối chiếu theo sao kê ngày nào..."
+                placeholder={
+                  isCashPayment(activeRow)
+                    ? "Ai nhận tiền mặt, nhận lúc nào, ở đâu..."
+                    : "Ai xác nhận, đối chiếu theo sao kê ngày nào..."
+                }
               />
             </div>
           </>
@@ -1156,9 +1185,9 @@ export default function AdminCashFlowPage() {
             <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
               <Descriptions.Item label="Khách hàng">{activeRow.customerName || "—"}</Descriptions.Item>
               <Descriptions.Item label="Đợt">
-                {INSTALLMENT_LABELS[activeRow.installmentType] || activeRow.installmentType || "—"}
+                {getInstallmentTypeLabel(activeRow.installmentType)}
               </Descriptions.Item>
-              <Descriptions.Item label="Phương thức">{activeRow.paymentMethod || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Phương thức">{getPaymentMethodLabel(activeRow.paymentMethod)}</Descriptions.Item>
               <Descriptions.Item label="Tạo / trả lúc">
                 {formatDateTime(activeRow.createdAt || activeRow.paidAt)}
                 {activeRow.waitingDays ? ` · đã chờ ${activeRow.waitingDays} ngày` : ""}
@@ -1176,7 +1205,11 @@ export default function AdminCashFlowPage() {
               rows={3}
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}
-              placeholder="VD: không tìm thấy khoản tiền tương ứng trên sao kê ngày 17/08"
+              placeholder={
+                isCashPayment(activeRow)
+                  ? "VD: khách không đến nộp tiền mặt, đã hẹn lại"
+                  : "VD: không tìm thấy khoản tiền tương ứng trên sao kê ngày 17/08"
+              }
             />
           </>
         ) : null}

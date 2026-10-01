@@ -53,6 +53,7 @@ import {
   splitVietnamAddress,
 } from "@shared/api/vietnamAddressService";
 import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
+import { tablePagination } from "@shared/utils/tablePagination";
 import "@features/settlement/pages/SaleSettlementPage/SaleSettlementPage.css";
 
 const { Title, Text } = Typography;
@@ -439,7 +440,7 @@ export default function SaleReleasePage() {
         dataSource={filtered}
         loading={loading}
         scroll={{ x: 1180 }}
-        pagination={{ pageSize: 12, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "đơn" })}
         locale={{
           emptyText: (
             <Empty

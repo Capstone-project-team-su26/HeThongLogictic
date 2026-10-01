@@ -10,6 +10,7 @@ import {
 } from "@features/shipment/api/internationalShipmentService";
 import ShipmentTimelineDrawer from "@features/shipment/components/ShipmentTimelineDrawer/ShipmentTimelineDrawer";
 import { countPurchaseRecords } from "@shared/components/OrderTypeTag/orderType";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text } = Typography;
 
@@ -34,6 +35,8 @@ export default function ShipmentWorkspace({
   const [statusTab, setStatusTab] = useState(defaultTab);
   const [keyword, setKeyword] = useState("");
   const [pageNumber, setPageNumber] = useState(1);
+  /* Phân trang phía server (GET /api/international-shipments, backend nhận tối đa 100). */
+  const [pageSize, setPageSize] = useState(20);
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -44,7 +47,7 @@ export default function ShipmentWorkspace({
     setLoading(true);
     setErrorMessage("");
     try {
-      const result = await listShipments({ statusTab, search: keyword.trim(), pageNumber, pageSize: 20 });
+      const result = await listShipments({ statusTab, search: keyword.trim(), pageNumber, pageSize });
       setRows(result.items);
       setTotalCount(result.totalCount);
     } catch (error) {
@@ -52,7 +55,7 @@ export default function ShipmentWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [statusTab, keyword, pageNumber]);
+  }, [statusTab, keyword, pageNumber, pageSize]);
 
   useEffect(() => {
     fetchRows();
@@ -169,13 +172,16 @@ export default function ShipmentWorkspace({
         columns={columns}
         dataSource={rows}
         scroll={{ x: 1100 }}
-        pagination={{
+        pagination={tablePagination({
+          unit: "lô",
           current: pageNumber,
-          pageSize: 20,
+          pageSize,
           total: totalCount,
-          showSizeChanger: false,
-          onChange: setPageNumber,
-        }}
+          onChange: (page, size) => {
+            setPageNumber(size !== pageSize ? 1 : page);
+            setPageSize(size);
+          },
+        })}
         locale={{ emptyText: <Empty description="Không có lô nào." /> }}
       />
 

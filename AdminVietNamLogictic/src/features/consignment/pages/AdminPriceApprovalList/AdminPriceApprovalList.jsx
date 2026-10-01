@@ -38,6 +38,7 @@ import {
   groupFeesByOrderItem,
 } from "@features/consignment/api/quotationService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import { tablePagination } from "@shared/utils/tablePagination";
 import {
   ReviewFacts,
   ReviewItemsTable,
@@ -50,6 +51,7 @@ import OrderReviewPanel from "@features/consignment/components/OrderReviewPanel/
 import useOrderReview from "@features/consignment/hooks/useOrderReview";
 
 import "./AdminPriceApprovalList.css";
+import { getRouteLabel } from "@shared/utils/statusLabel";
 
 const formatCurrency = (value) => {
   const number = Number(value);
@@ -253,7 +255,7 @@ export default function AdminPriceApprovalList() {
               <strong>{row.order?.consignmentCode || "—"}</strong>
             </Link>
             <small>{row.order?.customerName || "Khách hàng"}</small>
-            <small>{row.order?.route || "—"}</small>
+            <small>{getRouteLabel(row.order?.route, "—")}</small>
           </div>
         ),
       },
@@ -377,8 +379,8 @@ export default function AdminPriceApprovalList() {
         description={
           <>
             Hệ thống chưa có API liệt kê báo giá chờ duyệt giá. Màn này quét các
-            đơn ký gửi gần đây (PENDING_REVIEW, NEED_MORE_INFO, QUOTATION_SENT,
-            QUOTATION_REJECTED, APPROVED) rồi đọc báo giá của từng đơn, nên chỉ
+            đơn ký gửi gần đây (chờ duyệt, cần bổ sung thông tin, đã gửi báo giá,
+            khách từ chối báo giá, đã duyệt) rồi đọc báo giá của từng đơn, nên chỉ
             phủ vài trang đầu mỗi trạng thái — đơn rất cũ có thể không hiện ra.
             {summary.scannedOrders > 0
               ? ` Lần tải gần nhất đã quét ${summary.scannedOrders} đơn.`
@@ -416,7 +418,7 @@ export default function AdminPriceApprovalList() {
           rowKey={(row) => row.quotation?.quotationId}
           dataSource={rows}
           columns={columns}
-          pagination={false}
+          pagination={tablePagination({ unit: "báo giá", defaultPageSize: 10 })}
           className="price-approval-table"
         />
       )}

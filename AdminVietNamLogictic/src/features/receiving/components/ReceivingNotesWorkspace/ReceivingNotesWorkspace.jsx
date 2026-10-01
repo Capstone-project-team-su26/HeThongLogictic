@@ -56,6 +56,8 @@ import { toPublicReceiptUrl } from "@shared/utils/receiptUrl";
 /* Hàng đủ D×R×C + báo giá + tiền đã cọc của đơn gốc — phiếu nhập kho không mang mấy số này. */
 import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
+import { getParcelStatusLabel, getRouteLabel, textOr } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text, Title } = Typography;
 
@@ -182,7 +184,7 @@ const ACTUAL_PARCEL_COLUMNS = [
   {
     title: "Trạng thái",
     key: "status",
-    render: (_, row) => row?.packageStatusText || row?.packageStatus || "—",
+    render: (_, row) => textOr(row?.packageStatusText, getParcelStatusLabel(row?.packageStatus)),
   },
   { title: "Ô kệ", dataIndex: "binCode", width: 110, render: (value) => value || "Chưa xếp" },
 ];
@@ -214,7 +216,7 @@ function ReceivingDecisionReview({ target, noteReview, orderReview, compareColum
           { label: "Mã phiếu", value: <Text strong>{note.receivingNoteCode}</Text> },
           {
             label: "Đang chờ",
-            value: getApprovalStageMeta(stage)?.label || note.statusText || note.status,
+            value: getApprovalStageMeta(stage)?.label || textOr(note.statusText, getReceivingStatusMeta(note.status).label),
           },
           {
             label: isPurchaseReceivingNote(note) ? "Đơn mua hộ" : "Đơn ký gửi",
@@ -337,6 +339,18 @@ export default function ReceivingNotesWorkspace({
   const [keyword, setKeyword] = useState("");
   const [orderType, setOrderType] = useState("");
 
+  /*
+   * Phân trang PHÍA SERVER cho các tab trạng thái thật (trước đây chỉ đọc trang đầu 200 phiếu —
+   * trần pageSize backend — nên phiếu thứ 201 trở đi không bao giờ hiện). Tab "Cần quyết định"
+   * là bộ lọc tại chỗ (backend không có status này) nên vẫn phân trang phía client.
+   * Đổi tab / ô tìm / loại đơn → về trang 1 (khoá `filterKey`, không cần effect).
+   */
+  const isAwaitingTab = statusTab === AWAITING_TAB_KEY;
+  const filterKey = `${statusTab}|${keyword.trim()}|${orderType}`;
+  const [pageState, setPageState] = useState({ key: filterKey, pageNumber: 1, pageSize: 20 });
+  const pageNumber = pageState.key === filterKey ? pageState.pageNumber : 1;
+  const { pageSize } = pageState;
+
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -363,7 +377,12 @@ export default function ReceivingNotesWorkspace({
     try {
       /* Số đếm đầu trang tính trên mọi phiếu, không theo tab — tab "Cần quyết định" rỗng không được kéo chip về 0. */
       const [result, counts] = await Promise.all([
-        listReceivingNotes({ status: statusTab, search: keyword.trim(), orderType }),
+        listReceivingNotes({
+          status: statusTab,
+          search: keyword.trim(),
+          orderType,
+          ...(isAwaitingTab ? {} : { pageNumber, pageSize }),
+        }),
         getReceivingSummary({ search: keyword.trim() }).catch(() => null),
       ]);
       setRows(result.items);
@@ -374,7 +393,7 @@ export default function ReceivingNotesWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [statusTab, keyword, orderType]);
+  }, [statusTab, keyword, orderType, isAwaitingTab, pageNumber, pageSize]);
 
   useEffect(() => {
     fetchRows();
@@ -538,7 +557,7 @@ export default function ReceivingNotesWorkspace({
           const meta = getReceivingStatusMeta(value);
           return (
             <Space direction="vertical" size={2}>
-              <Tag color={meta.tone}>{row.statusText || meta.label}</Tag>
+              <Tag color={meta.tone}>{textOr(row.statusText, meta.label)}</Tag>
               {row.awaitingApproval && getApprovalStageMeta(row.approvalStage) ? (
                 <Tag color={getApprovalStageMeta(row.approvalStage).color}>
                   Chờ: {getApprovalStageMeta(row.approvalStage).label}
@@ -734,7 +753,22 @@ export default function ReceivingNotesWorkspace({
         columns={columns}
         dataSource={rows}
         scroll={{ x: 1200 }}
-        pagination={{ pageSize: 12, showSizeChanger: false }}
+        pagination={
+          isAwaitingTab
+            ? tablePagination({ unit: "phiếu" })
+            : tablePagination({
+                unit: "phiếu",
+                current: pageNumber,
+                pageSize,
+                total: totalCount,
+                onChange: (page, size) =>
+                  setPageState({
+                    key: filterKey,
+                    pageNumber: size !== pageSize ? 1 : page,
+                    pageSize: size,
+                  }),
+              })
+        }
         locale={{
           emptyText: (
             <Empty
@@ -791,7 +825,7 @@ export default function ReceivingNotesWorkspace({
         {detail ? (
           <>
             <Space wrap style={{ marginBottom: 12 }}>
-              <Tag color={detailStatusMeta.tone}>{detail.statusText || detailStatusMeta.label}</Tag>
+              <Tag color={detailStatusMeta.tone}>{textOr(detail.statusText, detailStatusMeta.label)}</Tag>
               {detail.awaitingApproval && getApprovalStageMeta(detail.approvalStage) ? (
                 <Tag color={getApprovalStageMeta(detail.approvalStage).color}>
                   Chờ: {getApprovalStageMeta(detail.approvalStage).label}
@@ -856,7 +890,7 @@ export default function ReceivingNotesWorkspace({
                   </Descriptions.Item>
                 </>
               ) : null}
-              <Descriptions.Item label="Tuyến">{detail.route || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Tuyến">{getRouteLabel(detail.route, "—")}</Descriptions.Item>
               <Descriptions.Item label="Khách hàng">
                 {detail.customerName || "—"}
               </Descriptions.Item>

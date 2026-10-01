@@ -173,7 +173,7 @@ export const getAdminFinanceTransactions = async (filters = {}, options = {}) =>
 };
 
 /**
- * Khoản tiền đang treo chờ đối soát tay: khách chuyển khoản tay (OFFLINE →
+ * Khoản tiền đang treo chờ Admin xác nhận tay: khách chọn thanh toán tiền mặt (OFFLINE →
  * PENDING_RECONCILIATION), SePay (production chưa có khoá webhook) hoặc link cổng
  * thanh toán mà webhook chưa về (PENDING).
  */

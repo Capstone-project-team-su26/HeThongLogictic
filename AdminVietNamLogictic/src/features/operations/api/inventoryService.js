@@ -14,6 +14,7 @@ import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getArrayItems, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getInventoryApiError };
 
@@ -22,10 +23,12 @@ export const INVENTORY_STATUS_META = Object.freeze({
   RESERVED: { label: "Giữ cho phiếu xuất", color: "gold" },
   PICKED: { label: "Đã bốc sang khu xuất", color: "processing" },
   RELEASED: { label: "Đã xuất khỏi kho", color: "default" },
+  IN_STOCK: { label: "Đang lưu kho", color: "success" },
 });
 
+/* Mã lạ: nhãn tiếng Việt an toàn từ statusLabel, không bao giờ in mã thô. */
 export const getInventoryStatusMeta = (status) =>
-  INVENTORY_STATUS_META[String(status || "").toUpperCase()] || { label: status || "—", color: "default" };
+  metaOf(INVENTORY_STATUS_META, status, { color: "default" });
 
 /** Danh sách tồn — MẢNG TRẦN. */
 export const listInventories = async ({ warehouseId = "", status = "" } = {}) => {

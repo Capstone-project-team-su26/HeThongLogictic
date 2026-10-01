@@ -40,6 +40,8 @@ import "@features/operations/styles/OperationsPage.css";
 // Thẻ KPI dùng class wro-kpi-* khai bên trang WRO. Import thẳng thay vì trông chờ trang khác
 // đã kéo file này vào bundle giúp.
 import "@features/operations/styles/OperationsWroPage.css";
+import { getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
+import { subTablePagination, tablePagination } from "@shared/utils/tablePagination";
 
 const { Title, Text } = Typography;
 
@@ -83,7 +85,11 @@ const INBOUND_PARCEL_COLUMNS = [
       );
     },
   },
-  { title: "Trạng thái", dataIndex: "packageStatus" },
+  {
+    title: "Trạng thái",
+    dataIndex: "packageStatus",
+    render: (v, row) => textOr(row.packageStatusText, getParcelStatusLabel(v)),
+  },
   { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "Chưa xếp" },
 ];
 
@@ -121,7 +127,7 @@ function InboundDecisionReview({ target, review }) {
           },
           {
             label: "Trạng thái",
-            value: data.statusText || getInboundStatusMeta(data.status).label,
+            value: textOr(data.statusText, getInboundStatusMeta(data.status).label),
           },
           { label: "Ghi chú của kho", value: data.note, span: 2 },
         ]}
@@ -438,12 +444,7 @@ export default function OperationsInboundApprovalsPage() {
           loading={loading}
           sticky={{ offsetHeader: 0 }}
           scroll={{ x: 1200, y: "calc(100vh - 460px)" }}
-          pagination={{
-            pageSize: 15,
-            showSizeChanger: true,
-            pageSizeOptions: ["10", "15", "25", "50"],
-            showTotal: (total) => `Tổng ${total} phiếu`,
-          }}
+          pagination={tablePagination({ unit: "phiếu" })}
           locale={{ emptyText: "Không có phiếu nhập kho nào." }}
         />
       </div>
@@ -464,7 +465,7 @@ export default function OperationsInboundApprovalsPage() {
               <Descriptions.Item label="Kho nhận">{detail.warehouseName || "—"}</Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <Tag color={getInboundStatusMeta(detail.status).tone}>
-                  {detail.statusText || getInboundStatusMeta(detail.status).label}
+                  {textOr(detail.statusText, getInboundStatusMeta(detail.status).label)}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Người lập">
@@ -509,7 +510,7 @@ export default function OperationsInboundApprovalsPage() {
             <Table
               rowKey={(row) => row.parcelId}
               size="small"
-              pagination={false}
+              pagination={subTablePagination("kiện")}
               dataSource={detail.parcels || []}
               columns={INBOUND_PARCEL_COLUMNS}
               locale={{ emptyText: "Phiếu chưa có kiện nào." }}

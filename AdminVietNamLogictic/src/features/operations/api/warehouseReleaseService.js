@@ -18,6 +18,7 @@ import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getPagedData, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
 import { openFileInNewTab } from "@shared/api/fileDownload";
 import { getAdminApiError } from "@features/admin/api/adminService";
+import { metaOf } from "@shared/utils/statusLabel";
 
 export { getAdminApiError as getWroApiError };
 
@@ -29,7 +30,7 @@ export const WRO_STATUS_META = Object.freeze({
   PICKING: { label: "Đang bốc hàng sang khu xuất", color: "processing" },
   READY: { label: "Đã bốc xong, chờ vào lô", color: "cyan" },
   IN_SHIPMENT: { label: "Đã vào lô vận chuyển", color: "geekblue" },
-  HANDED_OVER: { label: "Đã bàn giao cho hãng", color: "success" },
+  HANDED_OVER: { label: "Đã bàn giao cho hãng vận chuyển", color: "success" },
   REJECTED: { label: "Bị từ chối", color: "error" },
   CANCELLED: { label: "Đã huỷ", color: "default" },
 });
@@ -42,13 +43,10 @@ export const WRO_PARCEL_STATUS_META = Object.freeze({
 });
 
 export const getWroStatusMeta = (status) =>
-  WRO_STATUS_META[String(status || "").toUpperCase()] || { label: status || "—", color: "default" };
+  metaOf(WRO_STATUS_META, status, { color: "default" });
 
 export const getWroParcelStatusMeta = (status) =>
-  WRO_PARCEL_STATUS_META[String(status || "").toUpperCase()] || {
-    label: status || "—",
-    color: "default",
-  };
+  metaOf(WRO_PARCEL_STATUS_META, status, { color: "default" });
 
 /** Tab của màn duyệt — key là giá trị `status` gửi thẳng lên (nhiều giá trị ngăn dấu phẩy). */
 export const WRO_STATUS_TABS = Object.freeze([

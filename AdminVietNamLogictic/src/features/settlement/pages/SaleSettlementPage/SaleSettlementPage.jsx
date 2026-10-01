@@ -55,7 +55,11 @@ import { OrderReviewPanel, useOrderReview } from "@features/consignment";
  * rule trong file CSS gộp (xem ARCHITECTURE.md mục thứ tự nạp CSS); module api thì không.
  */
 import { getPurchaseRequestDetailApi } from "@features/purchase/api/purchaseRequestService";
+import { AttachmentThumbnails } from "@features/attachments";
 import "./SaleSettlementPage.css";
+import { getInstallmentTypeLabel, getPaymentMethodLabel, getRouteLabel } from "@shared/utils/statusLabel";
+import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
+import { subTablePagination, tablePagination } from "@shared/utils/tablePagination";
 
 const { Title, Text } = Typography;
 
@@ -84,14 +88,6 @@ const signedMoney = (value) => {
       {formatMoney(number)}
     </Text>
   );
-};
-
-const PAYMENT_TYPE_LABELS = {
-  DEPOSIT: "Cọc",
-  FINAL: "Tất toán",
-  FINAL_PAYMENT: "Tất toán",
-  STORAGE_FEE: "Phí lưu kho",
-  REDELIVERY_FEE: "Phí giao lại",
 };
 
 /** Sản phẩm của yêu cầu mua hộ (GET /api/purchase-requests/{id} → items[]). */
@@ -374,7 +370,7 @@ export default function SaleSettlementPage() {
         dataSource={filtered}
         loading={loading}
         scroll={{ x: 1080 }}
-        pagination={{ pageSize: 12, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "đơn" })}
         locale={{
           emptyText: (
             <Empty
@@ -402,7 +398,7 @@ export default function SaleSettlementPage() {
               <Descriptions.Item label="Loại đơn">
                 {target.orderType === "PURCHASE" ? "Mua hộ" : "Ký gửi"}
               </Descriptions.Item>
-              <Descriptions.Item label="Tuyến">{target.route || "—"}</Descriptions.Item>
+              <Descriptions.Item label="Tuyến">{getRouteLabel(target.route, "—")}</Descriptions.Item>
               <Descriptions.Item label="Hàng về kho">
                 {target.parcelCount} kiện · {Number(target.totalWeight || 0).toLocaleString("vi-VN")} kg
               </Descriptions.Item>
@@ -478,7 +474,7 @@ export default function SaleSettlementPage() {
                   <Table
                     size="small"
                     rowKey="parcelId"
-                    pagination={false}
+                    pagination={subTablePagination("kiện")}
                     dataSource={preview.parcels || []}
                     style={{ marginBottom: 12 }}
                     columns={[
@@ -502,6 +498,15 @@ export default function SaleSettlementPage() {
                       },
                       { title: "Cân quy đổi", dataIndex: "volumetricWeight", align: "right", render: (v) => `${formatNumber(v)} kg` },
                       { title: "Cân tính cước", dataIndex: "chargeableWeight", align: "right", render: (v) => <Text strong>{formatNumber(v)} kg</Text> },
+                      /* Ảnh kho VN chụp lúc tiếp nhận — căn cứ cho số cân đo VN. Backend cũ không trả → "—". */
+                      {
+                        title: "Ảnh nhận VN",
+                        key: "arrivalPhotos",
+                        width: 112,
+                        render: (_, row) => (
+                          <AttachmentThumbnails items={row.arrivalPhotos} size={34} emptyText="—" />
+                        ),
+                      },
                     ]}
                   />
 
@@ -571,15 +576,17 @@ export default function SaleSettlementPage() {
                       {
                         title: "Loại",
                         dataIndex: "installmentType",
-                        render: (v) => PAYMENT_TYPE_LABELS[String(v || "").toUpperCase()] || v || "—",
+                        render: (v) => getInstallmentTypeLabel(v),
                       },
                       { title: "Số tiền", dataIndex: "amount", align: "right", render: formatMoney },
-                      { title: "Phương thức", dataIndex: "paymentMethod", render: (v) => v || "—" },
+                      { title: "Phương thức", dataIndex: "paymentMethod", render: (v) => getPaymentMethodLabel(v) },
                       {
                         title: "Trạng thái",
                         dataIndex: "paymentStatus",
                         render: (v) => (
-                          <Tag color={String(v).toUpperCase() === "PAID" ? "success" : "default"}>{v || "—"}</Tag>
+                          <Tag color={String(v).toUpperCase() === "PAID" ? "success" : "default"}>
+                            {getPaymentStatusMeta(v).label}
+                          </Tag>
                         ),
                       },
                       { title: "Trả lúc", dataIndex: "paidAt", render: formatDateTime },

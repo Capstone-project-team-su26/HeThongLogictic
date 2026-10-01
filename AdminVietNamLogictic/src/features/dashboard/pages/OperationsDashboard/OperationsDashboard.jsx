@@ -20,6 +20,7 @@ import {
 } from "@features/dashboard/components/DashboardCharts";
 import { formatCount, formatDayLabel } from "@features/dashboard/components/dashboardFormat";
 import "@features/operations/styles/OperationsPage.css";
+import { getWarehouseTypeLabel } from "@shared/utils/statusLabel";
 
 /*
  * Mỗi thẻ là MỘT hàng đợi việc của quản lý kho, đếm bằng API thật.
@@ -49,8 +50,6 @@ const formatDuration = (minutes) => {
   if (minutes < 48 * 60) return `${oneDecimal.format(minutes / 60)} giờ`;
   return `${oneDecimal.format(minutes / 1440)} ngày`;
 };
-
-const WAREHOUSE_TYPE_LABELS = { ORIGIN: "Kho nguồn", DESTINATION: "Kho VN" };
 
 const CARDS = [
   {
@@ -224,7 +223,7 @@ function OperationsStats({ stats }) {
                     <td>
                       <strong>{w.warehouseName || w.warehouseCode}</strong>
                       <br />
-                      <small>{WAREHOUSE_TYPE_LABELS[w.warehouseType] ?? w.warehouseType}</small>
+                      <small>{getWarehouseTypeLabel(w.warehouseType)}</small>
                     </td>
                     <td>{formatCount(w.storedParcels)}</td>
                     <td>{formatKg(w.storedWeightKg)}</td>

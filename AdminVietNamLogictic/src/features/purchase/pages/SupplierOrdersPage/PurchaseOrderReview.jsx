@@ -9,6 +9,7 @@
  */
 
 import { Typography } from "antd";
+import { textOr } from "@shared/utils/statusLabel";
 
 import {
   ReviewFacts,
@@ -135,7 +136,7 @@ export default function PurchaseOrderReview({ order }) {
           { label: "Đơn mua", value: <Text strong>{order.purchaseOrderCode}</Text> },
           { label: "Yêu cầu mua hộ", value: order.purchaseCode },
           { label: "Khách hàng", value: order.customerName },
-          { label: "Trạng thái", value: order.statusText || order.statusMeta?.label },
+          { label: "Trạng thái", value: textOr(order.statusText, order.statusMeta?.label) },
           { label: "Nhà cung cấp", value: order.supplierName || "Chưa chọn" },
           { label: "Kho nhận", value: order.warehouseName || "Chưa gắn kho" },
           {

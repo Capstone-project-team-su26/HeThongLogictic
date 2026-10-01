@@ -39,6 +39,15 @@ import {
  * tự cộng ở trình duyệt, còn biểu đồ 7 ngày là đường vẽ cứng.
  */
 import { getSaleDashboardApi } from "@features/dashboard/api/dashboardService";
+/*
+ * Trạng thái mua hộ hiện CHẶNG THẬT (đối chiếu đơn mua NCC + đơn kho), không dùng nhãn server
+ * "Hoàn tất nghiệp vụ" — mã COMPLETED của yêu cầu có thể chỉ là tất toán đợt cuối đời cũ.
+ */
+import { getPurchaseStageContextApi } from "@features/purchase/api/purchaseRequestService";
+import {
+  derivePurchaseStage,
+  getPurchaseRequestStatusLabel,
+} from "@features/purchase/api/purchaseRequestStage";
 
 import {
   getOrderStatusLabel,
@@ -46,6 +55,7 @@ import {
 } from "@features/consignment";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import "./SaleDashboard.css";
+import { textOr } from "@shared/utils/statusLabel";
 
 const SALE_DASHBOARD_THEME = {
   token: {
@@ -118,6 +128,15 @@ const STATUS_CONFIGS = {
     text: "Từ chối",
   },
 };
+/*
+ * Dòng "Mua hộ · COMPLETED" của biểu đồ: server ghi "Hoàn tất nghiệp vụ" dù có yêu cầu chỉ mới
+ * tất toán đời cũ — ở mức đếm theo mã chỉ gọi là "đã đóng yêu cầu".
+ */
+const purchaseBreakdownLabel = (row) =>
+  String(row?.key || "").toUpperCase() === "PURCHASE:COMPLETED"
+    ? `Mua hộ · ${getPurchaseRequestStatusLabel("COMPLETED")}`
+    : row?.label;
+
 /* Cờ + lớp màu thanh cho bốn tuyến chính; tuyến khác (nếu backend trả về) dùng màu trung tính. */
 const ROUTE_META = {
   KR: { flag: "🇰🇷", name: "Hàn Quốc (Korea)", barClass: "is-krw" },
@@ -177,6 +196,8 @@ export default function SaleDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
+  /* undefined = đang tải; null = không tải được (cột trạng thái lùi về nhãn theo mã). */
+  const [purchaseStageContext, setPurchaseStageContext] = useState(undefined);
 
   // Quick convert state — tỷ giá lấy từ bảng tỷ giá công ty (trong response dashboard).
   const [convertCurrency, setConvertCurrency] = useState("CNY");
@@ -196,6 +217,20 @@ export default function SaleDashboard() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPurchaseStageContextApi()
+      .then((context) => {
+        if (!cancelled) setPurchaseStageContext(context);
+      })
+      .catch(() => {
+        if (!cancelled) setPurchaseStageContext(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const exchangeRates = dashboard.exchangeRates;
@@ -320,12 +355,19 @@ export default function SaleDashboard() {
           border: "#e2e8f0",
           text: status || "Mới",
         };
+        const stage =
+          purchaseStageContext || record.overallStage
+            ? derivePurchaseStage(record, purchaseStageContext || null)
+            : null;
         return (
           <span
             className="dashboard-status-badge"
             style={{ color: conf.color, background: conf.bg, borderColor: conf.border }}
+            title={stage?.hint || undefined}
           >
-            {record.statusText || conf.text}
+            {stage
+              ? stage.label
+              : getPurchaseRequestStatusLabel(stKey, textOr(record.statusText, conf.text))}
           </span>
         );
       },
@@ -642,7 +684,7 @@ export default function SaleDashboard() {
                   <div
                     key={segment.key}
                     className="legend-item"
-                    title={segment.statuses.map((st) => `${st.label}: ${st.count}`).join("\n")}
+                    title={segment.statuses.map((st) => `${purchaseBreakdownLabel(st)}: ${st.count}`).join("\n")}
                   >
                     <span className={`dot dot-${segment.className}`} />
                     <span>{segment.label} ({segment.percent}% · {formatNumber(segment.count)})</span>

@@ -15,6 +15,7 @@ import {
   getRestrictedItemDetail,
   getRestrictedItems,
 } from "@features/catalog/api/catalogAdminService";
+import { labelOf } from "@shared/utils/statusLabel";
 
 export const RESTRICTION_TYPE = {
   BANNED: "BANNED",
@@ -82,8 +83,9 @@ export const normalizeRestrictedItem = (item = {}) => {
     country,
     countryDisplayName: COUNTRY_NAME_LABELS[country] || country || "—",
     restrictionType,
-    restrictionTypeDisplayName:
-      RESTRICTION_LABELS[restrictionType] || restrictionType || "—",
+    restrictionTypeDisplayName: labelOf(RESTRICTION_LABELS, restrictionType, {
+      generic: "Loại hạn chế khác",
+    }),
     note: normalizeText(item?.note),
     isActive: item?.isActive !== false,
   };

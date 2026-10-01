@@ -115,6 +115,9 @@ import {
 
 import "./CustomerServiceChat.css";
 
+/* Số nhóm khách vẽ mỗi nấc ở cột hội thoại (phân trang kiểu "Xem thêm"). */
+const CONVERSATION_GROUP_WINDOW = 20;
+
 export default function CustomerServiceChat() {
   const location = useLocation();
   const currentUserId = useMemo(() => getCurrentUserId(), []);
@@ -186,6 +189,17 @@ export default function CustomerServiceChat() {
   const conversationGroups = useMemo(
     () => buildConversationGroups(conversations),
     [conversations]
+  );
+
+  /* Hộp thư dài (GET /api/conversations không phân trang): vẽ trước CONVERSATION_GROUP_WINDOW
+     khách, "Xem thêm" mở thêm từng nấc — cột trái không phải dựng hàng trăm nhóm một lúc. */
+  const [visibleGroupCount, setVisibleGroupCount] = useState(
+    CONVERSATION_GROUP_WINDOW
+  );
+  const visibleConversationGroups = conversationGroups.slice(0, visibleGroupCount);
+  const hiddenGroupCount = Math.max(
+    0,
+    conversationGroups.length - visibleConversationGroups.length
   );
 
   const messageTimeline = useMemo(
@@ -1480,7 +1494,7 @@ export default function CustomerServiceChat() {
               )}
 
               {!isLoadingList &&
-                conversationGroups.map((group) => {
+                visibleConversationGroups.map((group) => {
                   const isCollapsed = collapsedGroupKeys.has(group.key);
                   const hasMultiple = group.conversationCount > 1;
                   const groupHasActive = group.conversations.some(
@@ -1667,6 +1681,25 @@ export default function CustomerServiceChat() {
                     </div>
                   );
                 })}
+
+              {!isLoadingList && hiddenGroupCount > 0 && (
+                <div className="cskh-load-more">
+                  <span>
+                    Đang hiện {visibleConversationGroups.length} /{" "}
+                    {conversationGroups.length} khách
+                  </span>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setVisibleGroupCount(
+                        (count) => count + CONVERSATION_GROUP_WINDOW
+                      )
+                    }
+                  >
+                    Xem thêm (còn {hiddenGroupCount})
+                  </Button>
+                </div>
+              )}
             </div>
           </aside>
 

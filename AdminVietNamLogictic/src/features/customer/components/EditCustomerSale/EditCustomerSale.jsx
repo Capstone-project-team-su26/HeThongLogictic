@@ -18,6 +18,7 @@ import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import CustomerAddressSelector from "@shared/components/VietnamAddressSelector/VietnamAddressSelector";
 import { getAddressSelectionError } from "@shared/api/vietnamAddressService";
 import "./EditCustomerSale.css";
+import { getUserStatusLabel } from "@shared/utils/statusLabel";
 
 const STATUS_OPTIONS = [
   { value: "ACTIVE", label: "Đang hoạt động" },
@@ -155,7 +156,8 @@ export default function EditCustomerSale({
           </div>
           <div className={`edit-customer-sale__status is-${displayValues.status.toLowerCase()}`}>
             <SafetyCertificateOutlined />
-            {STATUS_OPTIONS.find((item) => item.value === displayValues.status)?.label || displayValues.status}
+            {STATUS_OPTIONS.find((item) => item.value === displayValues.status)?.label ||
+              getUserStatusLabel(displayValues.status)}
           </div>
         </header>
 

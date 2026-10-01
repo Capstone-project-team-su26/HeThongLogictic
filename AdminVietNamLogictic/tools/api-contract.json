@@ -1114,5 +1114,22 @@
     ],
     "hasDefault": true,
     "originalLines": 197
+  },
+  "src/shared/api/orderLimitsApi.js": {
+    "named": [
+      "NO_ORDER_LIMITS",
+      "ORDER_LIMITS_ENDPOINT",
+      "ORDER_LIMITS_HISTORY_ENDPOINT",
+      "getOrderLimitHistoryApi",
+      "getOrderLimitSettingsApi",
+      "getOrderLimitsApi",
+      "getOrderLimitsApiError",
+      "normalizeOrderLimits",
+      "toOrderLimit",
+      "updateOrderLimitSettingsApi"
+    ],
+    "hasDefault": false,
+    "realApi": true,
+    "realApiNote": "API THẬT: giới hạn tạo đơn do Admin cấu hình (30/09/2026) — GET/PUT /api/system-settings/order-limits."
   }
 }

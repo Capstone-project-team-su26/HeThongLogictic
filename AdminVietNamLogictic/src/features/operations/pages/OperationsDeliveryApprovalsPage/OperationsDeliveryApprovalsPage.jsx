@@ -46,6 +46,8 @@ import "@features/operations/styles/OperationsPage.css";
 // Thẻ KPI dùng class wro-kpi-* khai bên trang WRO. Import thẳng thay vì trông chờ trang khác
 // đã kéo file này vào bundle giúp.
 import "@features/operations/styles/OperationsWroPage.css";
+import { getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
+import { subTablePagination, tablePagination } from "@shared/utils/tablePagination";
 
 const { Title, Text } = Typography;
 
@@ -67,7 +69,11 @@ const formatDateTime = (value) => {
 /** Cột kiện của phiếu giao — dùng chung cho drawer chi tiết và hộp duyệt / từ chối. */
 const DELIVERY_PARCEL_COLUMNS = [
   { title: "Mã kiện", dataIndex: "packageCode" },
-  { title: "Trạng thái", dataIndex: "packageStatus" },
+  {
+    title: "Trạng thái",
+    dataIndex: "packageStatus",
+    render: (v, row) => textOr(row.packageStatusText, getParcelStatusLabel(v)),
+  },
   {
     /*
      * Khách khai muốn gửi lại kho mà lại có yêu cầu giao — có thể khách gọi đổi ý,
@@ -347,7 +353,7 @@ export default function OperationsDeliveryApprovalsPage() {
         dataIndex: "status",
         render: (value, row) => {
           const meta = getDeliveryStatusMeta(value);
-          return <Tag color={meta.tone}>{row.statusText || meta.label}</Tag>;
+          return <Tag color={meta.tone}>{textOr(row.statusText, meta.label)}</Tag>;
         },
       },
       {
@@ -502,12 +508,7 @@ export default function OperationsDeliveryApprovalsPage() {
           loading={loading}
           sticky={{ offsetHeader: 0 }}
           scroll={{ x: 1400, y: "calc(100vh - 460px)" }}
-          pagination={{
-            pageSize: 15,
-            showSizeChanger: true,
-            pageSizeOptions: ["10", "15", "25", "50"],
-            showTotal: (total) => `Tổng ${total} phiếu`,
-          }}
+          pagination={tablePagination({ unit: "phiếu" })}
           locale={{ emptyText: "Không có yêu cầu giao hàng nào." }}
         />
       </div>
@@ -535,7 +536,7 @@ export default function OperationsDeliveryApprovalsPage() {
               </Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                 <Tag color={getDeliveryStatusMeta(detail.status).tone}>
-                  {detail.statusText || getDeliveryStatusMeta(detail.status).label}
+                  {textOr(detail.statusText, getDeliveryStatusMeta(detail.status).label)}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Người lập">
@@ -585,7 +586,7 @@ export default function OperationsDeliveryApprovalsPage() {
             <Table
               rowKey={(row) => row.parcelId}
               size="small"
-              pagination={false}
+              pagination={subTablePagination("kiện")}
               dataSource={detail.parcels || []}
               columns={DELIVERY_PARCEL_COLUMNS}
               locale={{ emptyText: "Phiếu chưa có kiện nào." }}

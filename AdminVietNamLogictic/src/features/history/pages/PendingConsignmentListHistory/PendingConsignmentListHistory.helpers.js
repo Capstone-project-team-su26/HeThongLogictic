@@ -20,6 +20,7 @@ import {
   DEPOSIT_STATUS_SET,
   PRODUCT_NAME_SEPARATOR,
 } from "./PendingConsignmentListHistory.constants";
+import { labelOf } from "@shared/utils/statusLabel";
 
 export const normalizeDepositStatusFilter = (
   value
@@ -343,16 +344,7 @@ export const getConsignmentStatus = (
   }
 
   const fallbackLabel = code
-    ? code
-      .replace(/_/g, " ")
-      .toLocaleLowerCase("vi-VN")
-      .replace(
-        /(^|\s)\S/g,
-        (character) =>
-          character.toLocaleUpperCase(
-            "vi-VN"
-          )
-      )
+    ? labelOf(null, code)
     : "Chưa xác định";
 
   return {

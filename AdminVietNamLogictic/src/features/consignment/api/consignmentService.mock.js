@@ -190,8 +190,9 @@ const removeEmptyParams = (
   );
 };
 
+/* Giống bản thật: chỉ kiểm dạng GUID hex, không kiểm version/variant (id seed như 99999999-2222-…). */
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const normalizeUuid = (value, fieldName) => {
   const id = normalizeText(value);

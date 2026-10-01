@@ -32,6 +32,9 @@ import {
 } from "@features/purchase/api/purchaseRequestService";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
 import "./PurchaseDocumentsList.css";
+import { labelOf } from "@shared/utils/statusLabel";
+/* Nhãn mã COMPLETED theo chặng mua hộ mới (không dùng "Hoàn tất" chung chung — xem purchaseRequestStage). */
+import { getPurchaseRequestStatusLabel } from "@features/purchase/api/purchaseRequestStage";
 
 const { Option } = Select;
 
@@ -50,7 +53,7 @@ const PURCHASE_STATUS_MAP = {
   DEPOSITED: { label: "Đã cọc tiền", color: "blue", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
   DEPOSIT_PAID: { label: "Đã cọc tiền", color: "blue", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
   WAITING_PAYMENT: { label: "Chờ thanh toán", color: "orange", bg: "#fff7ed", border: "#fed7aa", text: "#c2410c" },
-  PURCHASED: { label: "Xác nhận mua hàng", color: "teal", bg: "#f0fdfa", border: "#99f6e4", text: "#0f766e" },
+  PURCHASED: { label: "Đã mua hàng", color: "teal", bg: "#f0fdfa", border: "#99f6e4", text: "#0f766e" },
   WAREHOUSE_RECEIVED: { label: "Kho đã nhận", color: "purple", bg: "#faf5ff", border: "#e9d5ff", text: "#6b21a8" },
   CHECKED_IN: { label: "Đã kiểm kho", color: "green", bg: "#f0fdf4", border: "#bbf7d0", text: "#166534" },
   STORED: { label: "Đã nhập kho", color: "purple", bg: "#faf5ff", border: "#e9d5ff", text: "#6b21a8" },
@@ -59,13 +62,13 @@ const PURCHASE_STATUS_MAP = {
   PROCESSING: { label: "Đang xử lý", color: "blue", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
   DELIVERING: { label: "Đang vận chuyển", color: "indigo", bg: "#eef2ff", border: "#c7d2fe", text: "#4338ca" },
   DELIVERED: { label: "Đã giao hàng", color: "green", bg: "#f0fdf4", border: "#bbf7d0", text: "#166534" },
-  COMPLETED: { label: "Hoàn tất", color: "emerald", bg: "#ecfdf5", border: "#a7f3d0", text: "#047857" },
+  COMPLETED: { label: getPurchaseRequestStatusLabel("COMPLETED"), color: "emerald", bg: "#ecfdf5", border: "#a7f3d0", text: "#047857" },
 };
 
 const getPurchaseStatusBadge = (statusKey, statusDisplayName) => {
   const code = String(statusKey || "").toUpperCase();
   const config = PURCHASE_STATUS_MAP[code] || {
-    label: statusDisplayName || statusKey || "Đang xử lý",
+    label: statusKey || statusDisplayName ? labelOf(null, statusKey, statusDisplayName) : "Đang xử lý",
     color: "blue",
     bg: "#eff6ff",
     border: "#bfdbfe",
@@ -311,7 +314,7 @@ export default function PurchaseDocumentsList() {
         const mapped = PURCHASE_STATUS_MAP[code];
         statusMap.set(code, {
           value: code,
-          label: mapped ? mapped.label : item.statusDisplayName || code,
+          label: mapped ? mapped.label : labelOf(null, code, item.statusDisplayName),
         });
       }
     });

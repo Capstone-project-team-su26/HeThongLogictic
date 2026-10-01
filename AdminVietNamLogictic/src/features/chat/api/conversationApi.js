@@ -181,7 +181,7 @@ const validateConversationPayload = (payload) => {
 
   if (relatedType && !VALID_RELATED_TYPES.includes(relatedType)) {
     throw new Error(
-      "Loại liên kết chỉ nhận: CONSIGNMENT, PURCHASE_REQUEST, QUOTATION."
+      "Chỉ liên kết được với đơn ký gửi, yêu cầu mua hộ hoặc báo giá."
     );
   }
 

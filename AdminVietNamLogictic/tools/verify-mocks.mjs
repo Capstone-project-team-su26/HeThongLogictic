@@ -347,10 +347,10 @@ try {
   await checkMatrix("Mã cũ: normalizeOrderStatus(\"WAREHOUSE_RECEIVED\") → \"CHECKED_IN\"", () =>
     expectEqual("mã", normalizeOrderStatus("WAREHOUSE_RECEIVED"), "CHECKED_IN")
   );
-  await checkMatrix("Mã lạ: normalizeOrderStatus(\"FOO\") → \"FOO\", nhãn \"FOO\", không throw", () =>
+  await checkMatrix("Mã lạ: normalizeOrderStatus(\"FOO\") → \"FOO\", nhãn \"Trạng thái khác\" (không in mã thô), không throw", () =>
     firstFailure(
       expectEqual("mã", normalizeOrderStatus("FOO"), "FOO"),
-      expectEqual("nhãn", getOrderStatusLabel("FOO"), "FOO")
+      expectEqual("nhãn", getOrderStatusLabel("FOO"), "Trạng thái khác")
     )
   );
   await checkMatrix("Rỗng: normalizeOrderStatus(null) → null, nhãn \"—\", không throw", () =>

@@ -1,0 +1,883 @@
+{
+  "$comment": "Mọi mã backend (VCL_BLL / VCL_DLL, đọc ngày 2026-09-30) có thể trả ra FE, theo họ. `legacy`: mã cũ còn trong DB, không còn đường code nào ghi mới. Nguồn: ShipmentMilestones.cs, ExportFlowStatuses.cs, VnArrivalStatuses.cs, PurchaseFlow.cs, PurchaseRequestService.cs, OrderService.*.cs, WarehouseReceivingNoteService.cs, DeliveryRequestService.cs, ParcelReturnService.cs, GoshipService.cs, StaffRoleHelper.cs…",
+  "families": {
+    "shipmentStatus": {
+      "codes": [
+        "DRAFT",
+        "HANDED_OVER",
+        "DEPARTED",
+        "IN_TRANSIT",
+        "DELAYED",
+        "ON_HOLD",
+        "CUSTOMS_CLEARED",
+        "ARRIVED_VN",
+        "ARRIVED_DESTINATION",
+        "CANCELLED"
+      ],
+      "legacy": [
+        "CREATED",
+        "LOT_CREATED",
+        "PREPARING",
+        "READY_TO_SHIP",
+        "ARRIVED",
+        "ARRIVED_IN_VN",
+        "MANIFESTED",
+        "CUSTOMS_EXPORT_PENDING",
+        "CUSTOMS_IMPORT_PENDING",
+        "CUSTOMS_REJECTED",
+        "HOLD",
+        "ISSUE"
+      ]
+    },
+    "shipmentEvent": {
+      "codes": [
+        "HANDED_OVER",
+        "DEPARTED",
+        "IN_TRANSIT",
+        "DELAYED",
+        "ON_HOLD",
+        "CUSTOMS_CLEARED",
+        "ARRIVED_VN",
+        "ARRIVED_DESTINATION",
+        "RECEIVED_AT_DESTINATION"
+      ]
+    },
+    "shipmentStatusTab": {
+      "codes": [
+        "PREPARING",
+        "IN_TRANSIT",
+        "ARRIVED",
+        "ISSUE",
+        "CANCELLED"
+      ]
+    },
+    "trackingStage": {
+      "codes": [
+        "NOT_RECEIVED",
+        "AT_ORIGIN_WAREHOUSE",
+        "PREPARING_EXPORT",
+        "HANDED_OVER",
+        "DEPARTED",
+        "IN_TRANSIT",
+        "DELAYED",
+        "ON_HOLD",
+        "CUSTOMS_CLEARED",
+        "ARRIVED_VN",
+        "ARRIVED_DESTINATION",
+        "RECEIVED_AT_VN",
+        "QUARANTINED",
+        "STORED_AT_VN",
+        "OUT_FOR_DELIVERY",
+        "DELIVERY_FAILED",
+        "DELIVERED",
+        "DISPOSED"
+      ]
+    },
+    "trackingRouteStop": {
+      "codes": [
+        "ORIGIN",
+        "EXPORTED",
+        "TRANSIT",
+        "VN_WAREHOUSE",
+        "DELIVERY"
+      ]
+    },
+    "orderStatus": {
+      "codes": [
+        "PENDING_REVIEW",
+        "APPROVED",
+        "NEED_MORE_INFO",
+        "REJECTED",
+        "QUOTATION_SENT",
+        "QUOTATION_REJECTED",
+        "WAITING_DEPOSIT",
+        "DEPOSIT_PAID",
+        "CHECKED_IN",
+        "WAREHOUSE_RECEIVED",
+        "AT_DESTINATION_WAREHOUSE",
+        "WAITING_FINAL_PAYMENT",
+        "PAID",
+        "DELIVERED",
+        "CUSTOMER_CONFIRMED",
+        "COMPLETED",
+        "CANCELLED",
+        "CANCELLED_FORFEITED"
+      ],
+      "legacy": [
+        "QUOTATION_CONFIRMED",
+        "IN_TRANSIT",
+        "PAYMENT_CONFIRMED",
+        "PROCESSING",
+        "SHIPPED",
+        "OUT_FOR_DELIVERY",
+        "DELIVERING",
+        "ARRIVED_VN",
+        "ARRIVED_DESTINATION",
+        "WAITING_PAYMENT",
+        "STORED_AT_VN",
+        "NEW",
+        "PENDING",
+        "WAITING_QUOTATION",
+        "CANCELED",
+        "PREVIEW"
+      ]
+    },
+    "orderHistoryEvent": {
+      "codes": [
+        "QUOTATION_SENT",
+        "QUOTATION_SUBMITTED_FOR_PRICE_APPROVAL",
+        "QUOTATION_PRICE_APPROVED",
+        "QUOTATION_PRICE_REJECTED",
+        "QUOTATION_REJECTED",
+        "QUOTATION_ACCEPTED",
+        "ORDER_REJECTED",
+        "ORDER_NEED_MORE_INFO",
+        "ORDER_CANCELLED_BY_CUSTOMER",
+        "ORDER_DELIVERED",
+        "ORDER_COMPLETED_BY_CUSTOMER",
+        "ORDER_AUTO_COMPLETED",
+        "PAYMENT_RECEIVED_UNALLOCATED",
+        "PAYMENT_CONFIRMED_DEPOSIT",
+        "PAYMENT_CONFIRMED_FINAL_PAYMENT",
+        "PAYMENT_CONFIRMED_FULL_PAYMENT",
+        "PAYMENT_CONFIRMED_STORAGE_FEE",
+        "PAYMENT_CONFIRMED_REDELIVERY_FEE",
+        "PAYMENT_CONFIRMED_UNKNOWN",
+        "RECEIVING_NOTE_CREATED",
+        "RECEIVING_NOTE_COUNTED",
+        "RECEIVING_NOTE_APPROVED_TO_RECEIVE",
+        "RECEIVING_NOTE_REJECTED",
+        "RECEIVING_COUNT_APPROVED",
+        "RECEIVING_COUNT_REJECTED",
+        "RECEIVING_DISCREPANCY_ACCEPTED",
+        "PURCHASE_ORDER_PLACED",
+        "PURCHASE_ORDER_CANCELLED"
+      ]
+    },
+    "orderType": {
+      "codes": [
+        "CONSIGNMENT",
+        "PURCHASE"
+      ]
+    },
+    "saleActionState": {
+      "codes": [
+        "AWAITING_RECEIVING_NOTE",
+        "AWAITING_DELIVERY_REQUEST",
+        "NOTIFIED_AWAITING_INBOUND",
+        "INBOUND_REJECTED",
+        "INBOUND_PENDING_APPROVAL",
+        "AWAITING_WAREHOUSE_NOTICE"
+      ]
+    },
+    "saleNextAction": {
+      "codes": [
+        "CREATE_RECEIVING_NOTE",
+        "CREATE_DELIVERY_REQUEST",
+        "RENOTIFY_WAREHOUSE",
+        "NOTIFY_WAREHOUSE",
+        "NONE"
+      ]
+    },
+    "saleHandlingGroup": {
+      "codes": [
+        "RECEIVING_NOTE",
+        "DIRECT_DELIVERY",
+        "STORE_AT_VN"
+      ]
+    },
+    "customerActionKey": {
+      "codes": [
+        "QUOTATION_CONFIRM",
+        "PAYMENT_DUE",
+        "PURCHASE_PRICE_DECISION",
+        "DELIVERY_CONFIRM",
+        "REFUND_INCOMING"
+      ]
+    },
+    "purchaseRequestStatus": {
+      "codes": [
+        "PENDING_REVIEW",
+        "IN_REVIEW",
+        "NEED_MORE_INFO",
+        "REJECTED",
+        "QUOTED",
+        "QUOTATION_REJECTED",
+        "WAITING_PAYMENT",
+        "PAID",
+        "PURCHASING",
+        "COMPLETED",
+        "CANCELLED"
+      ],
+      "legacy": [
+        "NEW",
+        "DEPOSIT_PAID",
+        "PURCHASED",
+        "SELLER_SHIPPED",
+        "ARRIVED_ORIGIN_WAREHOUSE",
+        "WAITING_STORED",
+        "STORED",
+        "WAITING_FINAL_PAYMENT"
+      ]
+    },
+    "purchaseQuotationStatus": {
+      "codes": [
+        "PENDING_CUSTOMER_CONFIRMATION",
+        "ACCEPTED",
+        "REJECTED",
+        "CANCELLED"
+      ]
+    },
+    "purchaseOrderStatus": {
+      "codes": [
+        "DRAFT",
+        "AWAITING_CUSTOMER",
+        "AWAITING_CUSTOMER_PAYMENT",
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "REJECTED",
+        "ORDERED",
+        "SUPPLIER_CONFIRMED",
+        "SUPPLIER_SHIPPED",
+        "CANCELLED"
+      ]
+    },
+    "purchasePaymentType": {
+      "codes": [
+        "PREPAYMENT",
+        "PRICE_DIFFERENCE",
+        "REFUND_PRICE_DIFF",
+        "REFUND_CANCEL",
+        "REFUND_UNFULFILLED",
+        "DEPOSIT",
+        "FULL_PAYMENT",
+        "FINAL_PAYMENT"
+      ]
+    },
+    "refundStatus": {
+      "codes": [
+        "PENDING",
+        "REFUNDED",
+        "CANCELLED"
+      ]
+    },
+    "refundReason": {
+      "codes": [
+        "PRICE_DIFF",
+        "UNFULFILLED",
+        "SUPPLIER_SHORT",
+        "CANCEL_CUSTOMER",
+        "CANCEL_SUPPLIER",
+        "PRICE_DIFF_RETURN"
+      ]
+    },
+    "quotationStatus": {
+      "codes": [
+        "DRAFT",
+        "PENDING",
+        "PENDING_PRICE_APPROVAL",
+        "PRICE_REJECTED",
+        "ACCEPTED",
+        "REJECTED",
+        "SUPERSEDED",
+        "CANCELLED",
+        "EXPIRED",
+        "SENT"
+      ]
+    },
+    "priceApprovalStatus": {
+      "codes": [
+        "NOT_REQUIRED",
+        "PENDING",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "quoteType": {
+      "codes": [
+        "ESTIMATE",
+        "OFFICIAL",
+        "PURCHASE"
+      ]
+    },
+    "requoteState": {
+      "codes": [
+        "OPEN",
+        "REPLACE_PENDING_PRICE_APPROVAL",
+        "CUSTOMER_REJECTED",
+        "EXPIRED",
+        "PRICE_REJECTED",
+        "SENT_TO_CUSTOMER",
+        "APPROVED_SENT_TO_CUSTOMER",
+        "ACCEPTED",
+        "ORDER_NOT_QUOTABLE"
+      ]
+    },
+    "paymentStatus": {
+      "codes": [
+        "PENDING",
+        "PENDING_RECONCILIATION",
+        "PAID",
+        "CANCELLED",
+        "RECEIVED_UNALLOCATED",
+        "SUCCESS",
+        "FAILED",
+        "CANCELED",
+        "COMPLETED",
+        "PROCESSING",
+        "EXPIRED",
+        "REJECTED"
+      ]
+    },
+    "aggregatePaymentStatus": {
+      "codes": [
+        "PAID",
+        "PARTIAL",
+        "UNPAID",
+        "PARTIALLY_PAID"
+      ]
+    },
+    "invoiceStatus": {
+      "codes": [
+        "PENDING",
+        "PAID",
+        "CANCELLED"
+      ]
+    },
+    "installmentType": {
+      "codes": [
+        "DEPOSIT",
+        "FINAL_PAYMENT",
+        "FULL_PAYMENT",
+        "STORAGE_FEE",
+        "REDELIVERY_FEE",
+        "FULL",
+        "FINAL",
+        "PREPAYMENT",
+        "PRICE_DIFFERENCE",
+        "REFUND_PRICE_DIFF",
+        "REFUND_CANCEL",
+        "REFUND_UNFULFILLED"
+      ]
+    },
+    "paymentMethod": {
+      "codes": [
+        "PAYOS",
+        "SEPAY",
+        "OFFLINE",
+        "BANK_TRANSFER",
+        "CASH",
+        "VNPAY",
+        "MOMO",
+        "MANUAL",
+        "PREPAID",
+        "WALLET"
+      ]
+    },
+    "paymentConfirmationSource": {
+      "codes": [
+        "GATEWAY_PAYOS",
+        "GATEWAY_SEPAY",
+        "ADMIN_MANUAL",
+        "SYSTEM_ZERO"
+      ]
+    },
+    "financeSource": {
+      "codes": [
+        "CONSIGNMENT",
+        "PURCHASE"
+      ]
+    },
+    "feeType": {
+      "codes": [
+        "MAIN_SERVICE",
+        "SERVICE_FEE",
+        "SURCHARGE",
+        "TAX",
+        "VAT",
+        "IMPORT_TAX",
+        "DOMESTIC_FEE",
+        "DOMESTIC_SHIPPING",
+        "PACKING_FEE",
+        "EXTRA",
+        "STORAGE",
+        "REDELIVERY_FEE",
+        "TAX_ADJUSTMENT",
+        "FREIGHT_ADJUSTMENT",
+        "VAT_ADJUSTMENT",
+        "PREPAID_ADJUSTMENT"
+      ]
+    },
+    "surchargeCode": {
+      "codes": [
+        "WOOD_CRATE",
+        "WOODEN_BOX",
+        "INSPECTION",
+        "PACKING",
+        "INSURANCE",
+        "FRAGILE",
+        "OVERWEIGHT",
+        "OVERSIZE",
+        "REMOTE_AREA",
+        "OTHER"
+      ]
+    },
+    "settlementBlocker": {
+      "codes": [
+        "NO_INVOICE",
+        "NO_DEPOSIT",
+        "ALREADY_SETTLED",
+        "PARCEL_NOT_INSPECTED",
+        "OPEN_INCIDENT"
+      ]
+    },
+    "parcelStatus": {
+      "codes": [
+        "PENDING_CHECKIN",
+        "RECEIVED",
+        "IN_WAREHOUSE",
+        "STORED",
+        "SPLIT",
+        "MERGED",
+        "RELEASED",
+        "IN_TRANSIT",
+        "ARRIVED_DESTINATION",
+        "RECEIVED_AT_DESTINATION",
+        "QUARANTINED",
+        "DELIVERED",
+        "DISPOSED",
+        "DELIVERY_FAILED",
+        "RETURNING",
+        "RETURNED",
+        "RETURNED_TO_WAREHOUSE",
+        "LOST",
+        "AWAITING_PICKUP",
+        "PICKING_UP",
+        "PICKED_UP",
+        "OUT_FOR_DELIVERY",
+        "DELIVERY_CANCELLED",
+        "DELIVERY_DELAYED",
+        "PARTIALLY_DELIVERED",
+        "AT_CARRIER_WAREHOUSE",
+        "DELIVERY_ERROR",
+        "CREATED",
+        "PENDING",
+        "CHECKED_IN",
+        "RESERVED",
+        "PICKED",
+        "IN_SHIPMENT",
+        "HANDED_OVER",
+        "ARRIVED_VN"
+      ]
+    },
+    "inventoryStatus": {
+      "codes": [
+        "AVAILABLE",
+        "RESERVED",
+        "PICKED",
+        "RELEASED",
+        "IN_STOCK"
+      ]
+    },
+    "pickingStatus": {
+      "codes": [
+        "PENDING",
+        "PICKED",
+        "PACKING",
+        "PACKED",
+        "RELEASED",
+        "COMPLETED"
+      ]
+    },
+    "cycleCountStatus": {
+      "codes": [
+        "MATCHED",
+        "DISCREPANCY",
+        "RESOLVED"
+      ]
+    },
+    "alertSeverity": {
+      "codes": [
+        "WARNING",
+        "CRITICAL"
+      ]
+    },
+    "movementType": {
+      "codes": [
+        "INBOUND",
+        "OUTBOUND",
+        "RELOCATION",
+        "DISPOSAL"
+      ]
+    },
+    "receivingCondition": {
+      "codes": [
+        "GOOD",
+        "DAMAGED",
+        "WRONG_ITEM",
+        "MISSING_ITEMS",
+        "INTACT",
+        "MISSING",
+        "WET",
+        "SEAL_BROKEN"
+      ]
+    },
+    "zoneType": {
+      "codes": [
+        "RECEIVING",
+        "QUARANTINE",
+        "STORAGE",
+        "OUTBOUND"
+      ]
+    },
+    "binStatus": {
+      "codes": [
+        "AVAILABLE",
+        "OCCUPIED",
+        "FULL",
+        "LOCKED",
+        "INACTIVE",
+        "ACTIVE"
+      ]
+    },
+    "warehouseType": {
+      "codes": [
+        "ORIGIN",
+        "DESTINATION",
+        "DOMESTIC",
+        "TRANSIT"
+      ]
+    },
+    "wrnStatus": {
+      "codes": [
+        "PENDING_APPROVAL",
+        "ACTIVE",
+        "PARTIALLY_RECEIVED",
+        "RECEIVED",
+        "APPROVED",
+        "REJECTED",
+        "CANCELLED"
+      ]
+    },
+    "wrnApprovalStage": {
+      "codes": [
+        "RECEIVE",
+        "DISCREPANCY",
+        "DISCREPANCY_ACK"
+      ]
+    },
+    "inboundStatus": {
+      "codes": [
+        "INBOUND_PENDING",
+        "INBOUND_APPROVED",
+        "INBOUND_REJECTED"
+      ]
+    },
+    "wroStatus": {
+      "codes": [
+        "DRAFT",
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "PICKING",
+        "READY",
+        "IN_SHIPMENT",
+        "HANDED_OVER",
+        "REJECTED",
+        "CANCELLED"
+      ]
+    },
+    "wroParcelStatus": {
+      "codes": [
+        "RESERVED",
+        "PICKED",
+        "HANDED_OVER",
+        "REMOVED"
+      ]
+    },
+    "releaseType": {
+      "codes": [
+        "SINGLE",
+        "BATCH"
+      ]
+    },
+    "exportBlockReason": {
+      "codes": [
+        "NOT_STORED",
+        "NOT_IN_STORAGE_ZONE",
+        "WRONG_WAREHOUSE",
+        "ORDER_CLOSED",
+        "DEPOSIT_NOT_CONFIRMED",
+        "RECEIVING_NOT_SETTLED",
+        "EXPORT_HOLD",
+        "RESTRICTED_NO_PERMIT",
+        "ALREADY_IN_EXPORT",
+        "INVENTORY_NOT_AVAILABLE"
+      ]
+    },
+    "deliveryStatus": {
+      "codes": [
+        "DELIVERY_PENDING",
+        "DELIVERY_APPROVED",
+        "DELIVERY_REJECTED",
+        "DELIVERY_DISPATCHED",
+        "DELIVERY_RETURNED"
+      ]
+    },
+    "pickSource": {
+      "codes": [
+        "FROM_SHELF",
+        "FROM_STAGING"
+      ]
+    },
+    "returnCaseStatus": {
+      "codes": [
+        "PENDING_RETURN",
+        "IN_TRANSIT_BACK",
+        "RECEIVED_AT_WAREHOUSE",
+        "RESOLVED",
+        "LOST"
+      ]
+    },
+    "returnReason": {
+      "codes": [
+        "FAILED_DELIVERY",
+        "RETURNING",
+        "LOST",
+        "CANCELLED"
+      ]
+    },
+    "returnResolution": {
+      "codes": [
+        "REDELIVER",
+        "CUSTOMER_PICKUP",
+        "DISPOSE",
+        "COMPENSATE"
+      ]
+    },
+    "feeBearer": {
+      "codes": [
+        "CUSTOMER",
+        "COMPANY"
+      ]
+    },
+    "incidentType": {
+      "codes": [
+        "DAMAGED",
+        "WRONG_ITEM",
+        "MISSING_ITEMS",
+        "WEIGHT_DEVIATION",
+        "COMPLAINT"
+      ]
+    },
+    "incidentStatus": {
+      "codes": [
+        "OPEN",
+        "CUSTOMER_RESPONDED",
+        "RESOLVED"
+      ]
+    },
+    "incidentStage": {
+      "codes": [
+        "RECEIVING",
+        "AFTER_DELIVERY"
+      ]
+    },
+    "incidentResolution": {
+      "codes": [
+        "ACCEPT",
+        "COMPENSATE",
+        "DISPOSE"
+      ]
+    },
+    "destinationHandling": {
+      "codes": [
+        "DIRECT_DELIVERY",
+        "STORE_AT_VN"
+      ]
+    },
+    "documentType": {
+      "codes": [
+        "PERMIT",
+        "PICKING_ISSUE",
+        "PARCEL_PHOTO",
+        "CUSTOMS_EXPORT",
+        "COMMERCIAL_INVOICE",
+        "HANDOVER_RECORD",
+        "WAYBILL",
+        "CUSTOMS_IMPORT",
+        "TAX_RECEIPT",
+        "INCIDENT",
+        "OTHER",
+        "INCIDENT_PHOTO",
+        "COMPENSATION_RECEIPT",
+        "DELIVERY_PROOF",
+        "PURCHASE_PROOF",
+        "PUT_AWAY_PROOF",
+        "WRO_APPROVAL_PROOF"
+      ]
+    },
+    "attachmentEntity": {
+      "codes": [
+        "ORDER",
+        "WRO",
+        "WRO_PARCEL",
+        "SHIPMENT",
+        "INCIDENT",
+        "DELIVERY_REQUEST",
+        "PURCHASE_ORDER",
+        "PARCEL"
+      ]
+    },
+    "role": {
+      "codes": [
+        "ADMIN",
+        "ADMINISTRATOR",
+        "SALE",
+        "SALES",
+        "STAFF",
+        "WAREHOUSESTAFF",
+        "WAREHOUSE_STAFF",
+        "WAREHOUSE",
+        "WAREHOUSETQ",
+        "WAREHOUSEVN",
+        "WAREHOUSE_STAFF_VN",
+        "WAREHOUSEMANAGER",
+        "WAREHOUSE_MANAGER",
+        "MANAGER",
+        "OPERATIONSMANAGER",
+        "OPERATIONS_MANAGER",
+        "OPERATIONS",
+        "DELIVERY",
+        "CUSTOMER"
+      ]
+    },
+    "userStatus": {
+      "codes": [
+        "PENDINGVERIFICATION",
+        "PENDING_VERIFICATION",
+        "ACTIVE",
+        "LOCKED",
+        "INACTIVE",
+        "PENDING",
+        "BLOCKED",
+        "SUSPENDED",
+        "DELETED"
+      ]
+    },
+    "userType": {
+      "codes": [
+        "CUSTOMER",
+        "STAFF"
+      ]
+    },
+    "customerType": {
+      "codes": [
+        "INDIVIDUAL",
+        "RETAIL"
+      ]
+    },
+    "restrictionType": {
+      "codes": [
+        "BANNED",
+        "RESTRICTED",
+        "WARNING"
+      ]
+    },
+    "calculationType": {
+      "codes": [
+        "FIXED",
+        "PERCENTAGE",
+        "PER_KG",
+        "PER_VOLUME",
+        "PER_CBM",
+        "PER_PRODUCT"
+      ]
+    },
+    "conditionType": {
+      "codes": [
+        "ALWAYS",
+        "REQUIRES_INSPECTION",
+        "MIN_WEIGHT",
+        "MIN_VOLUME",
+        "MIN_DECLARED_VALUE"
+      ]
+    },
+    "ruleType": {
+      "codes": [
+        "DOMESTIC_FEE",
+        "VAT",
+        "PACKING",
+        "CARTON_REPACK",
+        "IMPORT_TAX",
+        "VOLUMETRIC_DIVISOR"
+      ]
+    },
+    "packageConfigCode": {
+      "codes": [
+        "CARTON",
+        "WOODEN_BOX",
+        "BUBBLE_BAG",
+        "PALLET"
+      ]
+    },
+    "transportMode": {
+      "codes": [
+        "AIR",
+        "SEA",
+        "ROAD",
+        "RAIL",
+        "EXPRESS"
+      ]
+    },
+    "serviceTier": {
+      "codes": [
+        "STANDARD",
+        "EXPRESS",
+        "ECONOMY"
+      ]
+    },
+    "supplierType": {
+      "codes": [
+        "TRANSIT",
+        "PICKUP",
+        "GOODS",
+        "SERVICE"
+      ]
+    },
+    "conversationStatus": {
+      "codes": [
+        "OPEN"
+      ]
+    },
+    "conversationContext": {
+      "codes": [
+        "CONSIGNMENT",
+        "PURCHASE_REQUEST",
+        "QUOTATION"
+      ]
+    },
+    "customerTrackingEvent": {
+      "codes": [
+        "NOT_RECEIVED",
+        "AT_ORIGIN_WAREHOUSE",
+        "PREPARING_EXPORT",
+        "HANDED_OVER",
+        "DEPARTED",
+        "IN_TRANSIT",
+        "DELAYED",
+        "ON_HOLD",
+        "CUSTOMS_CLEARED",
+        "ARRIVED_VN",
+        "ARRIVED_DESTINATION",
+        "RECEIVED_AT_VN",
+        "QUARANTINED",
+        "STORED_AT_VN",
+        "OUT_FOR_DELIVERY",
+        "DELIVERY_FAILED",
+        "DELIVERED",
+        "DISPOSED",
+        "RECEIVED_AT_DESTINATION"
+      ]
+    }
+  }
+}

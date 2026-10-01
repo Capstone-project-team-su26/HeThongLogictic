@@ -30,6 +30,7 @@
 import httpClient from "@shared/api/httpClient";
 import API_ENDPOINTS from "@shared/api/apiEndpoints";
 import { getArrayItems, getResponseData, removeEmptyParams } from "@shared/api/apiEnvelope";
+import { metaOf } from "@shared/utils/statusLabel";
 
 /* =========================================================
    TRẠNG THÁI
@@ -74,11 +75,7 @@ export const PURCHASE_ORDER_STATUS_META = Object.freeze({
 });
 
 export const getPurchaseOrderStatusMeta = (status) =>
-  PURCHASE_ORDER_STATUS_META[String(status ?? "").trim().toUpperCase()] || {
-    label: status || "—",
-    tone: "default",
-    waiting: "—",
-  };
+  metaOf(PURCHASE_ORDER_STATUS_META, status, { tone: "default", waiting: "—" });
 
 /** Sale còn sửa được nội dung đơn. */
 export const isEditablePurchaseOrder = (status) =>

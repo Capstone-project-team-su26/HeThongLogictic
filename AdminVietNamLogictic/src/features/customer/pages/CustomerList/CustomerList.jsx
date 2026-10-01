@@ -37,6 +37,10 @@ import {
   getCustomersApi,
 } from "@features/customer/api/customerService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import {
+  TABLE_PAGE_SIZE_OPTIONS,
+  formatTableRange,
+} from "@shared/utils/tablePagination";
 import CustomerDetailModal from "@features/customer/components/CustomerDetailModal/CustomerDetailModal";
 import CreateCustomerSale from "@features/customer/components/CreateCustomerSale/CreateCustomerSale";
 import EditCustomerSale from "@features/customer/components/EditCustomerSale/EditCustomerSale";
@@ -732,19 +736,17 @@ export default function CustomerList() {
                   filteredCustomers.length
                 }
                 showSizeChanger
-                pageSizeOptions={[
-                  10,
-                  20,
-                  50,
-                ]}
-                showTotal={(total) =>
-                  `${total} khách hàng`
+                pageSizeOptions={TABLE_PAGE_SIZE_OPTIONS.map(String)}
+                showTotal={(total, range) =>
+                  formatTableRange(total, range, "khách hàng")
                 }
                 onChange={(
                   nextPage,
                   nextPageSize
                 ) => {
-                  setCurrentPage(nextPage);
+                  setCurrentPage(
+                    nextPageSize !== pageSize ? 1 : nextPage
+                  );
                   setPageSize(
                     nextPageSize
                   );

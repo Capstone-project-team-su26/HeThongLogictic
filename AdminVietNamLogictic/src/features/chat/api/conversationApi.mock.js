@@ -106,7 +106,7 @@ const validateRelatedType = (relatedType) => {
 
   if (!VALID_RELATED_TYPES.includes(type)) {
     throw new Error(
-      "Loại liên kết chỉ nhận: CONSIGNMENT, PURCHASE_REQUEST, QUOTATION."
+      "Chỉ liên kết được với đơn ký gửi, yêu cầu mua hộ hoặc báo giá."
     );
   }
 };

@@ -9,11 +9,10 @@ export const MAX_IMAGES_PER_ITEM = 5;
 
 /*
  * GIỚI HẠN ĐẦU VÀO của yêu cầu mua hộ — khớp backend (vượt là 400 kèm câu tiếng Việt).
- * FE chặn trước để Sale không điền xong cả form mới ăn lỗi. Đổi số ở đây là đổi cả
- * nhãn gợi ý, maxLength của ô lẫn câu báo lỗi.
+ * FE chặn trước để Sale không điền xong cả form mới ăn lỗi.
+ * Số dòng sản phẩm và số lượng mỗi sản phẩm KHÔNG còn ghi cứng: Admin cấu hình
+ * (PURCHASE_MAX_ITEMS / PURCHASE_MAX_ITEM_QUANTITY), màn hình đọc qua useOrderLimits.
  */
-export const MAX_PURCHASE_ITEMS = 50;
-export const MAX_PURCHASE_ITEM_QUANTITY = 999;
 
 /* Độ dài tối đa (ký tự, tính sau khi trim) của từng trường gửi lên. */
 export const PURCHASE_FIELD_MAX_LENGTH = Object.freeze({

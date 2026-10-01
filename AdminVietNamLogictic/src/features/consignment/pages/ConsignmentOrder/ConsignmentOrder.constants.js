@@ -11,35 +11,45 @@ export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 /*
  * Bốn ô số nằm cùng một hàng nên rất hẹp: placeholder dài bị cắt giữa chừng. Giới hạn đưa
- * lên `hint` cạnh nhãn để Sale luôn đọc được, placeholder chỉ còn ví dụ số.
+ * lên gợi ý cạnh nhãn để Sale luôn đọc được, placeholder chỉ còn ví dụ số.
+ * Con số giới hạn KHÔNG ghi cứng ở đây: `limitKey` trỏ vào giới hạn Admin cấu hình
+ * (GET /api/system-settings/order-limits), màn hình tự dựng câu gợi ý / tooltip.
  */
 export const PACKAGE_NUMBER_FIELDS = [
   {
     field: "weight",
     label: "CÂN NẶNG (KG)",
-    hint: "tối đa 3",
-    tooltip: "Nhập tổng cân nặng của kiện hàng (tối đa 3 kg/kiện).",
+    limitKey: "maxParcelWeightKg",
+    unit: "kg",
+    hintSuffix: " / kiện",
+    tooltip: "Nhập tổng cân nặng của kiện hàng",
     placeholder: "VD: 1.5",
   },
   {
     field: "length",
     label: "DÀI (CM)",
-    hint: "tối đa 100",
-    tooltip: "Nhập chiều dài của kiện hàng (tối đa 100 cm).",
+    limitKey: "maxParcelLengthCm",
+    unit: "cm",
+    hintSuffix: "",
+    tooltip: "Nhập chiều dài của kiện hàng",
     placeholder: "VD: 40",
   },
   {
     field: "width",
     label: "RỘNG (CM)",
-    hint: "tối đa 200",
-    tooltip: "Nhập chiều rộng của kiện hàng (tối đa 200 cm).",
+    limitKey: "maxParcelWidthCm",
+    unit: "cm",
+    hintSuffix: "",
+    tooltip: "Nhập chiều rộng của kiện hàng",
     placeholder: "VD: 30",
   },
   {
     field: "height",
     label: "CAO (CM)",
-    hint: "tối đa 50",
-    tooltip: "Nhập chiều cao của kiện hàng (tối đa 50 cm).",
+    limitKey: "maxParcelHeightCm",
+    unit: "cm",
+    hintSuffix: "",
+    tooltip: "Nhập chiều cao của kiện hàng",
     placeholder: "VD: 20",
   },
 ];

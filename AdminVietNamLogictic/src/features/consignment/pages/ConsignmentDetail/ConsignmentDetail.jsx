@@ -51,7 +51,10 @@ import {
   getConsignmentDetailApi,
   updateConsignmentStatusApi,
 } from "@features/consignment/api/consignmentService";
-import { getRequoteGuard } from "@features/consignment/api/quotationService";
+import {
+  getQuotationStatusLabel,
+  getRequoteGuard,
+} from "@features/consignment/api/quotationService";
 import {
   getProductTypesApi,
 } from "@features/consignment/api/consignmentMasterService";
@@ -2999,7 +3002,7 @@ export default function ConsignmentDetail({
                 {
                   label: "Báo giá hiện có",
                   value: detail?.quotation
-                    ? `${detail.quotation.status || "—"} · ${formatReviewMoney(
+                    ? `${getQuotationStatusLabel(detail.quotation.status)} · ${formatReviewMoney(
                         detail.quotation.totalEstimatedCost
                       )}`
                     : "Chưa có",

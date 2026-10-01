@@ -12,6 +12,8 @@ import ShipmentTimelineDrawer from "@features/shipment/components/ShipmentTimeli
 import ShipmentWorkspace from "@features/shipment/components/ShipmentWorkspace/ShipmentWorkspace";
 import { getDocumentTypeLabel } from "@features/attachments";
 import "@features/operations/styles/OperationsPage.css";
+import { textOr } from "@shared/utils/statusLabel";
+import { tablePagination } from "@shared/utils/tablePagination";
 
 const { Text } = Typography;
 
@@ -123,7 +125,7 @@ export default function SaleShipmentsPage() {
         width: 180,
         render: (value, row) => {
           const meta = getShipmentStatusMeta(value);
-          return <Tag color={meta.color}>{row.statusText || meta.label}</Tag>;
+          return <Tag color={meta.color}>{textOr(row.statusText, meta.label)}</Tag>;
         },
       },
       {
@@ -173,7 +175,7 @@ export default function SaleShipmentsPage() {
                   danger={tone === "exception"}
                   onClick={() => setOpenId(row.shipmentId)}
                 >
-                  {item.text || item.status}
+                  {textOr(item.text, getShipmentStatusMeta(item.status).label)}
                 </Button>
 
                 {/* Thiếu giấy tờ thì nói thẳng ra — trước đây chỉ nằm trong tooltip, phải trỏ
@@ -238,7 +240,7 @@ export default function SaleShipmentsPage() {
         dataSource={sortedRows}
         scroll={{ x: 1250 }}
         rowClassName={(row) => (row.isOverdue ? "ops-row--danger" : "")}
-        pagination={{ pageSize: 15, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "lô" })}
         locale={{ emptyText: <Empty description="Không có lô nào đang trên đường." /> }}
       />
     </>

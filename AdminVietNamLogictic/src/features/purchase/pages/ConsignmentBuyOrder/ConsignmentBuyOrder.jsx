@@ -58,8 +58,6 @@ import {
   INITIAL_ADDRESS_SELECT,
   INITIAL_FORM,
   MAX_IMAGES_PER_ITEM,
-  MAX_PURCHASE_ITEM_QUANTITY,
-  MAX_PURCHASE_ITEMS,
   PURCHASE_FIELD_MAX_LENGTH,
 } from "./ConsignmentBuyOrder.constants";
 
@@ -77,7 +75,8 @@ import {
   getSourceWebsiteFromLink,
   isCanceledRequest,
   isValidHttpUrl,
-  MAX_PURCHASE_ITEMS_MESSAGE,
+  getMaxPurchaseItemsMessage,
+  hasPurchaseLimit,
   normalizeDeliveryAddress,
   normalizeDeliveryAddressList,
   normalizeOptionList,
@@ -89,6 +88,7 @@ import {
   validateBuyOrderForm,
   validateProductImageFile,
 } from "./ConsignmentBuyOrder.helpers";
+import useOrderLimits from "@shared/hooks/useOrderLimits";
 
 import "./ConsignmentBuyOrder.css";
 import "@shared/styles/create-request.css";
@@ -159,6 +159,10 @@ export default function ConsignmentBuyOrder() {
   const [customerError, setCustomerError] = useState("");
 
   const [items, setItems] = useState([createEmptyItem()]);
+
+  /* Giới hạn số dòng / số lượng do Admin cấu hình; chưa tải / lỗi → không chặn, backend kiểm. */
+  const { purchase: purchaseLimits } = useOrderLimits();
+  const maxPurchaseItemsMessage = getMaxPurchaseItemsMessage(purchaseLimits);
 
   const [formErrors, setFormErrors] = useState(createEmptyFormErrors());
 
@@ -694,7 +698,8 @@ export default function ConsignmentBuyOrder() {
     );
   };
 
-  const isItemLimitReached = items.length >= MAX_PURCHASE_ITEMS;
+  const isItemLimitReached =
+    hasPurchaseLimit(purchaseLimits.maxItems) && items.length >= purchaseLimits.maxItems;
 
   /* Chỗ còn lại cho ghi chú Sale gõ, sau khi trừ phần backend tự nối thêm. */
   const generalNoteMaxLength = getGeneralNoteMaxLength(form.optionalServices);
@@ -705,7 +710,7 @@ export default function ConsignmentBuyOrder() {
     }
 
     setItems((previous) =>
-      previous.length >= MAX_PURCHASE_ITEMS
+      hasPurchaseLimit(purchaseLimits.maxItems) && previous.length >= purchaseLimits.maxItems
         ? previous
         : [...previous, createEmptyItem()],
     );
@@ -912,6 +917,7 @@ export default function ConsignmentBuyOrder() {
     const result = validateBuyOrderForm({
       form,
       items,
+      purchaseLimits,
     });
 
     setFormErrors(result.formErrors);
@@ -1681,8 +1687,16 @@ export default function ConsignmentBuyOrder() {
                         inputMode="numeric"
                         value={item.quantity}
                         disabled={isSubmitting}
-                        maxLength={String(MAX_PURCHASE_ITEM_QUANTITY).length}
-                        placeholder={`Từ 1 đến ${MAX_PURCHASE_ITEM_QUANTITY}`}
+                        maxLength={
+                          hasPurchaseLimit(purchaseLimits.maxItemQuantity)
+                            ? String(purchaseLimits.maxItemQuantity).length
+                            : 9
+                        }
+                        placeholder={
+                          hasPurchaseLimit(purchaseLimits.maxItemQuantity)
+                            ? `Từ 1 đến ${purchaseLimits.maxItemQuantity}`
+                            : "VD: 1"
+                        }
                         className={getFieldClassName(
                           "purchase-buy-custom-input",
                           errors.quantity,
@@ -1943,14 +1957,15 @@ export default function ConsignmentBuyOrder() {
             >
               <PlusCircleOutlined className="purchase-buy-plus-dashed-icon" />
               <span>
-                THÊM SẢN PHẨM MUA HỘ ({items.length}/{MAX_PURCHASE_ITEMS})
+                THÊM SẢN PHẨM MUA HỘ ({items.length}
+                {hasPurchaseLimit(purchaseLimits.maxItems) ? `/${purchaseLimits.maxItems}` : ""})
               </span>
             </button>
 
             <FieldError
               message={
                 formErrors.items ||
-                (isItemLimitReached ? MAX_PURCHASE_ITEMS_MESSAGE : "")
+                (isItemLimitReached ? maxPurchaseItemsMessage : "")
               }
             />
             <div

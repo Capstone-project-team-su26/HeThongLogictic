@@ -23,6 +23,7 @@ import {
   LEGACY_ORDER_STATUS_MAP,
   ORDER_STATUS_LABELS,
 } from "@features/consignment";
+import { labelOf } from "@shared/utils/statusLabel";
 
 /*
  * Nhãn trạng thái ĐƠN (19 mã đích + mã cũ) lấy từ module dùng chung của feature
@@ -92,11 +93,9 @@ export const mapStatusLabel = (value, kind = "order") => {
   if (/chưa ghép/i.test(text)) return "Chưa ghép lô vận chuyển quốc tế";
   if (/đã nhập kho|checked.?in/i.test(text)) return "Đã nhập kho";
 
+  /* Mã máy còn lại: dịch qua bảng nhãn chung — không bao giờ in "Received at destination". */
   if (/^[A-Z0-9_\- :()]+$/.test(text) && /[A-Z]{3,}/.test(text)) {
-    return text
-      .replace(/[_-]+/g, " ")
-      .toLowerCase()
-      .replace(/^./, (char) => char.toUpperCase());
+    return labelOf(null, code);
   }
 
   return text;

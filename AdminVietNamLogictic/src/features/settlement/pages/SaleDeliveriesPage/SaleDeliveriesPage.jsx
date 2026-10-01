@@ -53,6 +53,8 @@ import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
 /* Cân từng kiện, hàng khai và tiền của đơn cho hộp xác nhận — phiếu giao không có mấy số này. */
 import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import "@features/settlement/pages/SaleSettlementPage/SaleSettlementPage.css";
+import { getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
+import { subTablePagination, tablePagination } from "@shared/utils/tablePagination";
 
 const { Title, Text } = Typography;
 
@@ -77,7 +79,11 @@ const idOf = (row) => row?.deliveryRequestId || row?.id;
 
 const PARCEL_COLUMNS = [
   { title: "Kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
-  { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => <Tag>{v || "—"}</Tag> },
+  {
+    title: "Trạng thái kiện",
+    dataIndex: "packageStatus",
+    render: (v, row) => <Tag>{textOr(row.packageStatusText, getParcelStatusLabel(v))}</Tag>,
+  },
   { title: "Hướng xử lý", dataIndex: "customerIntentText", render: (v) => v || "—" },
   { title: "Ô kệ", dataIndex: "binCode", render: (v) => v || "—" },
 ];
@@ -285,7 +291,7 @@ export default function SaleDeliveriesPage() {
         const meta = getDeliveryStatusMeta(value);
         return (
           <Space direction="vertical" size={0}>
-            <Tag color={meta.tone}>{row.statusText || meta.label}</Tag>
+            <Tag color={meta.tone}>{textOr(row.statusText, meta.label)}</Tag>
             {row.carrierTrackingCode ? <Text type="secondary">Vận đơn {row.carrierTrackingCode}</Text> : null}
             {row.proofAt ? <Text type="success">Đã ký nhận: {row.proofReceivedBy}</Text> : null}
           </Space>
@@ -330,7 +336,7 @@ export default function SaleDeliveriesPage() {
         dataSource={filtered}
         loading={loading}
         scroll={{ x: 1100 }}
-        pagination={{ pageSize: 12, showSizeChanger: false }}
+        pagination={tablePagination({ unit: "yêu cầu" })}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có yêu cầu giao nào." /> }}
       />
 
@@ -347,7 +353,7 @@ export default function SaleDeliveriesPage() {
           <Spin spinning={detailLoading}>
             <Space wrap style={{ marginBottom: 12 }}>
               <Tag color={getDeliveryStatusMeta(detail.status).tone}>
-                {detail.statusText || getDeliveryStatusMeta(detail.status).label}
+                {textOr(detail.statusText, getDeliveryStatusMeta(detail.status).label)}
               </Tag>
               {detail.sourceDeliveryRequestId ? <Tag color="purple">Phiếu giao lại</Tag> : null}
             </Space>
@@ -403,7 +409,7 @@ export default function SaleDeliveriesPage() {
             <Table
               size="small"
               rowKey="parcelId"
-              pagination={false}
+              pagination={subTablePagination("kiện")}
               dataSource={detail.parcels || []}
               style={{ marginBottom: 16 }}
               columns={PARCEL_COLUMNS}

@@ -29,28 +29,10 @@ import {
 import { getPaymentStatusMeta } from "@shared/utils/paymentStatus";
 
 import { getOrderStatusLabel } from "../../constants/orderStatus";
+import { getInstallmentTypeLabel, getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
+import { getQuotationStatusLabel } from "../../api/quotationService";
 
 const { Text } = Typography;
-
-const INSTALLMENT_LABELS = Object.freeze({
-  DEPOSIT: "Đặt cọc",
-  FINAL_PAYMENT: "Thanh toán phần còn lại",
-  REMAINING: "Thanh toán phần còn lại",
-  FULL_PAYMENT: "Thanh toán toàn bộ",
-  STORAGE_FEE: "Phí lưu kho",
-  REDELIVERY_FEE: "Phí giao lại",
-});
-
-const QUOTATION_STATUS_LABELS = Object.freeze({
-  PENDING: "Chờ khách xác nhận",
-  SENT: "Đã gửi khách",
-  ACCEPTED: "Khách đã chấp nhận",
-  REJECTED: "Khách từ chối",
-  EXPIRED: "Đã hết hạn",
-  PENDING_PRICE_APPROVAL: "Chờ Admin duyệt giá",
-  PRICE_REJECTED: "Admin từ chối giá",
-  SUPERSEDED: "Đã được thay bằng báo giá mới",
-});
 
 const ORDER_TYPE_LABELS = Object.freeze({ CONSIGNMENT: "Ký gửi", PURCHASE: "Mua hộ" });
 
@@ -83,7 +65,7 @@ const PARCEL_COLUMNS = [
     title: "Trạng thái",
     key: "status",
     width: 170,
-    render: (_, parcel) => parcel?.statusText || parcel?.status || "—",
+    render: (_, parcel) => textOr(parcel?.statusText, getParcelStatusLabel(parcel?.status)),
   },
   {
     title: "Xử lý khi về VN",
@@ -260,7 +242,7 @@ export default function OrderReviewPanel({
           const meta = getPaymentStatusMeta(row?.status);
           return {
             key: row?.paymentId || `payment-${index}`,
-            label: INSTALLMENT_LABELS[upper(row?.installmentType)] || "Khoản thanh toán",
+            label: row?.installmentType ? getInstallmentTypeLabel(row.installmentType) : "Khoản thanh toán",
             hint: row?.paidAt ? `trả lúc ${formatReviewDateTime(row.paidAt)}` : "",
             value: (
               <Space size={6}>
@@ -319,7 +301,7 @@ export default function OrderReviewPanel({
           extra={
             quotation
               ? [
-                  QUOTATION_STATUS_LABELS[upper(quotation.status)] || quotation.status,
+                  getQuotationStatusLabel(quotation.status),
                   quotation.expiredAt ? `hạn ${formatReviewDateTime(quotation.expiredAt)}` : null,
                 ]
                   .filter(Boolean)

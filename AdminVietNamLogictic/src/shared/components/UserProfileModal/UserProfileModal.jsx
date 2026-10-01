@@ -19,6 +19,7 @@ import {
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
 import VietnamAddressSelector from "@shared/components/VietnamAddressSelector/VietnamAddressSelector";
 import { getAddressSelectionError } from "@shared/api/vietnamAddressService";
+import { getRoleLabel as getSharedRoleLabel } from "@shared/utils/statusLabel";
 import "./UserProfileModal.css";
 
 const normalizeText = (value) => String(value ?? "").trim();
@@ -114,20 +115,8 @@ const getAvatarText = (fullName) => {
   return `${words[0][0]}${words.at(-1)[0]}`.toUpperCase();
 };
 
-const ROLE_LABELS = {
-  admin: "Quản trị viên",
-  administrator: "Quản trị viên",
-  sale: "Nhân viên kinh doanh",
-  salesstaff: "Nhân viên kinh doanh",
-  operationsmanager: "Quản lý vận hành",
-};
-
-const getRoleLabel = (role) => {
-  const normalizedRole = normalizeText(role)
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  return ROLE_LABELS[normalizedRole] || normalizeText(role) || "Người dùng";
-};
+/* Nhãn vai trò lấy từ bảng dùng chung (@shared/utils/statusLabel) — không in mã vai trò thô. */
+const getRoleLabel = (role) => (normalizeText(role) ? getSharedRoleLabel(role) : "Người dùng");
 
 const getStatusInfo = (profile = {}) => {
   if (profile?.isActive === true) {

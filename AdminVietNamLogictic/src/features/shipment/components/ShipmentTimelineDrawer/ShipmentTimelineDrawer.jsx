@@ -48,7 +48,9 @@ import {
 } from "@shared/components/SubmitReview/SubmitReview";
 import { REVIEW_MODAL_PROPS } from "@shared/components/SubmitReview/submitReviewFormat";
 import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
+import { getParcelStatusLabel, textOr } from "@shared/utils/statusLabel";
 import { countPurchaseRecords, isPurchaseRecord } from "@shared/components/OrderTypeTag/orderType";
+import { subTablePagination } from "@shared/utils/tablePagination";
 
 const { Text, Title } = Typography;
 
@@ -143,7 +145,7 @@ export default function ShipmentTimelineDrawer({
       });
       AuthNotify.success(
         "Đã ghi mốc hành trình",
-        `${milestone.text || milestone.status} — khách của từng đơn trong lô đã nhận thông báo.`,
+        `${textOr(milestone.text, getShipmentStatusMeta(milestone.status).label)} — khách của từng đơn trong lô đã nhận thông báo.`,
       );
       setMilestone(null);
       await reloadAll();
@@ -203,7 +205,7 @@ export default function ShipmentTimelineDrawer({
                       disabled={!canUpdate || blocked}
                       onClick={() => openMilestone(item)}
                     >
-                      {item.text || getShipmentStatusMeta(item.status).label}
+                      {textOr(item.text, getShipmentStatusMeta(item.status).label)}
                     </Button>
                   </Tooltip>
                   {item.requirements?.includes(MILESTONE_REQUIREMENT_NOTE) ? (
@@ -239,7 +241,7 @@ export default function ShipmentTimelineDrawer({
           <Space direction="vertical" size={2}>
             <Space wrap>
               <Tag color={getShipmentStatusMeta(event.status).color}>
-                {event.statusText || getShipmentStatusMeta(event.status).label}
+                {textOr(event.statusText, getShipmentStatusMeta(event.status).label)}
               </Tag>
               <Text type="secondary">{formatDateTime(event.time)}</Text>
               <Text type="secondary">· {event.createdByName || "Hệ thống"}</Text>
@@ -295,7 +297,7 @@ export default function ShipmentTimelineDrawer({
         ) : null}
 
         <Space wrap style={{ marginBottom: 12 }}>
-          <Tag color={statusMeta.color}>{summary.statusText || statusMeta.label}</Tag>
+          <Tag color={statusMeta.color}>{textOr(summary.statusText, statusMeta.label)}</Tag>
           {timeline?.isOverdue ? (
             <Tag color="error" icon={<WarningOutlined />}>
               Quá ngày dự kiến
@@ -345,7 +347,7 @@ export default function ShipmentTimelineDrawer({
                 <Table
                   size="small"
                   rowKey="orderId"
-                  pagination={false}
+                  pagination={subTablePagination("đơn")}
                   dataSource={timeline?.orders || []}
                   columns={[
                     {
@@ -385,7 +387,7 @@ export default function ShipmentTimelineDrawer({
                   <Table
                     size="small"
                     rowKey="parcelId"
-                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    pagination={subTablePagination("kiện")}
                     dataSource={detail?.parcels || []}
                     columns={[
                       { title: "Mã kiện", dataIndex: "packageCode", render: (v) => <Text code>{v}</Text> },
@@ -411,7 +413,11 @@ export default function ShipmentTimelineDrawer({
                         align: "right",
                         render: (v) => (v != null ? `${Number(v).toLocaleString("vi-VN")} kg` : "—"),
                       },
-                      { title: "Trạng thái kiện", dataIndex: "packageStatus", render: (v) => <Tag>{v || "—"}</Tag> },
+                      {
+                        title: "Trạng thái kiện",
+                        dataIndex: "packageStatus",
+                        render: (v, row) => <Tag>{textOr(row.packageStatusText, getParcelStatusLabel(v))}</Tag>,
+                      },
                     ]}
                   />
                 </>
@@ -458,7 +464,7 @@ export default function ShipmentTimelineDrawer({
       <Modal
         {...REVIEW_MODAL_PROPS}
         open={!!milestone}
-        title={`Ghi mốc: ${milestone?.text || milestone?.status || ""} · lô ${summary.shipmentCode || ""}`}
+        title={`Ghi mốc: ${milestone ? textOr(milestone.text, getShipmentStatusMeta(milestone.status).label) : ""} · lô ${summary.shipmentCode || ""}`}
         okText="Ghi mốc và báo khách"
         cancelText="Huỷ"
         okButtonProps={{ loading: submitting, disabled: noteRequired && !form.note.trim() }}
@@ -477,8 +483,8 @@ export default function ShipmentTimelineDrawer({
               { label: "Lô", value: <Text strong>{summary.shipmentCode || "—"}</Text> },
               {
                 label: "Mốc hiện tại → mốc mới",
-                value: `${summary.statusText || statusMeta.label} → ${
-                  milestone?.text || getShipmentStatusMeta(milestone?.status).label
+                value: `${textOr(summary.statusText, statusMeta.label)} → ${
+                  textOr(milestone?.text, getShipmentStatusMeta(milestone?.status).label)
                 }`,
               },
               {

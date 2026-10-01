@@ -1604,3 +1604,14 @@
     padding-bottom: 6px;
   }
 }
+
+/* "Xem thêm" cuối cột hội thoại — phân trang hộp thư dài. */
+.cskh-load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 4px;
+  color: #64748b;
+  font-size: 12px;
+}

@@ -46,7 +46,11 @@ import {
 
 import {
   getPurchaseRequestDetailApi,
+  getPurchaseStageContextApi,
 } from "@features/purchase/api/purchaseRequestService";
+import {
+  derivePurchaseStage,
+} from "@features/purchase/api/purchaseRequestStage";
 import {
   getActivePricingRulesApi,
   PRICING_RULE_CODE,
@@ -89,7 +93,6 @@ import {
   getPricingRuleCalculationLabel,
   getPricingRuleUnitLabel,
   getQuotationStatusInfo,
-  getStatusInfo,
   normalizeText,
   normalizeUpperText,
   translateRoute,
@@ -1021,14 +1024,62 @@ export default function PurchaseRequestDetail() {
     loadDetail();
   }, [loadDetail]);
 
-  const status = useMemo(
-    () =>
-      getStatusInfo(
-        detail?.status,
-        detail?.statusDisplayName
-      ),
-    [detail?.status, detail?.statusDisplayName]
-  );
+  /*
+   * Đơn mua NCC + đơn kho của yêu cầu — để badge hiện CHẶNG THẬT thay cho nhãn server
+   * `statusDisplayName` ("Hoàn tất nghiệp vụ" của mã COMPLETED có thể chỉ là tất toán đời cũ).
+   * undefined = đang tải; null = không tải được.
+   */
+  const [stageState, setStageState] =
+    useState({ source: null, context: undefined });
+
+  useEffect(() => {
+    if (!detail) return undefined;
+
+    let cancelled = false;
+
+    getPurchaseStageContextApi({
+      purchaseRequestId:
+        detail?.purchaseRequestId ||
+        purchaseRequestId,
+      purchaseCode: detail?.purchaseCode,
+    })
+      .then((context) => {
+        if (!cancelled) setStageState({ source: detail, context });
+      })
+      .catch(() => {
+        if (!cancelled) setStageState({ source: detail, context: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, purchaseRequestId]);
+
+  /* Ngữ cảnh của lần tải chi tiết TRƯỚC không dùng cho chi tiết mới (tải lại sau thao tác). */
+  const stageContext =
+    stageState.source === detail
+      ? stageState.context
+      : undefined;
+
+  const status = useMemo(() => {
+    if (detail && stageContext === undefined) {
+      return {
+        label: "Đang đối chiếu tiến độ…",
+        className: "is-default",
+        hint: "",
+      };
+    }
+
+    return derivePurchaseStage(
+      {
+        ...detail,
+        purchaseRequestId:
+          detail?.purchaseRequestId ||
+          purchaseRequestId,
+      },
+      stageContext
+    );
+  }, [detail, stageContext, purchaseRequestId]);
 
   /* Hành trình vận chuyển quốc tế của đơn, kèm số liệu cho phần tiêu đề. */
   const journey = useMemo(
@@ -1444,11 +1495,13 @@ export default function PurchaseRequestDetail() {
               </Button>
             )}
 
-            <Tag
-              className={`purchase-detail-status ${status.className}`}
-            >
-              {status.label}
-            </Tag>
+            <Tooltip title={status.hint || ""}>
+              <Tag
+                className={`purchase-detail-status ${status.className}`}
+              >
+                {status.label}
+              </Tag>
+            </Tooltip>
           </div>
         </div>
 

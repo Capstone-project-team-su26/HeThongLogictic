@@ -8,6 +8,10 @@
 
 export { default as AttachmentList } from "./components/AttachmentList/AttachmentList";
 export { default as AttachmentUploadButton } from "./components/AttachmentUploadButton/AttachmentUploadButton";
+export {
+  default as AttachmentThumbnails,
+  AuthorizedThumbnail,
+} from "./components/AttachmentThumbnails/AttachmentThumbnails";
 
 export * from "./api/attachmentService";
 export { default as attachmentService } from "./api/attachmentService";
