@@ -58,6 +58,8 @@ import { OrderReviewPanel, useOrderReview } from "@features/consignment";
 import OrderTypeTag from "@shared/components/OrderTypeTag/OrderTypeTag";
 import { getParcelStatusLabel, getRouteLabel, textOr } from "@shared/utils/statusLabel";
 import { tablePagination } from "@shared/utils/tablePagination";
+import { formatPackageConfigurationName } from "@shared/utils/productTypeLabel";
+import ProductTypeLabel from "@shared/components/ProductTypeLabel/ProductTypeLabel";
 
 const { Text, Title } = Typography;
 
@@ -624,7 +626,8 @@ export default function ReceivingNotesWorkspace({
   const compareColumns = useMemo(
     () => [
       { title: "Tên hàng", dataIndex: "productName", render: (v) => v || "—" },
-      { title: "Loại", dataIndex: "productType", width: 120, render: (v) => v || "—" },
+      /* productType của dòng phiếu có thể là Id loại hàng — tra tên, không in GUID. */
+      { title: "Loại", dataIndex: "productType", width: 120, render: (_, row) => <ProductTypeLabel item={row} fallback="—" /> },
       {
         title: "SL khai",
         dataIndex: "declaredQuantity",
@@ -972,7 +975,7 @@ export default function ReceivingNotesWorkspace({
               dataSource={detail.expectedItems || []}
               columns={[
                 { title: "Tên hàng", dataIndex: "productName", render: (v) => v || "—" },
-                { title: "Loại", dataIndex: "productType", render: (v) => v || "—" },
+                { title: "Loại", dataIndex: "productType", render: (_, row) => <ProductTypeLabel item={row} fallback="—" /> },
                 {
                   title: "Số lượng",
                   dataIndex: "quantity",
@@ -993,9 +996,10 @@ export default function ReceivingNotesWorkspace({
                   key: "packageConfiguration",
                   width: 150,
                   render: (_, row) =>
-                    row.packageConfiguration?.configName ||
-                    row.packageConfiguration?.configCode ||
-                    "—",
+                    formatPackageConfigurationName(
+                      row.packageConfiguration,
+                      "—",
+                    ),
                 },
                 {
                   title: "Dịch vụ kèm kiện",

@@ -61,6 +61,7 @@ import {
 } from "@features/warehouse/api/warehouseService";
 import { getWarehouses } from "@features/admin/api/adminService";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import ProductTypeLabel from "@shared/components/ProductTypeLabel/ProductTypeLabel";
 import ShipmentJourney from "@features/shipment/components/ShipmentJourney/ShipmentJourney";
 import {
   describeJourneyScale,
@@ -2270,15 +2271,14 @@ export default function PurchaseRequestDetail() {
 
                           <div>
                             <span>
-                              Mã loại hàng
+                              Loại hàng
                             </span>
-                            <CopyValue
-                              value={
-                                item
-                                  ?.productType
-                              }
-                              label="mã loại hàng"
-                            />
+                            <strong>
+                              {/* productType có thể là Id loại hàng — tra tên, không in GUID. */}
+                              <ProductTypeLabel
+                                item={item}
+                              />
+                            </strong>
                           </div>
 
                           <div>

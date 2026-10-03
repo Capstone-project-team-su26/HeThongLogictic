@@ -48,6 +48,7 @@ import {
   sanitizeSelectedPricingRuleIds,
   sanitizeSelectedRuleCodes,
 } from "./PackageOptionalServices.helpers";
+import { formatPackageConfigurationName } from "@shared/utils/productTypeLabel";
 import "./PackageOptionalServices.css";
 
 // Shared initial form state used by the create-request page.
@@ -618,7 +619,7 @@ export default function PackageOptionalServices({
           if (!silent) {
             AuthNotify.success(
               "Đã gợi ý kích thước thùng",
-              `${packageItem.displayName}: ${normalizedSuggestion.configName}.`,
+              `${packageItem.displayName}: ${formatPackageConfigurationName(normalizedSuggestion, normalizedSuggestion.configName)}.`,
             );
           }
 
@@ -1270,9 +1271,10 @@ export default function PackageOptionalServices({
                               >
                                 <span className="package-config-option__top">
                                   <strong>
-                                    {
-                                      configuration.configName
-                                    }
+                                    {formatPackageConfigurationName(
+                                      configuration,
+                                      configuration.configName,
+                                    )}
                                   </strong>
 
                                   {isSuggested && (
@@ -1329,9 +1331,10 @@ export default function PackageOptionalServices({
                             <span>
                               Đã chọn{" "}
                               <strong>
-                                {
-                                  selectedConfiguration.configName
-                                }
+                                {formatPackageConfigurationName(
+                                  selectedConfiguration,
+                                  selectedConfiguration.configName,
+                                )}
                               </strong>{" "}
                               cho kiện này.
                             </span>

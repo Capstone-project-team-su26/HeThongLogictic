@@ -106,3 +106,9 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* Dòng hàng chờ đang gửi thao tác: mờ đi và không bấm được tới khi có kết quả (chống bấm đúp). */
+.sale-queue-row--busy > td {
+  opacity: 0.6;
+  pointer-events: none;
+}

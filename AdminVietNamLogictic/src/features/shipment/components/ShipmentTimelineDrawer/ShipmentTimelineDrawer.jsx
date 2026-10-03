@@ -42,6 +42,8 @@ import {
   getDocumentTypeLabel,
 } from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import ActionErrorAlert from "@shared/components/ActionErrorAlert/ActionErrorAlert";
+import { createLoadSequencer, createRowActionRunner } from "@shared/utils/rowActionGuard";
 import {
   ReviewFacts,
   ReviewItemsTable,
@@ -97,8 +99,18 @@ export default function ShipmentTimelineDrawer({
   const [uploadType, setUploadType] = useState("CUSTOMS_IMPORT");
   const [manifestBusy, setManifestBusy] = useState(false);
 
+  /*
+   * CHỐNG GHI MỐC HAI LẦN: mỗi lô chỉ một lời gọi ghi mốc đang bay (bấm đúp / Enter + chuột không
+   * gọi API lần hai); lỗi hiện ngay trong hộp, hộp không đóng; ghi xong mốc vừa ghi rời danh sách
+   * nút ngay; chỉ lần tải mới nhất được ghi vào ngăn (đổi lô / tải lại chồng nhau không đè nhau).
+   */
+  const [runMilestone] = useState(createRowActionRunner);
+  const [loadSeq] = useState(createLoadSequencer);
+  const [milestoneError, setMilestoneError] = useState("");
+
   const load = useCallback(async () => {
     if (!shipmentId) return;
+    const seq = loadSeq.next();
     setLoading(true);
     setErrorMessage("");
     /* Timeline là phần chính; chi tiết lô (kiện, phiếu) hỏng thì vẫn xem được hành trình. */
@@ -107,12 +119,14 @@ export default function ShipmentTimelineDrawer({
       getShipmentDetail(shipmentId),
     ]);
 
+    if (!loadSeq.isLatest(seq)) return;
+
     if (timelineResult.status === "fulfilled") setTimeline(timelineResult.value);
     else setErrorMessage(getShipmentApiError(timelineResult.reason, "Không tải được hành trình lô."));
 
     setDetail(detailResult.status === "fulfilled" ? detailResult.value : null);
     setLoading(false);
-  }, [shipmentId]);
+  }, [shipmentId, loadSeq]);
 
   useEffect(() => {
     if (open && shipmentId) {
@@ -128,32 +142,50 @@ export default function ShipmentTimelineDrawer({
   }, [load, onChanged]);
 
   const openMilestone = (item) => {
+    if (runMilestone.isBusy(shipmentId)) return;
     setMilestone(item);
+    setMilestoneError("");
     setForm({ ...EMPTY_FORM, carrierTrackingCode: "" });
   };
 
   const noteRequired = Boolean(milestone?.requirements?.includes(MILESTONE_REQUIREMENT_NOTE));
 
   const submitMilestone = async () => {
-    if (!milestone) return;
+    if (!milestone || runMilestone.isBusy(shipmentId)) return;
+
+    const recorded = milestone;
+    setMilestoneError("");
     setSubmitting(true);
-    try {
-      await updateShipmentMilestone(shipmentId, {
-        status: milestone.status,
+
+    const outcome = await runMilestone(shipmentId, () =>
+      updateShipmentMilestone(shipmentId, {
+        status: recorded.status,
         ...form,
         noteRequired,
-      });
-      AuthNotify.success(
-        "Đã ghi mốc hành trình",
-        `${textOr(milestone.text, getShipmentStatusMeta(milestone.status).label)} — khách của từng đơn trong lô đã nhận thông báo.`,
-      );
-      setMilestone(null);
-      await reloadAll();
-    } catch (error) {
-      AuthNotify.error("Không ghi được mốc", getShipmentApiError(error, "Vui lòng thử lại."));
-    } finally {
-      setSubmitting(false);
+      }),
+    );
+
+    if (outcome.skipped) return;
+
+    setSubmitting(false);
+
+    if (!outcome.ok) {
+      setMilestoneError(getShipmentApiError(outcome.error, "Vui lòng thử lại."));
+      return;
     }
+
+    AuthNotify.success(
+      "Đã ghi mốc hành trình",
+      `${textOr(recorded.text, getShipmentStatusMeta(recorded.status).label)} — khách của từng đơn trong lô đã nhận thông báo.`,
+    );
+    setMilestone(null);
+    /* Mốc vừa ghi rời danh sách nút ngay, không chờ tải lại xong mới mất. */
+    setTimeline((current) =>
+      current && Array.isArray(current.nextMilestones)
+        ? { ...current, nextMilestones: current.nextMilestones.filter((item) => item.status !== recorded.status) }
+        : current,
+    );
+    await reloadAll();
   };
 
   const openManifest = async () => {
@@ -202,7 +234,7 @@ export default function ShipmentTimelineDrawer({
                     <Button
                       type="primary"
                       icon={<FlagOutlined />}
-                      disabled={!canUpdate || blocked}
+                      disabled={!canUpdate || blocked || submitting}
                       onClick={() => openMilestone(item)}
                     >
                       {textOr(item.text, getShipmentStatusMeta(item.status).label)}
@@ -468,8 +500,20 @@ export default function ShipmentTimelineDrawer({
         okText="Ghi mốc và báo khách"
         cancelText="Huỷ"
         okButtonProps={{ loading: submitting, disabled: noteRequired && !form.note.trim() }}
+        cancelButtonProps={{ disabled: submitting }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        keyboard={!submitting}
         onOk={submitMilestone}
-        onCancel={() => setMilestone(null)}
+        onCancel={() => {
+          if (!submitting) setMilestone(null);
+        }}
+        footer={(origin) => (
+          <>
+            <ActionErrorAlert error={milestoneError} title="Không ghi được mốc" />
+            {origin}
+          </>
+        )}
       >
         <Alert
           type="info"

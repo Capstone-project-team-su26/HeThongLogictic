@@ -14,6 +14,9 @@ import { getDocumentTypeLabel } from "@features/attachments";
 import "@features/operations/styles/OperationsPage.css";
 import { textOr } from "@shared/utils/statusLabel";
 import { tablePagination } from "@shared/utils/tablePagination";
+import { createLoadSequencer } from "@shared/utils/rowActionGuard";
+/* Đi thẳng file store (như Sidebar): barrel "@features/workspace" kéo bảng tab → vòng import về trang này. */
+import { useSaleBadges } from "@features/workspace/context/saleBadgeStore";
 
 const { Text } = Typography;
 
@@ -43,24 +46,31 @@ const formatDate = (value) => {
  */
 export default function SaleShipmentsPage() {
   const navigate = useNavigate();
+  const { forceRefresh: refreshBadges } = useSaleBadges();
 
   const [rows, setRows] = useState([]);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [openId, setOpenId] = useState("");
+  /* Chỉ lần tải mới nhất được ghi vào bảng (bật/tắt lọc, ghi mốc xong tải lại chồng nhau). */
+  const [loadSeq] = useState(createLoadSequencer);
 
   const load = useCallback(async () => {
+    const seq = loadSeq.next();
     setLoading(true);
     setErrorMessage("");
     try {
-      setRows(await getTrackingQueue({ attentionOnly }));
+      const next = await getTrackingQueue({ attentionOnly });
+      if (!loadSeq.isLatest(seq)) return;
+      setRows(next);
     } catch (error) {
+      if (!loadSeq.isLatest(seq)) return;
       setErrorMessage(getShipmentApiError(error, "Không tải được hàng đợi theo dõi lô."));
     } finally {
-      setLoading(false);
+      if (loadSeq.isLatest(seq)) setLoading(false);
     }
-  }, [attentionOnly]);
+  }, [attentionOnly, loadSeq]);
 
   useEffect(() => {
     load();
@@ -284,7 +294,11 @@ export default function SaleShipmentsPage() {
         open={!!openId}
         shipmentId={openId}
         onClose={() => setOpenId("")}
-        onChanged={load}
+        onChanged={() => {
+          load();
+          /* Ghi mốc có thể đưa lô ra/vào nhóm "cần chú ý" → đếm lại badge "Lô về VN". */
+          refreshBadges();
+        }}
         onOpenOrder={openOrder}
       />
     </div>

@@ -18,6 +18,7 @@ import {
   STATUS_LABEL_MAP,
 } from "./ConsignmentDetail.constants";
 import { labelOf } from "@shared/utils/statusLabel";
+import { formatPackageConfigurationName } from "@shared/utils/productTypeLabel";
 
 /* =========================
    BASIC HELPERS
@@ -352,20 +353,9 @@ export const translateConditionType = (value) => {
 export const translatePackageConfiguration = (
   packageConfig
 ) => {
-  const code = normalizeText(
-    packageConfig?.configCode
-  ).toUpperCase();
-
-  const nameMap = {
-    SMALL: "Thùng nhỏ",
-    MEDIUM: "Thùng vừa",
-    LARGE: "Thùng lớn",
-    CUSTOM: "Đóng gói theo kích thước thực tế",
-  };
-
-  return (
-    nameMap[code] ||
-    normalizeText(packageConfig?.configName) ||
+  /* Cùng tên với web khách ("Thùng cỡ vừa"...), không để lọt tên seed tiếng Anh. */
+  return formatPackageConfigurationName(
+    packageConfig,
     "Cấu hình đóng gói"
   );
 };
@@ -826,7 +816,7 @@ export const getProductTypeName = (
       item?.productType?.name
     );
 
-  if (directName) {
+  if (directName && !isUuid(directName)) {
     return directName;
   }
 

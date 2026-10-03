@@ -22,6 +22,10 @@ import {
   getArrayItems,
   getResponseData,
 } from "@shared/api/apiEnvelope";
+import {
+  formatPackageConfigurationName,
+  PACKAGE_CONFIGURATION_NAMES,
+} from "@shared/utils/productTypeLabel";
 
 /* =========================
    CONSTANTS
@@ -39,12 +43,7 @@ export const PACKAGE_CONFIGURATION_CODE = {
   CUSTOM: "CUSTOM",
 };
 
-const PACKAGE_CONFIGURATION_LABELS = {
-  SMALL: "Thùng nhỏ",
-  MEDIUM: "Thùng vừa",
-  LARGE: "Thùng lớn",
-  CUSTOM: "Đóng gói theo kích thước thực tế",
-};
+const PACKAGE_CONFIGURATION_LABELS = PACKAGE_CONFIGURATION_NAMES;
 
 /* =========================
    NORMALIZE HELPERS
@@ -191,30 +190,22 @@ const matchesQueryFilters = (
 export const getPackageConfigurationDisplayName = (
   configurationOrCode
 ) => {
-  const code =
-    typeof configurationOrCode === "object"
-      ? normalizeUpperText(
-          configurationOrCode?.configCode
-        )
-      : normalizeUpperText(
-          configurationOrCode
-        );
-
-  if (PACKAGE_CONFIGURATION_LABELS[code]) {
-    return PACKAGE_CONFIGURATION_LABELS[code];
-  }
-
+  /* Cùng tên với web khách ("Thùng cỡ vừa"...) — xem @shared/utils/productTypeLabel. */
   if (
+    configurationOrCode &&
     typeof configurationOrCode === "object"
   ) {
-    return (
-      normalizeText(
-        configurationOrCode?.configName
-      ) || "Cấu hình đóng gói"
+    return formatPackageConfigurationName(
+      configurationOrCode,
+      "Cấu hình đóng gói"
     );
   }
 
-  return "Cấu hình đóng gói";
+  return (
+    PACKAGE_CONFIGURATION_LABELS[
+      normalizeUpperText(configurationOrCode)
+    ] || "Cấu hình đóng gói"
+  );
 };
 
 /* =========================

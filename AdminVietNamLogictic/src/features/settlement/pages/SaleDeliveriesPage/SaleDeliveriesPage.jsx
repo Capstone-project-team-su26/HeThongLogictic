@@ -42,6 +42,10 @@ import {
   listAttachments,
 } from "@features/attachments";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import ActionErrorAlert from "@shared/components/ActionErrorAlert/ActionErrorAlert";
+import { createLoadSequencer, createRowActionRunner } from "@shared/utils/rowActionGuard";
+/* Đi thẳng file store (như Sidebar): barrel "@features/workspace" kéo bảng tab → vòng import về trang này. */
+import { useSaleBadges } from "@features/workspace/context/saleBadgeStore";
 import DeliveryAddressPicker from "@shared/components/AddressSelect/DeliveryAddressPicker";
 import { isDeliveryAddressComplete } from "@shared/api/vietnamAddressService";
 import {
@@ -111,17 +115,35 @@ export default function SaleDeliveriesPage() {
   const [confirmAction, setConfirmAction] = useState(null);
   const orderReview = useOrderReview(confirmAction ? detail?.orderId : "");
 
+  /*
+   * CHỐNG BẤM LẠI (cùng khuôn với hàng chờ tất toán): mỗi phiếu chỉ một lời gọi đang bay; lỗi hiện
+   * ngay trong hộp xác nhận (hộp không đóng); chỉ lần tải mới nhất được ghi vào bảng.
+   *  - doneProofIds: phiếu vừa ghi bằng chứng giao → ẩn ngay khối ghi, không chờ tải lại.
+   *  - redeliveredIds: phiếu hoàn vừa lập giao lại → không cho lập giao lại lần hai (phiếu hoàn
+   *    không đổi trạng thái, phiếu giao lại chỉ trỏ ngược về nó qua sourceDeliveryRequestId).
+   */
+  const { forceRefresh: refreshBadges } = useSaleBadges();
+  const [runAction] = useState(createRowActionRunner);
+  const [loadSeq] = useState(createLoadSequencer);
+  const [actionError, setActionError] = useState("");
+  const [doneProofIds, setDoneProofIds] = useState(() => new Set());
+  const [redeliveredIds, setRedeliveredIds] = useState(() => new Set());
+
   const load = useCallback(async () => {
+    const seq = loadSeq.next();
     setLoading(true);
     setErrorMessage("");
     try {
-      setRows(await listDeliveryRequests({ status: statusFilter }));
+      const next = await listDeliveryRequests({ status: statusFilter });
+      if (!loadSeq.isLatest(seq)) return;
+      setRows(next);
     } catch (error) {
+      if (!loadSeq.isLatest(seq)) return;
       setErrorMessage(getApprovalApiError(error, "Không tải được danh sách yêu cầu giao hàng."));
     } finally {
-      setLoading(false);
+      if (loadSeq.isLatest(seq)) setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, loadSeq]);
 
   useEffect(() => {
     load();
@@ -145,6 +167,7 @@ export default function SaleDeliveriesPage() {
       setAttachments([]);
       setProof({ receivedBy: row.receiverName || "", note: "" });
       setRedelivery(null);
+      setActionError("");
       loadDetail(idOf(row));
     },
     [loadDetail],
@@ -164,23 +187,40 @@ export default function SaleDeliveriesPage() {
     (item) => String(item.documentType).toUpperCase() === "DELIVERY_PROOF",
   );
 
+  /**
+   * Gửi MỘT thao tác ghi của một phiếu: bấm lần hai khi lần đầu chưa xong → bỏ qua (không gọi
+   * API); lỗi → câu lỗi hiện trong hộp xác nhận, hộp giữ nguyên.
+   */
+  const performAction = async (deliveryId, action) => {
+    if (!deliveryId || runAction.isBusy(deliveryId)) return { ok: false, skipped: true };
+
+    setActionError("");
+    setSubmitting(true);
+
+    const outcome = await runAction(deliveryId, action);
+
+    if (outcome.skipped) return outcome;
+
+    setSubmitting(false);
+    if (!outcome.ok) setActionError(getApprovalApiError(outcome.error, "Vui lòng thử lại."));
+    return outcome;
+  };
+
   const submitProof = async () => {
     if (!detail) return;
-    setSubmitting(true);
-    try {
-      await recordDeliveryProof(idOf(detail), proof);
-      setConfirmAction(null);
-      AuthNotify.success(
-        "Đã ghi bằng chứng giao",
-        `Phiếu ${detail.deliveryCode}: kiện chuyển Đã giao, khách nhận thông báo.`,
-      );
-      await loadDetail(idOf(detail));
-      load();
-    } catch (error) {
-      AuthNotify.error("Không ghi được bằng chứng giao", getApprovalApiError(error, "Vui lòng thử lại."));
-    } finally {
-      setSubmitting(false);
-    }
+    const deliveryId = idOf(detail);
+
+    const outcome = await performAction(deliveryId, () => recordDeliveryProof(deliveryId, proof));
+    if (!outcome.ok) return;
+
+    setDoneProofIds((current) => new Set(current).add(String(deliveryId)));
+    setConfirmAction(null);
+    AuthNotify.success(
+      "Đã ghi bằng chứng giao",
+      `Phiếu ${detail.deliveryCode}: kiện chuyển Đã giao, khách nhận thông báo.`,
+    );
+    load();
+    await loadDetail(deliveryId);
   };
 
   const openRedelivery = () => {
@@ -215,24 +255,26 @@ export default function SaleDeliveriesPage() {
       );
       return;
     }
-    setSubmitting(true);
-    try {
-      const result = await createDeliveryRequest({ orderId: detail.orderId, ...redelivery });
-      setConfirmAction(null);
-      AuthNotify.success(
-        "Đã lập yêu cầu giao lại",
-        result?.redeliveryFeeCheckoutUrl
-          ? `Phiếu ${result.deliveryCode}: khách cần trả phí giao lại ${formatMoney(result.redeliveryFee)} trước khi kho đặt giao.`
-          : `Phiếu ${result?.deliveryCode || ""} đang chờ quản lý kho duyệt.`,
-      );
-      setRedelivery(null);
-      setDetail(null);
-      load();
-    } catch (error) {
-      AuthNotify.error("Không lập được yêu cầu giao lại", getApprovalApiError(error, "Vui lòng thử lại."));
-    } finally {
-      setSubmitting(false);
-    }
+    const sourceId = idOf(detail);
+    const outcome = await performAction(sourceId, () =>
+      createDeliveryRequest({ orderId: detail.orderId, ...redelivery }),
+    );
+    if (!outcome.ok) return;
+
+    const result = outcome.result;
+    setRedeliveredIds((current) => new Set(current).add(String(sourceId)));
+    setConfirmAction(null);
+    AuthNotify.success(
+      "Đã lập yêu cầu giao lại",
+      result?.redeliveryFeeCheckoutUrl
+        ? `Phiếu ${result.deliveryCode}: khách cần trả phí giao lại ${formatMoney(result.redeliveryFee)} trước khi kho đặt giao.`
+        : `Phiếu ${result?.deliveryCode || ""} đang chờ quản lý kho duyệt.`,
+    );
+    setRedelivery(null);
+    setDetail(null);
+    load();
+    /* Phiếu hoàn vừa có phiếu giao lại → rơi khỏi badge "Giao hàng". */
+    refreshBadges();
   };
 
   const copyText = async (text) => {
@@ -302,6 +344,14 @@ export default function SaleDeliveriesPage() {
   ];
 
   const detailStatus = String(detail?.status || "").toUpperCase();
+  const detailId = String(idOf(detail) ?? "");
+  const proofDone = Boolean(detail?.proofAt) || doneProofIds.has(detailId);
+  /* Phiếu hoàn đã có phiếu giao lại (vừa lập ở đây, hoặc phiếu giao lại đang nằm trong bảng). */
+  const alreadyRedelivered =
+    redeliveredIds.has(detailId) ||
+    rows.some(
+      (row) => detailId && String(row?.sourceDeliveryRequestId ?? "").toLowerCase() === detailId.toLowerCase(),
+    );
 
   return (
     <div className="sale-settlement-page">
@@ -343,6 +393,7 @@ export default function SaleDeliveriesPage() {
       <Drawer
         open={Boolean(detail)}
         onClose={() => {
+          if (submitting) return;
           setDetail(null);
           setConfirmAction(null);
         }}
@@ -418,7 +469,7 @@ export default function SaleDeliveriesPage() {
             <Title level={5}>Ảnh ký nhận / giấy tờ</Title>
             <AttachmentList items={attachments} showThumbnails emptyText="Chưa có ảnh ký nhận." />
 
-            {detailStatus === "DELIVERY_DISPATCHED" && !detail.proofAt && (
+            {detailStatus === "DELIVERY_DISPATCHED" && !proofDone && (
               <div className="sale-settlement-fees" style={{ marginTop: 16 }}>
                 <Text strong>Ghi bằng chứng giao (hãng không báo về)</Text>
                 <Space direction="vertical" style={{ width: "100%", marginTop: 8 }}>
@@ -449,7 +500,10 @@ export default function SaleDeliveriesPage() {
                     icon={<CheckCircleOutlined />}
                     loading={submitting}
                     disabled={!hasProofPhoto || !proof.receivedBy.trim()}
-                    onClick={() => setConfirmAction("proof")}
+                    onClick={() => {
+                      setActionError("");
+                      setConfirmAction("proof");
+                    }}
                   >
                     Xem lại và ghi nhận đã giao
                   </Button>
@@ -457,7 +511,17 @@ export default function SaleDeliveriesPage() {
               </div>
             )}
 
-            {detailStatus === "DELIVERY_RETURNED" && !redelivery && (
+            {detailStatus === "DELIVERY_RETURNED" && alreadyRedelivered && (
+              <Alert
+                type="success"
+                showIcon
+                style={{ marginTop: 16 }}
+                message="Phiếu hoàn này đã có yêu cầu giao lại"
+                description="Theo dõi phiếu giao lại (nhãn Giao lại) trong bảng."
+              />
+            )}
+
+            {detailStatus === "DELIVERY_RETURNED" && !alreadyRedelivered && !redelivery && (
               <Button type="primary" icon={<RetweetOutlined />} style={{ marginTop: 16 }} onClick={openRedelivery}>
                 Lập yêu cầu giao lại
               </Button>
@@ -507,8 +571,12 @@ export default function SaleDeliveriesPage() {
                     <Button onClick={() => setRedelivery(null)}>Huỷ</Button>
                     <Button
                       type="primary"
+                      loading={submitting}
                       disabled={!String(redelivery.addressDetail || "").trim() || !isDeliveryAddressComplete(redelivery)}
-                      onClick={() => setConfirmAction("redelivery")}
+                      onClick={() => {
+                        setActionError("");
+                        setConfirmAction("redelivery");
+                      }}
                     >
                       Xem lại và gửi yêu cầu giao lại
                     </Button>
@@ -542,8 +610,27 @@ export default function SaleDeliveriesPage() {
         cancelText="Xem lại"
         confirmLoading={submitting}
         okButtonProps={{ disabled: orderReview.loading }}
+        cancelButtonProps={{ disabled: submitting }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        keyboard={!submitting}
         onOk={confirmAction === "redelivery" ? submitRedelivery : submitProof}
-        onCancel={() => setConfirmAction(null)}
+        onCancel={() => {
+          if (!submitting) setConfirmAction(null);
+        }}
+        footer={(origin) => (
+          <>
+            <ActionErrorAlert
+              error={actionError}
+              title={
+                confirmAction === "redelivery"
+                  ? "Không lập được yêu cầu giao lại"
+                  : "Không ghi được bằng chứng giao"
+              }
+            />
+            {origin}
+          </>
+        )}
       >
         {detail && confirmAction === "proof" && (
           <>

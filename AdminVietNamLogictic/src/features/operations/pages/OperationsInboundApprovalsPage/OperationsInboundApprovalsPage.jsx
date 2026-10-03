@@ -52,6 +52,14 @@ const STATUS_FILTERS = [
   { value: "INBOUND_REJECTED", label: "Từ chối" },
 ];
 
+/**
+ * Phiếu đã duyệt nhưng còn kiện chưa lên kệ (lúc duyệt hệ thống không tìm được ô — khu lưu kho hết
+ * chỗ / chưa khai báo). Backend cho duyệt lại đúng trường hợp này để thử xếp kệ lần nữa.
+ */
+const needsPutAwayRetry = (row) =>
+  String(row?.status).toUpperCase() === "INBOUND_APPROVED" &&
+  (row?.parcels || []).some((p) => String(p?.packageStatus).toUpperCase() === "RECEIVED_AT_DESTINATION");
+
 const formatDateTime = (value) => {
   if (!value) return "—";
   const date = new Date(value);
@@ -65,9 +73,11 @@ const INBOUND_PARCEL_COLUMNS = [
   { title: "Khách", dataIndex: "customerName", render: (v) => v || "—" },
   {
     /*
-     * Khách muốn giao ngay mà kiện lại nằm trong phiếu nhập kho là dấu hiệu lệch:
-     * hoặc khách gọi đổi ý (hợp lệ), hoặc kho tick nhầm. Tô cảnh báo để OM hỏi lại
-     * trước khi ký duyệt, thay vì duyệt xong mới phát hiện.
+     * Ý khách cho TỪNG KIỆN (backend lấy lựa chọn của kiện, lùi về lựa chọn lúc đặt đơn).
+     * Khách muốn giao ngay mà kiện lại nằm trong phiếu nhập kho là dấu hiệu lệch: tô cảnh báo để
+     * OM hỏi lại trước khi ký duyệt. Backend cũ chỉ trả lựa chọn lúc đặt đơn nên kiện khách đã đổi
+     * sang gửi kho vẫn có thể hiện "Muốn giao ngay" — kho chỉ lập phiếu được cho kiện đang ở hướng
+     * gửi kho, nên gặp cảnh báo thì mở đơn xem lựa chọn từng kiện trước khi từ chối.
      */
     title: "Ý khách",
     dataIndex: "customerIntent",
@@ -232,13 +242,22 @@ export default function OperationsInboundApprovalsPage() {
     async (row) => {
       setSubmitting(true);
       try {
+        const retry = needsPutAwayRetry(row);
         await approveInboundRequest(row.inboundRequestId || row.id);
-        AuthNotify.success(`Đã duyệt phiếu ${row.inboundCode}. Kho có thể xếp kệ.`);
+        AuthNotify.success(
+          retry
+            ? `Đã xếp kệ lại các kiện của phiếu ${row.inboundCode}.`
+            : `Đã duyệt phiếu ${row.inboundCode}. Hệ thống đã xếp kiện lên kệ kho Việt Nam.`,
+        );
         setApproveTarget(null);
         setDetail(null);
         await fetchRows();
       } catch (error) {
         AuthNotify.error(getApprovalApiError(error, "Không duyệt được phiếu nhập kho."));
+        // Backend ghi "đã duyệt" TRƯỚC rồi mới xếp kệ: hết ô kệ thì báo lỗi nhưng phiếu đã duyệt.
+        // Tải lại để OM thấy đúng trạng thái và nút "Xếp kệ lại".
+        setApproveTarget(null);
+        await fetchRows();
       } finally {
         setSubmitting(false);
       }
@@ -297,6 +316,13 @@ export default function OperationsInboundApprovalsPage() {
         key: "actions",
         render: (_, row) => {
           const isPending = String(row.status).toUpperCase() === "INBOUND_PENDING";
+          if (!isPending && needsPutAwayRetry(row)) {
+            return (
+              <Button size="small" icon={<ReloadOutlined />} onClick={() => setApproveTarget(row)}>
+                Xếp kệ lại
+              </Button>
+            );
+          }
           if (!isPending) return <Text type="secondary">—</Text>;
           return (
             <Space>
@@ -334,7 +360,8 @@ export default function OperationsInboundApprovalsPage() {
           <span>BỘ PHẬN VẬN HÀNH (OPS)</span>
           <h1>Duyệt Phiếu Nhập Kho Việt Nam</h1>
           <p>
-            Kho lập phiếu sau khi mở lô kiểm đếm. Duyệt xong kho mới xếp kiện lên kệ được.
+            Kiện khách gửi lại kho VN: kho lập phiếu khi đơn đã tất toán và Sale đã báo kho. Duyệt xong
+            hệ thống tự xếp kiện vào ô trống của khu lưu kho VN.
           </p>
         </div>
         <div className="ops-page__hero-actions">
@@ -389,7 +416,7 @@ export default function OperationsInboundApprovalsPage() {
             <p className="ops-kpi-card__label">Đang chờ duyệt</p>
             <p className="ops-kpi-card__value">{loading ? "…" : pendingCount}</p>
             <div className="ops-kpi-card__meta">
-              <p>Kho đang chờ để xếp kệ</p>
+              <p>Duyệt xong hệ thống tự xếp kệ</p>
             </div>
           </div>
         </div>
@@ -544,8 +571,14 @@ export default function OperationsInboundApprovalsPage() {
       <Modal
         {...REVIEW_MODAL_PROPS}
         open={Boolean(approveTarget)}
-        title={`Duyệt phiếu nhập kho ${approveTarget?.inboundCode || ""}`}
-        okText={decisionReview.loading ? "Đang tải thông tin…" : "Duyệt phiếu"}
+        title={`${needsPutAwayRetry(approveTarget) ? "Xếp kệ lại phiếu" : "Duyệt phiếu nhập kho"} ${approveTarget?.inboundCode || ""}`}
+        okText={
+          decisionReview.loading
+            ? "Đang tải thông tin…"
+            : needsPutAwayRetry(approveTarget)
+              ? "Xếp kệ lại"
+              : "Duyệt phiếu"
+        }
         cancelText="Huỷ"
         okButtonProps={{ loading: submitting, disabled: decisionReview.loading }}
         onOk={() => handleApprove(approveTarget)}
@@ -555,7 +588,11 @@ export default function OperationsInboundApprovalsPage() {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="Duyệt xong kho được xếp các kiện dưới đây lên kệ kho Việt Nam."
+          message={
+            needsPutAwayRetry(approveTarget)
+              ? "Phiếu đã duyệt nhưng còn kiện chưa có ô kệ (lần trước hệ thống không xếp được, ví dụ khu lưu kho hết chỗ). Bấm để hệ thống xếp lại; kho cũng xếp tay được ở app kho › Tồn kho › Chờ xếp kệ."
+              : "Duyệt xong hệ thống tự xếp các kiện dưới đây vào ô trống của khu lưu kho Việt Nam; kiện nào không xếp được thì kho xếp tay trong app kho."
+          }
         />
         {approveTarget ? (
           <InboundDecisionReview target={approveTarget} review={decisionReview} />

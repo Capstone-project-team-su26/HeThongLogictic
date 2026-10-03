@@ -5,7 +5,8 @@
  * ngay cả khi dòng đó vẫn còn nằm trong danh sách:
  *   - đã gửi báo giá, đang chờ khách trả lời  -> không tính;
  *   - đã lập phiếu, đang chờ bộ phận khác duyệt -> không tính (canAct = false);
- *   - đã phát hành khoản thu cuối, chờ khách trả -> không tính (pendingPaymentAmount có giá trị);
+ *   - đã phát hành khoản thu cuối, chờ khách trả -> không tính (needsSaleSettlement = false — tab
+ *     "Chờ tất toán" cũng lọc đúng như vậy nên dòng đó không còn trong bảng);
  *   - phiếu giao hoàn về kho nhưng đã có phiếu giao lại -> không tính.
  *
  * Hai nguồn đếm khác nhau:
@@ -19,7 +20,10 @@
 import { getConsignmentsApi } from "@features/consignment/api/consignmentService";
 import { getPurchaseRequestsApi } from "@features/purchase/api/purchaseRequestService";
 import { listActionQueue } from "@features/settlement/api/actionQueueService";
-import { listAwaitingSettlement } from "@features/settlement/api/settlementService";
+import {
+  listAwaitingSettlement,
+  needsSaleSettlement,
+} from "@features/settlement/api/settlementService";
 import { getTrackingQueue } from "@features/shipment/api/internationalShipmentService";
 import { listDeliveryRequests } from "@features/operations/api/destinationApprovalService";
 import { listIncidents } from "@features/incident/api/parcelIncidentService";
@@ -108,14 +112,10 @@ const SOURCES = [
   [
     SALE_BADGE_KEYS.settlements,
     /*
-     * Hàng đã về kho VN. `pendingPaymentAmount` có giá trị nghĩa là Sale chốt phí cuối rồi,
-     * giờ là việc của khách — dòng vẫn ở lại danh sách nhưng không còn là việc của Sale.
+     * Hàng đã về kho VN, Sale chưa chốt phí cuối. Cùng hàm lọc với danh sách của tab
+     * (needsSaleSettlement) để badge và số dòng trong bảng luôn khớp nhau.
      */
-    async () =>
-      countWhere(
-        await listAwaitingSettlement(),
-        (row) => !(Number(row?.pendingPaymentAmount) > 0)
-      ),
+    async () => countWhere(await listAwaitingSettlement(), needsSaleSettlement),
   ],
   [
     SALE_BADGE_KEYS.deliveries,

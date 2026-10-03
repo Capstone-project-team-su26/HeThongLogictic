@@ -45,7 +45,7 @@ export default function BinInventoryModal({
         <div>
           <div>
             <Text strong style={{ color: "#1e40af", fontSize: 14 }}>
-              📦 {record.packageCode || record.parcelId || "KHIEN_HANG"}
+              📦 {record.packageCode || "Kiện chưa có mã"}
             </Text>
           </div>
           {record.consignmentCode && (

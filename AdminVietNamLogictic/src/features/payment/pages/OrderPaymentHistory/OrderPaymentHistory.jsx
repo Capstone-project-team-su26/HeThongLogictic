@@ -51,6 +51,7 @@ import {
   labelOf,
 } from "@shared/utils/statusLabel";
 
+import { isGuidLike } from "@shared/utils/productTypeLabel";
 import "./OrderPaymentHistory.css";
 
 /* =========================================================
@@ -641,10 +642,11 @@ export default function OrderPaymentHistory({
                 const isPaymentSuccess = isPaymentPaid(payment?.status);
                 const awaitingReview = isAwaitingManualReview(payment?.status);
 
+                /* paymentId là GUID nội bộ — không in làm mã giao dịch. */
                 const transactionCode =
                   payment?.transactionCode ||
                   payment?.orderCode ||
-                  payment?.paymentId ||
+                  (isGuidLike(payment?.paymentId) ? "" : payment?.paymentId) ||
                   "—";
 
                 return (

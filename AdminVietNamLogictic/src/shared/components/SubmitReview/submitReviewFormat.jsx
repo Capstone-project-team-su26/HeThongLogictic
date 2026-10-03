@@ -9,6 +9,9 @@
 
 import { Space, Tag, Typography } from "antd";
 
+import ProductTypeLabel from "@shared/components/ProductTypeLabel/ProductTypeLabel";
+import { formatPackageConfigurationName } from "@shared/utils/productTypeLabel";
+
 const { Text } = Typography;
 
 /* =========================
@@ -94,11 +97,12 @@ export const summarizeDeclaredItems = (items = []) => {
 const renderItemExtras = (item) => {
   const tags = [];
 
-  const crate = item?.packageConfiguration;
-  if (crate && (crate.configName || crate.configCode)) {
+  /* Tên thùng giống web khách ("Thùng cỡ vừa"), không để lọt tên seed tiếng Anh "Medium Box". */
+  const crateName = formatPackageConfigurationName(item?.packageConfiguration);
+  if (crateName) {
     tags.push(
       <Tag key="crate" color="gold">
-        Thùng: {crate.configName || crate.configCode}
+        Thùng: {crateName}
       </Tag>,
     );
   }
@@ -131,7 +135,8 @@ export const buildDeclaredItemColumns = () => [
       <Space direction="vertical" size={0}>
         <Text strong>{value || "—"}</Text>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          {item?.productTypeName || item?.productType || "Chưa phân loại"}
+          {/* productType thường là Id loại hàng — không in thẳng, tra tên (xem ProductTypeLabel). */}
+          <ProductTypeLabel item={item} />
         </Text>
         {item?.domesticTrackingCode ? (
           <Text type="secondary" style={{ fontSize: 12 }}>

@@ -20,6 +20,8 @@ import {
   ShoppingCartOutlined,
 } from "@ant-design/icons";
 
+import { isGuidLike } from "@shared/utils/productTypeLabel";
+
 import "./ConsignmentBuyOrderConfirm.css";
 
 const SERVICE_CODE_LABELS = {
@@ -45,12 +47,14 @@ const getOptionLabel = (options = [], value) => {
     return "Chưa cập nhật";
   }
 
-  return (
+  const label =
     options.find(
       (option) =>
         String(option?.value ?? "") === normalizedValue,
-    )?.label || normalizedValue
-  );
+    )?.label || normalizedValue;
+
+  /* Danh mục chưa tải / không có mục khớp: value là Id (GUID) thì không in ra làm nhãn. */
+  return isGuidLike(label) ? "Chưa cập nhật" : label;
 };
 
 const getDisplayText = (

@@ -31,6 +31,7 @@ import {
   getPurchaseRequestDetailApi,
 } from "@features/purchase/api/purchaseRequestService";
 import { formatVietnamDateTime } from "@shared/utils/timeUtc";
+import ProductTypeLabel from "@shared/components/ProductTypeLabel/ProductTypeLabel";
 import "./PurchaseDocumentsList.css";
 import { labelOf } from "@shared/utils/statusLabel";
 /* Nhãn mã COMPLETED theo chặng mua hộ mới (không dùng "Hoàn tất" chung chung — xem purchaseRequestStage). */
@@ -676,7 +677,7 @@ export default function PurchaseDocumentsList() {
                         </div>
                       ),
                     },
-                    { title: "Phân loại", dataIndex: "productType", key: "productType", width: 120 },
+                    { title: "Phân loại", dataIndex: "productType", key: "productType", width: 120, render: (_, record) => <ProductTypeLabel item={record} /> },
                     { title: "Số lượng", dataIndex: "quantity", key: "quantity", align: "center", width: 90 },
                   ]}
                 />

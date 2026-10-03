@@ -861,7 +861,7 @@ export default function PendingPurchaseRequestListHistory() {
                           Khách hàng:{" "}
                           <strong>
                             {item.customerName ||
-                              item.customerId ||
+                              item.customerCode ||
                               "-"}
                           </strong>
                         </span>

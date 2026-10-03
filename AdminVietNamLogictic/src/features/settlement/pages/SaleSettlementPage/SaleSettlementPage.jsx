@@ -37,9 +37,19 @@ import {
   getSettlementApiError,
   getSettlementPreview,
   listAwaitingSettlement,
+  needsSaleSettlement,
   SETTLEMENT_BLOCKER_HINTS,
 } from "@features/settlement/api/settlementService";
+/* Đi thẳng file store (như Sidebar): barrel "@features/workspace" kéo bảng tab → vòng import về trang này. */
+import { useSaleBadges } from "@features/workspace/context/saleBadgeStore";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import ActionErrorAlert from "@shared/components/ActionErrorAlert/ActionErrorAlert";
+import ProductTypeLabel from "@shared/components/ProductTypeLabel/ProductTypeLabel";
+import {
+  createLoadSequencer,
+  createRowActionRunner,
+  httpStatusOf,
+} from "@shared/utils/rowActionGuard";
 import SubmitReview, {
   ReviewFacts,
   ReviewItemsTable,
@@ -99,7 +109,9 @@ const PURCHASE_ITEM_COLUMNS = [
       <Space direction="vertical" size={0}>
         <Text strong>{value || "—"}</Text>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          {[item?.productType, item?.sourceWebsite].filter(Boolean).join(" · ") || "Chưa phân loại"}
+          {/* productType có thể là Id loại hàng — tra tên, không in GUID. */}
+          <ProductTypeLabel item={item} />
+          {item?.sourceWebsite ? ` · ${item.sourceWebsite}` : null}
         </Text>
       </Space>
     ),
@@ -111,8 +123,27 @@ const PURCHASE_ITEM_COLUMNS = [
 
 const emptyFee = () => ({ key: `${Date.now()}-${Math.round(performance.now())}`, name: "", amount: null, note: "" });
 
+const sameOrder = (a, b) => {
+  const left = String(a ?? "").trim().toLowerCase();
+  return left !== "" && left === String(b ?? "").trim().toLowerCase();
+};
+
 export default function SaleSettlementPage() {
   const navigate = useNavigate();
+  /* Chốt xong thì đếm lại badge NGAY (không chờ nhịp 60 giây / chặn 20 giây). */
+  const { forceRefresh: refreshBadges } = useSaleBadges();
+
+  /*
+   * CHỐNG BẤM LẠI. Trước đây bấm chốt xong dòng vẫn còn nguyên nút "Chốt tất toán" (bảng chỉ đổi
+   * sau khi tải lại, mà backend cũ còn trả cả dòng đã chốt) nên Sale bấm lại được mãi.
+   *  - runSettle: mỗi đơn chỉ một lời gọi đang bay — bấm đúp / Enter + chuột không gọi API lần hai.
+   *  - busyId: đơn đang gửi → nút trên dòng quay + khoá.
+   *  - loadSeq: chỉ lần tải mới nhất được ghi vào bảng; lần tải cũ về muộn không làm dòng sống lại.
+   */
+  const [runSettle] = useState(createRowActionRunner);
+  const [loadSeq] = useState(createLoadSequencer);
+  const [busyId, setBusyId] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,30 +191,42 @@ export default function SaleSettlementPage() {
   const [previewError, setPreviewError] = useState("");
 
   const load = useCallback(async () => {
+    const seq = loadSeq.next();
     setLoading(true);
     setErrorMessage("");
     try {
-      setRows(await listAwaitingSettlement());
+      const next = await listAwaitingSettlement();
+      if (!loadSeq.isLatest(seq)) return;
+      setRows(next);
     } catch (error) {
+      if (!loadSeq.isLatest(seq)) return;
       setErrorMessage(getSettlementApiError(error, "Không tải được danh sách hàng chờ tất toán."));
     } finally {
-      setLoading(false);
+      if (loadSeq.isLatest(seq)) setLoading(false);
     }
-  }, []);
+  }, [loadSeq]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  /*
+   * Bảng chỉ bày dòng còn là việc của Sale — CÙNG hàm lọc với badge tab "Chờ tất toán". Dòng đã
+   * chốt phí cuối (đang chờ khách trả) không còn nút chốt; chỉ đếm để Sale biết còn bao nhiêu đơn
+   * đang chờ khách.
+   */
+  const actionable = useMemo(() => rows.filter(needsSaleSettlement), [rows]);
+  const waitingCustomerCount = rows.length - actionable.length;
+
   const filtered = useMemo(() => {
     const needle = keyword.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) =>
+    if (!needle) return actionable;
+    return actionable.filter((row) =>
       [row.orderCode, row.customerName, row.customerPhone, row.receiverName]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
-  }, [rows, keyword]);
+  }, [actionable, keyword]);
 
   const loadPreview = useCallback(async (row) => {
     setPreview(null);
@@ -204,14 +247,18 @@ export default function SaleSettlementPage() {
 
   const openOrder = useCallback(
     (row) => {
+      /* Đơn đang gửi chốt thì không mở lại (dòng cũng đang khoá). */
+      if (runSettle.isBusy(row?.orderId)) return;
+
       setTarget(row);
       setConfirmOpen(false);
+      setSubmitError("");
       setFees([]);
       /* Không cần đặt lại phương thức: chỉ còn SePay, biến giữ cố định "SEPAY". */
       setIssued(null);
       loadPreview(row);
     },
-    [loadPreview],
+    [loadPreview, runSettle],
   );
 
   const feesTotal = useMemo(
@@ -237,39 +284,68 @@ export default function SaleSettlementPage() {
       return;
     }
 
+    setSubmitError("");
     setConfirmOpen(true);
   }, [target, fees, cleanFees]);
 
+  /**
+   * Gửi chốt phí cuối ĐÚNG MỘT LẦN cho một đơn.
+   *  - Lần bấm thứ hai khi lần đầu chưa xong: bỏ qua, không gọi API.
+   *  - Lỗi: hộp xác nhận GIỮ NGUYÊN, câu lỗi hiện ngay chân hộp (không đóng hộp rồi bắn toast).
+   *    409 = đơn đã được chốt (tab khác / người khác) → tải lại để dòng rời bảng.
+   *  - Thành công: bỏ dòng khỏi bảng ngay, báo thành công, rồi tải lại bảng + badge một lần.
+   */
   const submit = useCallback(async () => {
     if (!target) return;
+
+    const orderId = target.orderId;
+    if (runSettle.isBusy(orderId)) return;
 
     const cleaned = cleanFees();
 
     // Dòng phí điền dở làm số tiền chốt cho khách sai, nên chặn tại đây thay vì lặng lẽ bỏ qua.
     if (fees.length > 0 && cleaned.length !== fees.length) {
-      AuthNotify.error("Phí phát sinh chưa hợp lệ", "Mỗi dòng phí phải có tên và số tiền lớn hơn 0.");
+      setSubmitError("Mỗi dòng phí phải có tên và số tiền lớn hơn 0.");
       return;
     }
 
+    setSubmitError("");
     setSubmitting(true);
+    setBusyId(orderId);
+
+    // Đơn mua hộ cũng tất toán trên đơn kho PUR (`target.orderId`), cùng đường với ký gửi.
+    const outcome = await runSettle(orderId, () => createFinalPayment(orderId, cleaned, paymentMethod));
+
+    if (outcome.skipped) return;
+
     try {
-      // Đơn mua hộ cũng tất toán trên đơn kho PUR (`target.orderId`), cùng đường với ký gửi.
-      const result = await createFinalPayment(target.orderId, cleaned, paymentMethod);
+      if (!outcome.ok) {
+        setSubmitError(getSettlementApiError(outcome.error, "Không chốt được phí cuối. Vui lòng thử lại."));
+
+        if (httpStatusOf(outcome.error) === 409) {
+          load();
+          refreshBadges();
+        }
+        return;
+      }
+
+      const result = outcome.result;
 
       setIssued(result);
       setConfirmOpen(false);
-      loadPreview(target);
+      setRows((current) => current.filter((row) => !sameOrder(row.orderId, orderId)));
       AuthNotify.success(
         "Đã chốt phí cuối",
         `Khách có thể tất toán ${formatMoney(result?.finalAmount ?? result?.amount)} cho đơn ${target.orderCode}.`,
       );
+      loadPreview(target);
       load();
-    } catch (error) {
-      AuthNotify.error("Không chốt được phí cuối", getSettlementApiError(error, "Vui lòng thử lại."));
+      refreshBadges();
     } finally {
       setSubmitting(false);
+      setBusyId((current) => (sameOrder(current, orderId) ? "" : current));
     }
-  }, [target, fees, cleanFees, paymentMethod, load, loadPreview]);
+  }, [target, fees, cleanFees, paymentMethod, load, loadPreview, refreshBadges, runSettle]);
 
   const columns = useMemo(
     () => [
@@ -326,14 +402,23 @@ export default function SaleSettlementPage() {
         key: "actions",
         fixed: "right",
         width: 160,
-        render: (_, row) => (
-          <Button type="primary" icon={<DollarOutlined />} onClick={() => openOrder(row)}>
-            Chốt tất toán
-          </Button>
-        ),
+        render: (_, row) => {
+          const busy = sameOrder(busyId, row.orderId);
+          return (
+            <Button
+              type="primary"
+              icon={<DollarOutlined />}
+              loading={busy}
+              disabled={busy}
+              onClick={() => openOrder(row)}
+            >
+              {busy ? "Đang chốt…" : "Chốt tất toán"}
+            </Button>
+          );
+        },
       },
     ],
-    [openOrder],
+    [openOrder, busyId],
   );
 
   return (
@@ -344,6 +429,11 @@ export default function SaleSettlementPage() {
           <Text type="secondary">
             Đơn kho đã kiểm đếm xong, chờ Sale chốt phí cuối để khách tất toán.
           </Text>
+          {waitingCustomerCount > 0 && (
+            <Text type="secondary" style={{ display: "block" }}>
+              {waitingCustomerCount} đơn đã chốt phí cuối, đang chờ khách thanh toán — không cần thao tác thêm.
+            </Text>
+          )}
         </div>
 
         <Space>
@@ -369,6 +459,7 @@ export default function SaleSettlementPage() {
         columns={columns}
         dataSource={filtered}
         loading={loading}
+        rowClassName={(row) => (sameOrder(busyId, row.orderId) ? "sale-queue-row--busy" : "")}
         scroll={{ x: 1080 }}
         pagination={tablePagination({ unit: "đơn" })}
         locale={{
@@ -384,6 +475,8 @@ export default function SaleSettlementPage() {
       <Drawer
         open={Boolean(target)}
         onClose={() => {
+          /* Đang gửi chốt thì giữ ngăn mở tới khi có kết quả (thành công / lỗi đều hiện ở đây). */
+          if (submitting) return;
           setTarget(null);
           setConfirmOpen(false);
         }}
@@ -741,8 +834,20 @@ export default function SaleSettlementPage() {
         cancelText="Xem lại"
         confirmLoading={submitting}
         okButtonProps={{ disabled: confirmLoading }}
+        cancelButtonProps={{ disabled: submitting }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        keyboard={!submitting}
         onOk={submit}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => {
+          if (!submitting) setConfirmOpen(false);
+        }}
+        footer={(origin) => (
+          <>
+            <ActionErrorAlert error={submitError} title="Chưa chốt được phí cuối" />
+            {origin}
+          </>
+        )}
       >
         {target && (
           <>

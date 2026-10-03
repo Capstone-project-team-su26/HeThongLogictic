@@ -18,6 +18,7 @@
  * Thoát mã 1 nếu có kịch bản FAIL hoặc có request ra mạng.
  */
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
@@ -152,6 +153,11 @@ try {
     orderLimitsSection: await load("/src/features/pricing/components/OrderLimitsSection/OrderLimitsSection.helpers.js"),
     consignmentOrderHelpers: await load("/src/features/consignment/pages/ConsignmentOrder/ConsignmentOrder.helpers.js"),
     buyOrderHelpers: await load("/src/features/purchase/pages/ConsignmentBuyOrder/ConsignmentBuyOrder.helpers.js"),
+    /* Loại hàng / tên thùng hiển thị (03/10/2026): không bao giờ in GUID làm nhãn. */
+    productTypeLabel: await load("/src/shared/utils/productTypeLabel.js"),
+    productTypeCatalog: await load("/src/shared/api/productTypeCatalogApi.js"),
+    productTypeLabelComponent: await load("/src/shared/components/ProductTypeLabel/ProductTypeLabel.jsx"),
+    submitReviewFormat: await load("/src/shared/components/SubmitReview/submitReviewFormat.jsx"),
   };
 } catch (error) {
   loadError = error;
@@ -2167,6 +2173,75 @@ if (loadError) {
     );
   });
 
+  /*
+   * Lỗi thật 03/10/2026: bảng "Hàng khách khai trên đơn" in "11111111-0000-0000-0000-000000000001"
+   * thay vì tên loại hàng vì API thiếu productTypeName, và thùng hiện "Medium Box" tiếng Anh.
+   * Id seed không theo RFC 4122 — phải nhận diện GUID theo khuôn 8-4-4-4-12 hex bất kỳ.
+   */
+  await check("Loại hàng: dòng thiếu productTypeName mà có Id → tên trong danh mục, không bao giờ in GUID; thùng hiện như web khách", async () => {
+    resetState({ token: "tok" });
+    const SEED_TYPE_ID = "11111111-0000-0000-0000-000000000001";
+    const { resolveProductTypeLabel, formatPackageConfigurationName, isGuidLike, getProductTypeIdToResolve } =
+      mods.productTypeLabel;
+    const catalog = mods.productTypeCatalog;
+    catalog.resetProductTypeNameMapCache();
+
+    /* Lần 1: danh mục lỗi 500 → Map rỗng, không cache lỗi, màn hiện "Chưa phân loại". */
+    routes = [{ method: "GET", url: "/api/product-types", reply: () => fail(500, { message: "lỗi" }) }];
+    const failed = await catalog.getProductTypeNameMapApi();
+    const noCatalog = resolveProductTypeLabel({ productType: SEED_TYPE_ID }, failed);
+
+    routes = [
+      {
+        method: "GET",
+        url: "/api/product-types",
+        reply: () => ok({ message: "ok", data: [{ id: SEED_TYPE_ID.toUpperCase(), name: "Điện tử" }] }),
+      },
+    ];
+    const names = await catalog.getProductTypeNameMapApi();
+    const again = await catalog.getProductTypeNameMapApi();
+    const typeCalls = requests.filter((r) => r.url === "/api/product-types").length;
+
+    const item = { productName: "tai nghe só 2", productType: SEED_TYPE_ID, quantity: 2 };
+
+    /* Render SSR thật: cột chuẩn của bảng hàng + component nhãn (cache đã nạp nên render ra tên ngay). */
+    const React = createRequire(path.join(ROOT, "package.json"))("react");
+    const { renderToStaticMarkup } = createRequire(path.join(ROOT, "package.json"))("react-dom/server");
+    const labelHtml = renderToStaticMarkup(
+      React.createElement(mods.productTypeLabelComponent.default, { item }),
+    );
+    const columns = mods.submitReviewFormat.buildDeclaredItemColumns();
+    const nameCell = renderToStaticMarkup(columns[0].render(item.productName, item));
+    const extrasCell = renderToStaticMarkup(
+      columns[columns.length - 1].render(undefined, {
+        ...item,
+        packageConfiguration: { configCode: "MEDIUM", configName: "Medium Box" },
+      }),
+    );
+
+    return all(
+      expectTrue("Id seed 11111111-0000-… nhận là GUID", isGuidLike(SEED_TYPE_ID)),
+      expectEqual("danh mục lỗi → Chưa phân loại", noCatalog, "Chưa phân loại"),
+      expectEqual("lỗi không bị cache, cache sau khi tải được (2 lần gọi)", typeCalls, 2),
+      expectTrue("lần gọi sau dùng cache", names === again),
+      expectEqual("Id → tên (khoá không phân biệt hoa thường)", resolveProductTypeLabel(item, names), "Điện tử"),
+      expectEqual("có productTypeName thì dùng luôn", resolveProductTypeLabel({ ...item, productTypeName: "Phụ kiện" }, names), "Phụ kiện"),
+      expectEqual("productTypeName lỡ là GUID vẫn tra ra tên", resolveProductTypeLabel({ productTypeName: SEED_TYPE_ID }, names), "Điện tử"),
+      expectEqual("tên lưu kiểu cũ giữ nguyên", resolveProductTypeLabel({ productType: "Quần áo" }, names), "Quần áo"),
+      expectEqual("Id lạ → Chưa phân loại", resolveProductTypeLabel({ productType: "22222222-0000-0000-0000-000000000009" }, names), "Chưa phân loại"),
+      expectEqual("không có loại → Chưa phân loại", resolveProductTypeLabel({}, names), "Chưa phân loại"),
+      expectEqual("dòng có tên thì khỏi tra danh mục", getProductTypeIdToResolve({ ...item, productTypeName: "Điện tử" }), ""),
+      expectEqual("component ProductTypeLabel", labelHtml, "Điện tử"),
+      expectTrue("cột Tên hàng hiện tên loại, không có GUID", nameCell.includes("Điện tử") && !nameCell.includes(SEED_TYPE_ID)),
+      expectTrue("thùng hiện \"Thùng cỡ vừa\", không \"Medium Box\"", extrasCell.includes("Thùng: Thùng cỡ vừa") && !extrasCell.includes("Medium Box")),
+      expectEqual("thùng: mã chuẩn → tên như web khách", ["SMALL", "LARGE", "CUSTOM"].map((configCode) => formatPackageConfigurationName({ configCode })), ["Thùng cỡ nhỏ", "Thùng cỡ lớn", "Thùng tùy chỉnh"]),
+      expectEqual("thùng: mã lạ → tên trong DB", formatPackageConfigurationName({ configCode: "PALLET", configName: "Pallet gỗ" }), "Pallet gỗ"),
+      expectEqual("thùng: displayName backend", formatPackageConfigurationName({ configCode: "X1", displayName: "Thùng X1", configName: "X1 box" }), "Thùng X1"),
+      expectEqual("thùng: tên tiếng Anh mặc định được dịch", formatPackageConfigurationName({ configName: "Large Box" }), "Thùng cỡ lớn"),
+      expectEqual("thùng: không có gì → fallback", formatPackageConfigurationName(null, "—"), "—"),
+    );
+  });
+
   await check("routes / shipping-options: mảng CHUỖI được gói thành { value, label }", async () => {
     resetState({ token: "tok" });
     routes = [
@@ -2437,6 +2512,115 @@ if (loadError) {
       expectEqual("nút chính của Sale", saleMain, [["Gửi duyệt"], [], ["Đã đặt NCC"], ["NCC đã xác nhận đơn"], ["NCC đã phát hàng"], [], []]),
       expectEqual("SUPPLIER_CONFIRMED không có giao thiếu", [can("SUPPLIER_CONFIRMED").progress, can("SUPPLIER_CONFIRMED").closeShortage], [true, false]),
       expectEqual("Admin duyệt chỉ ở chờ duyệt", steps.map((status) => can(status, "admin").decide), [false, true, false, false, false, false, false]),
+    );
+  });
+
+  /*
+   * HÀNG CHỜ TẤT TOÁN — "Chốt tất toán" bấm MỘT lần (03/10/2026). Trước đây chốt xong dòng vẫn còn
+   * nguyên nút (backend cũ còn trả dòng đã chốt, bảng không lọc) nên Sale bấm lại được mãi, và badge
+   * tab "Chờ tất toán (1)" lệch với bảng 2 dòng vì badge có lọc còn bảng thì không. Nay badge và bảng
+   * dùng chung needsSaleSettlement; bộ chạy theo đơn chặn gửi lần hai; dòng rời bảng ngay khi chốt.
+   */
+  await check("Hàng chờ tất toán: badge = số dòng bảng; bấm đúp \"Chốt\" → POST /payments/final đúng 1 lần; chốt xong dòng rời bảng, badge về 0; bấm lại → 409 tiếng Việt", async () => {
+    resetState({ token: "t" });
+    const settlement = await load("/src/features/settlement/api/settlementService.js");
+    const guard = await load("/src/shared/utils/rowActionGuard.js");
+    const A = "5e771e00-0000-4000-8000-0000000000a1";
+    const B = "5e771e00-0000-4000-8000-0000000000b2";
+    /* B: Sale đã chốt từ trước (đợt cuối chờ khách trả) — đúng ảnh chụp lỗi: bảng 2 dòng, badge 1. */
+    const issued = new Set([B]);
+    const row = (orderId, orderCode) => ({
+      orderId, orderCode, orderType: "CONSIGNMENT", customerName: "Khách test", customerPhone: "0900000000",
+      parcelCount: 1, totalWeight: 3, discrepancyParcelCount: 0, arrivedAt: "2026-10-02T09:59:00Z",
+      pendingPaymentAmount: issued.has(orderId) ? 150000 : null,
+      pendingCheckoutUrl: issued.has(orderId) ? "https://pay.example.test/q" : null,
+    });
+    routes = [
+      {
+        method: "GET",
+        url: "/api/orders/awaiting-settlement",
+        reply: () => ok({ message: "Lấy danh sách hàng chờ tất toán thành công.", data: { items: [row(A, "VCL-20261002165900-215210"), row(B, "VCL-20261002164600-453138")] } }),
+      },
+      {
+        method: "POST",
+        url: `/api/orders/${A}/payments/final`,
+        reply: () => {
+          if (issued.has(A)) {
+            return fail(409, { message: "Đơn VCL-20261002165900-215210 đã chốt phí cuối (150.000đ), đang chờ khách thanh toán — không chốt lại lần nữa." });
+          }
+          issued.add(A);
+          return ok({ message: "Tạo thanh toán cuối thành công.", data: { orderId: A, finalAmount: 150000, paymentStatus: "PENDING", checkoutUrl: "https://pay.example.test/a" } });
+        },
+      },
+    ];
+
+    const before = await settlement.listAwaitingSettlement();
+    const tableBefore = before.filter(settlement.needsSaleSettlement);
+    const badgesBefore = await saleBadges.loadSaleBadges();
+
+    const run = guard.createRowActionRunner();
+    const send = () => run(A, () => settlement.createFinalPayment(A, [], "SEPAY"));
+    /* Bấm đúp: lần hai tới khi lần một chưa xong. */
+    const [first, second] = await Promise.all([send(), send()]);
+    const postsAfterDouble = requests.filter((req) => req.method === "POST");
+    /* Trang bỏ dòng khỏi bảng ngay từ phản hồi, chưa cần chờ tải lại. */
+    const tableLocal = before.filter((r) => r.orderId !== A).filter(settlement.needsSaleSettlement);
+    const after = await settlement.listAwaitingSettlement();
+    const tableAfter = after.filter(settlement.needsSaleSettlement);
+    const badgesAfter = await saleBadges.loadSaleBadges();
+
+    /* Bấm lại sau khi đã chốt (tab khác / dữ liệu cũ): backend 409, câu lỗi trả về cho hộp hiện. */
+    const again = await send();
+
+    return all(
+      expectEqual("trước: bảng = badge (dòng đã chốt không nằm trong bảng)", [before.length, tableBefore.map((r) => r.orderCode), badgesBefore.settlements], [2, ["VCL-20261002165900-215210"], 1]),
+      expectEqual("bấm đúp", [first.ok, Boolean(second.skipped)], [true, true]),
+      expectEqual("POST đúng 1 lần, đúng body", [postsAfterDouble.length, postsAfterDouble[0]?.body], [1, { extraFees: [], paymentMethod: "SEPAY" }]),
+      expectEqual("dòng rời bảng ngay", tableLocal, []),
+      expectEqual("tải lại: bảng rỗng, badge 0", [tableAfter.length, badgesAfter.settlements], [0, 0]),
+      expectEqual("bấm lại → 409 không nuốt", [again.ok, Boolean(again.skipped), guard.httpStatusOf(again.error)], [false, false, 409]),
+      expectEqual("câu lỗi tiếng Việt", /đã chốt phí cuối/.test(settlement.getSettlementApiError(again.error, "x")), true),
+    );
+  });
+
+  await check("Hàng chờ tất toán: lỗi chốt → hộp GIỮ MỞ + câu lỗi tại chỗ, gửi lại được; chỉ lần tải mới nhất ghi vào bảng; các tab hàng chờ cùng khuôn", async () => {
+    resetState({ token: "t" });
+    const settlement = await load("/src/features/settlement/api/settlementService.js");
+    const guard = await load("/src/shared/utils/rowActionGuard.js");
+    const A = "5e771e00-0000-4000-8000-0000000000c3";
+    routes = [{ method: "POST", url: `/api/orders/${A}/payments/final`, reply: () => fail(400, { message: "Chưa tất toán được: Còn kiện chưa kiểm ở kho VN." }) }];
+    const run = guard.createRowActionRunner();
+    const failed = await run(A, () => settlement.createFinalPayment(A, [], "SEPAY"));
+    const retry = await run(A, () => settlement.createFinalPayment(A, [], "SEPAY"));
+
+    const seq = guard.createLoadSequencer();
+    const stale = seq.next();
+    const fresh = seq.next();
+
+    /* Tĩnh: hàm submit của trang chỉ đóng hộp ở nhánh thành công; lỗi hiện ở chân hộp. */
+    const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const page = strip(fs.readFileSync(path.join(ROOT, "src/features/settlement/pages/SaleSettlementPage/SaleSettlementPage.jsx"), "utf8"));
+    const submit = page.slice(page.indexOf("const submit = useCallback"), page.indexOf("const columns = useMemo"));
+    const errorBranch = submit.slice(submit.indexOf("if (!outcome.ok)"), submit.indexOf("const result = outcome.result"));
+    const queuePages = [
+      "src/features/settlement/pages/SaleSettlementPage/SaleSettlementPage.jsx",
+      "src/features/settlement/pages/SaleReleasePage/SaleReleasePage.jsx",
+      "src/features/settlement/pages/SaleDeliveriesPage/SaleDeliveriesPage.jsx",
+      "src/features/shipment/components/ShipmentTimelineDrawer/ShipmentTimelineDrawer.jsx",
+    ];
+    const missingGuard = queuePages.filter((rel) => {
+      const source = strip(fs.readFileSync(path.join(ROOT, rel), "utf8"));
+      return !(/createRowActionRunner/.test(source) && /createLoadSequencer/.test(source) && /<ActionErrorAlert/.test(source) && /keyboard=\{!submitting\}/.test(source));
+    });
+
+    return all(
+      expectEqual("lỗi trả về, không ném", [failed.ok, settlement.getSettlementApiError(failed.error, "x")], [false, "Chưa tất toán được: Còn kiện chưa kiểm ở kho VN."]),
+      expectEqual("lỗi xong gửi lại được", [Boolean(retry.skipped), requests.filter((req) => req.method === "POST").length], [false, 2]),
+      expectEqual("tải cũ bị bỏ, tải mới được ghi", [seq.isLatest(stale), seq.isLatest(fresh)], [false, true]),
+      expectEqual("nhánh lỗi: hiện lỗi + return, không đóng hộp", [/setSubmitError\(/.test(errorBranch), /return;/.test(errorBranch), /setConfirmOpen\(false\)/.test(errorBranch)], [true, true, false]),
+      expectEqual("đóng hộp chỉ sau thành công", submit.indexOf("setConfirmOpen(false)") > submit.indexOf("const result = outcome.result"), true),
+      expectEqual("chân hộp có câu lỗi", /footer=\{\(origin\)[\s\S]*?<ActionErrorAlert error=\{submitError\}/.test(page), true),
+      expectEqual("các tab hàng chờ cùng khuôn chống bấm lại", missingGuard, []),
     );
   });
 

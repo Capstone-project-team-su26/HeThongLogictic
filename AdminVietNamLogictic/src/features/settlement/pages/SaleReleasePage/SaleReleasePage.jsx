@@ -46,7 +46,11 @@ import {
  * giao): khách + mã khách, hàng từng dòng, kiện, báo giá, tiền đã cọc — đều từ API thật.
  */
 import { OrderReviewPanel, useOrderReview } from "@features/consignment";
+/* Đi thẳng file store (như Sidebar): barrel "@features/workspace" kéo bảng tab → vòng import về trang này. */
+import { useSaleBadges } from "@features/workspace/context/saleBadgeStore";
 import AuthNotify from "@shared/components/AuthNotify/AuthNotify";
+import ActionErrorAlert from "@shared/components/ActionErrorAlert/ActionErrorAlert";
+import { createLoadSequencer, createRowActionRunner } from "@shared/utils/rowActionGuard";
 import DeliveryAddressPicker from "@shared/components/AddressSelect/DeliveryAddressPicker";
 import {
   isDeliveryAddressComplete,
@@ -90,8 +94,27 @@ const formatDateTime = (value) => {
  * quận / phường → splitVietnamAddress, rồi DeliveryAddressPicker dò mã GoShip theo tên.
  */
 
+/** Câu hiện ở cột Thao tác khi dòng vừa xử lý xong, trong lúc chờ bảng tải lại từ server. */
+const JUST_DONE_TEXT = {
+  RECEIVING_NOTE: "Đã lập phiếu — chờ quản lý kho duyệt",
+  NOTIFY: "Đã báo kho — chờ kho lập phiếu nhập",
+  DELIVERY: "Đã gửi yêu cầu giao — chờ OM duyệt",
+};
+
 export default function SaleReleasePage() {
   const navigate = useNavigate();
+  /* Làm xong một việc thì đếm lại badge ngay. */
+  const { forceRefresh: refreshBadges } = useSaleBadges();
+
+  /*
+   * CHỐNG BẤM LẠI (cùng khuôn với hàng chờ tất toán): mỗi dòng chỉ một lời gọi đang bay, dòng đang
+   * gửi khoá nút, gửi xong dòng tắt nút ngay (canAct = false) trong lúc chờ bảng tải lại, và chỉ lần
+   * tải mới nhất được ghi vào bảng. Lỗi hiện ngay trong hộp / ngăn đang mở, hộp không đóng.
+   */
+  const [runAction] = useState(createRowActionRunner);
+  const [loadSeq] = useState(createLoadSequencer);
+  const [busyKey, setBusyKey] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -122,16 +145,62 @@ export default function SaleReleasePage() {
   const review = useOrderReview(reviewOrderId, { enabled: Boolean(reviewOrderId) });
 
   const load = useCallback(async () => {
+    const seq = loadSeq.next();
     setLoading(true);
     setErrorMessage("");
     try {
-      setRows(await listActionQueue());
+      const next = await listActionQueue();
+      if (!loadSeq.isLatest(seq)) return;
+      setRows(next);
     } catch (error) {
+      if (!loadSeq.isLatest(seq)) return;
       setErrorMessage(getSettlementApiError(error, "Không tải được danh sách đơn cần xử lý."));
     } finally {
-      setLoading(false);
+      if (loadSeq.isLatest(seq)) setLoading(false);
     }
-  }, []);
+  }, [loadSeq]);
+
+  /**
+   * Chạy MỘT thao tác ghi của một dòng. Bấm lần hai khi lần đầu chưa xong → bỏ qua (không gọi API).
+   * Thành công: dòng tắt nút ngay, rồi tải lại bảng + badge một lần. Lỗi: trả câu lỗi cho hộp đang
+   * mở hiện tại chỗ.
+   *
+   * @returns {Promise<{ ok: boolean, skipped?: boolean, result?: any }>}
+   */
+  const performRowAction = useCallback(
+    async (row, action, doneText) => {
+      const key = row?.rowKey;
+      if (!key || runAction.isBusy(key)) return { ok: false, skipped: true };
+
+      setActionError("");
+      setSubmitting(true);
+      setBusyKey(key);
+
+      const outcome = await runAction(key, action);
+
+      if (outcome.skipped) return outcome;
+
+      try {
+        if (!outcome.ok) {
+          setActionError(getSettlementApiError(outcome.error, "Vui lòng thử lại."));
+          return outcome;
+        }
+
+        setRows((current) =>
+          current.map((item) =>
+            item.rowKey === key ? { ...item, canAct: false, blockedReason: doneText } : item,
+          ),
+        );
+        load();
+        refreshBadges();
+        return outcome;
+      } finally {
+        setSubmitting(false);
+        setBusyKey((current) => (current === key ? "" : current));
+      }
+    },
+    [runAction, load, refreshBadges],
+  );
 
   useEffect(() => {
     load();
@@ -150,6 +219,7 @@ export default function SaleReleasePage() {
   const openDelivery = useCallback((row) => {
     setTarget(row);
     setIssued(null);
+    setActionError("");
     setForm({
       receiverName: row.receiverName || row.customerName || "",
       receiverPhone: row.receiverPhone || row.customerPhone || "",
@@ -176,49 +246,45 @@ export default function SaleReleasePage() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      /* Gửi đúng các kiện của nhóm "giao ngay" server đã tách sẵn — kiện gửi kho không lẫn vào. */
-      const result = await createDeliveryRequest({
-        orderId: target.orderId,
-        parcelIds: target.parcelIds,
-        ...form,
-      });
-      setIssued(result);
-      AuthNotify.success(
-        "Đã gửi yêu cầu giao hàng",
-        `Phiếu ${result?.deliveryCode || ""} đang chờ Operations Manager duyệt.`,
-      );
-      load();
-    } catch (error) {
-      AuthNotify.error(
-        "Không lập được yêu cầu giao hàng",
-        getSettlementApiError(error, "Vui lòng thử lại."),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }, [target, form, load]);
+    /* Gửi đúng các kiện của nhóm "giao ngay" server đã tách sẵn — kiện gửi kho không lẫn vào. */
+    const outcome = await performRowAction(
+      target,
+      () =>
+        createDeliveryRequest({
+          orderId: target.orderId,
+          parcelIds: target.parcelIds,
+          ...form,
+        }),
+      JUST_DONE_TEXT.DELIVERY,
+    );
+    if (!outcome.ok) return;
+
+    const result = outcome.result;
+    setIssued(result);
+    AuthNotify.success(
+      "Đã gửi yêu cầu giao hàng",
+      `Phiếu ${result?.deliveryCode || ""} đang chờ Operations Manager duyệt.`,
+    );
+  }, [target, form, performRowAction]);
 
   const submitNotify = useCallback(async () => {
     if (!notifyTarget) return;
 
-    setSubmitting(true);
-    try {
-      const result = await notifyWarehouse(notifyTarget.orderId, notifyNote);
-      AuthNotify.success(
-        result?.alreadyNotified ? "Đơn này đã báo cho kho từ trước" : "Đã thông báo cho kho",
-        `Kho sẽ lập phiếu nhập cho ${result?.storeAtVnParcelCount || 0} kiện của đơn ${notifyTarget.orderCode}.`,
-      );
-      setNotifyTarget(null);
-      setNotifyNote("");
-      load();
-    } catch (error) {
-      AuthNotify.error("Không thông báo được", getSettlementApiError(error, "Vui lòng thử lại."));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [notifyTarget, notifyNote, load]);
+    const outcome = await performRowAction(
+      notifyTarget,
+      () => notifyWarehouse(notifyTarget.orderId, notifyNote),
+      JUST_DONE_TEXT.NOTIFY,
+    );
+    if (!outcome.ok) return;
+
+    const result = outcome.result;
+    AuthNotify.success(
+      result?.alreadyNotified ? "Đơn này đã báo cho kho từ trước" : "Đã thông báo cho kho",
+      `Kho sẽ lập phiếu nhập cho ${result?.storeAtVnParcelCount || 0} kiện của đơn ${notifyTarget.orderCode}.`,
+    );
+    setNotifyTarget(null);
+    setNotifyNote("");
+  }, [notifyTarget, notifyNote, performRowAction]);
 
   const submitReceivingNote = useCallback(async () => {
     if (!receivingTarget) return;
@@ -231,29 +297,26 @@ export default function SaleReleasePage() {
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const result = await createReceivingNote({
-        orderId: receivingTarget.orderId,
-        warehouseId: receivingTarget.receivingWarehouseId,
-        note: receivingNote,
-      });
-      AuthNotify.success(
-        "Đã lập phiếu nhập kho",
-        `Phiếu ${result?.receivingNoteCode || ""} (${result?.warehouseName || receivingTarget.receivingWarehouseName || "kho gốc"}) đang chờ quản lý kho duyệt. Duyệt xong khách nhận PDF để mang hàng tới.`,
-      );
-      setReceivingTarget(null);
-      setReceivingNote("");
-      load();
-    } catch (error) {
-      AuthNotify.error(
-        "Không lập được phiếu tiếp nhận",
-        getSettlementApiError(error, "Vui lòng thử lại."),
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }, [receivingTarget, receivingNote, load]);
+    const outcome = await performRowAction(
+      receivingTarget,
+      () =>
+        createReceivingNote({
+          orderId: receivingTarget.orderId,
+          warehouseId: receivingTarget.receivingWarehouseId,
+          note: receivingNote,
+        }),
+      JUST_DONE_TEXT.RECEIVING_NOTE,
+    );
+    if (!outcome.ok) return;
+
+    const result = outcome.result;
+    AuthNotify.success(
+      "Đã lập phiếu nhập kho",
+      `Phiếu ${result?.receivingNoteCode || ""} (${result?.warehouseName || receivingTarget.receivingWarehouseName || "kho gốc"}) đang chờ quản lý kho duyệt. Duyệt xong khách nhận PDF để mang hàng tới.`,
+    );
+    setReceivingTarget(null);
+    setReceivingNote("");
+  }, [receivingTarget, receivingNote, performRowAction]);
 
   const columns = useMemo(
     () => [
@@ -363,6 +426,15 @@ export default function SaleReleasePage() {
             return <Text type="secondary">{row.blockedReason || "Đang chờ bộ phận khác"}</Text>;
           }
 
+          /* Dòng đang gửi thao tác: khoá nút tới khi có kết quả. */
+          if (busyKey && busyKey === row.rowKey) {
+            return (
+              <Button type="primary" loading disabled>
+                Đang gửi…
+              </Button>
+            );
+          }
+
           if (row.handlingGroup === RECEIVING_NOTE) {
             return (
               <Button
@@ -371,6 +443,7 @@ export default function SaleReleasePage() {
                 onClick={() => {
                   setReceivingTarget(row);
                   setReceivingNote("");
+                  setActionError("");
                 }}
               >
                 Lập phiếu tiếp nhận kho
@@ -394,6 +467,7 @@ export default function SaleReleasePage() {
               onClick={() => {
                 setNotifyTarget(row);
                 setNotifyNote("");
+                setActionError("");
               }}
             >
               {row.actionState === "INBOUND_REJECTED" ? "Báo lại cho kho" : "Thông báo cho kho"}
@@ -402,7 +476,7 @@ export default function SaleReleasePage() {
         },
       },
     ],
-    [openDelivery],
+    [openDelivery, busyKey],
   );
 
   return (
@@ -439,6 +513,7 @@ export default function SaleReleasePage() {
         columns={columns}
         dataSource={filtered}
         loading={loading}
+        rowClassName={(row) => (busyKey && busyKey === row.rowKey ? "sale-queue-row--busy" : "")}
         scroll={{ x: 1180 }}
         pagination={tablePagination({ unit: "đơn" })}
         locale={{
@@ -465,10 +540,22 @@ export default function SaleReleasePage() {
       <Modal
         {...REVIEW_MODAL_PROPS}
         open={Boolean(receivingTarget)}
-        onCancel={() => setReceivingTarget(null)}
+        onCancel={() => {
+          if (!submitting) setReceivingTarget(null);
+        }}
         onOk={submitReceivingNote}
         confirmLoading={submitting}
         okButtonProps={{ disabled: review.loading }}
+        cancelButtonProps={{ disabled: submitting }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        keyboard={!submitting}
+        footer={(origin) => (
+          <>
+            <ActionErrorAlert error={actionError} title="Không lập được phiếu tiếp nhận" />
+            {origin}
+          </>
+        )}
         okText={review.loading ? "Đang tải thông tin…" : "Lập phiếu nhập kho"}
         cancelText="Để sau"
         title={`Lập phiếu tiếp nhận kho · ${receivingTarget?.orderCode || ""}`}
@@ -542,10 +629,22 @@ export default function SaleReleasePage() {
       <Modal
         {...REVIEW_MODAL_PROPS}
         open={Boolean(notifyTarget)}
-        onCancel={() => setNotifyTarget(null)}
+        onCancel={() => {
+          if (!submitting) setNotifyTarget(null);
+        }}
         onOk={submitNotify}
         confirmLoading={submitting}
         okButtonProps={{ disabled: review.loading }}
+        cancelButtonProps={{ disabled: submitting }}
+        closable={!submitting}
+        maskClosable={!submitting}
+        keyboard={!submitting}
+        footer={(origin) => (
+          <>
+            <ActionErrorAlert error={actionError} title="Không thông báo được cho kho" />
+            {origin}
+          </>
+        )}
         okText={review.loading ? "Đang tải thông tin…" : "Thông báo cho kho"}
         cancelText="Để sau"
         title={`Thông báo cho kho · ${notifyTarget?.orderCode || ""}`}
@@ -613,7 +712,9 @@ export default function SaleReleasePage() {
       */}
       <Drawer
         open={Boolean(target)}
-        onClose={() => setTarget(null)}
+        onClose={() => {
+          if (!submitting) setTarget(null);
+        }}
         width={980}
         title={`Tạo yêu cầu giao hàng · ${target?.orderCode || ""}`}
       >
@@ -679,6 +780,12 @@ export default function SaleReleasePage() {
                 }
               />
             ) : (
+              <>
+              <ActionErrorAlert
+                error={actionError}
+                title="Không lập được yêu cầu giao hàng"
+                style={{ marginTop: 16, marginBottom: 0 }}
+              />
               <Button
                 type="primary"
                 size="large"
@@ -691,6 +798,7 @@ export default function SaleReleasePage() {
               >
                 {review.loading ? "Đang tải thông tin đơn…" : "Gửi yêu cầu giao hàng cho OM duyệt"}
               </Button>
+              </>
             )}
           </>
         )}

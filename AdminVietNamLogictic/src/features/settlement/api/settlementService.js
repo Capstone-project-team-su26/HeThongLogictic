@@ -61,6 +61,16 @@ export const listAwaitingSettlement = async () => {
   return getArrayItems(getResponseData(response));
 };
 
+/**
+ * Dòng hàng chờ còn là VIỆC CỦA SALE (chưa chốt phí cuối). `pendingPaymentAmount` có giá trị nghĩa
+ * là Sale đã chốt, đợt cuối đang chờ KHÁCH trả — không còn nút "Chốt tất toán".
+ *
+ * MỘT định nghĩa cho cả badge tab "Chờ tất toán" lẫn danh sách: trước đây badge lọc theo điều kiện
+ * này còn bảng thì không, nên badge 1 mà bảng 2 dòng, dòng đã chốt vẫn còn nút bấm lại được.
+ * Backend mới tự bỏ dòng đã chốt khỏi hàng chờ của nhân viên; lọc ở đây vẫn giữ cho backend cũ.
+ */
+export const needsSaleSettlement = (row) => Boolean(row) && !(Number(row?.pendingPaymentAmount) > 0);
+
 /** Xem trước tất toán theo cân đo VN — không ghi gì, gọi bao nhiêu lần cũng được. */
 export const getSettlementPreview = async (orderId) => {
   const id = requireId(orderId, "Thiếu mã đơn hàng.");

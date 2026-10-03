@@ -1131,5 +1131,15 @@
     "hasDefault": false,
     "realApi": true,
     "realApiNote": "API THẬT: giới hạn tạo đơn do Admin cấu hình (30/09/2026) — GET/PUT /api/system-settings/order-limits."
+  },
+  "src/shared/api/productTypeCatalogApi.js": {
+    "named": [
+      "getProductTypeNameMapApi",
+      "peekProductTypeNameMap",
+      "resetProductTypeNameMapCache"
+    ],
+    "hasDefault": false,
+    "realApi": true,
+    "realApiNote": "API THẬT: danh mục loại hàng GET /api/product-types, cache chung để dịch Id → tên khi hiển thị (03/10/2026)."
   }
 }

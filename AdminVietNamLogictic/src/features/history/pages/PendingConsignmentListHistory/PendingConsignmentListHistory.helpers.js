@@ -21,6 +21,7 @@ import {
   PRODUCT_NAME_SEPARATOR,
 } from "./PendingConsignmentListHistory.constants";
 import { labelOf } from "@shared/utils/statusLabel";
+import { isGuidLike } from "@shared/utils/productTypeLabel";
 
 export const normalizeDepositStatusFilter = (
   value
@@ -382,9 +383,14 @@ export const getTrackingCode = (item) => {
 };
 
 export const getOrderCode = (item) => {
-  return String(
-    item?.orderCode || item?.orderId || "-"
+  /* orderId là GUID nội bộ — chỉ dùng khi nó không phải GUID (dữ liệu cũ lưu mã vào đây). */
+  const code = String(
+    item?.orderCode || item?.consignmentCode || ""
   ).trim();
+  if (code) return code;
+
+  const orderId = String(item?.orderId || "").trim();
+  return orderId && !isGuidLike(orderId) ? orderId : "-";
 };
 
 export const getErrorMessage = (error) => {

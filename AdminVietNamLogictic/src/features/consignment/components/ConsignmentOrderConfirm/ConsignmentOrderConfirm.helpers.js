@@ -12,6 +12,10 @@ import {
   SERVICE_LABELS,
   SHIPPING_OPTION_LABELS,
 } from "./ConsignmentOrderConfirm.constants";
+import {
+  isGuidLike,
+  UNCLASSIFIED_PRODUCT_TYPE_LABEL,
+} from "@shared/utils/productTypeLabel";
 
 export const normalizeCode = (value) =>
   String(value || "")
@@ -251,11 +255,20 @@ export const getOptionLabel = (
     option?.displayName ||
     value;
 
-  return translateOptionLabel({
+  const label = translateOptionLabel({
     value,
     rawLabel,
     context,
   });
+
+  /* Danh mục chưa tải / không có mục khớp: value là Id (GUID) thì không in ra làm nhãn. */
+  if (isGuidLike(label)) {
+    return context === "productType"
+      ? UNCLASSIFIED_PRODUCT_TYPE_LABEL
+      : "Chưa có thông tin";
+  }
+
+  return label;
 };
 
 export const formatVnd = (value) => {

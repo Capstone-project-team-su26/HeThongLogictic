@@ -314,7 +314,7 @@ export default function SaleDashboard() {
             navigate(`/sale/purchase-requests/${record.purchaseRequestId}`)
           }
         >
-          {code || record.purchaseRequestId || "—"}
+          {code || "—"}
         </a>
       ),
     },
