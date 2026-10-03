@@ -1,0 +1,282 @@
+/* =========================================================
+   GIAO DIỆN THEO DÕI HÀNH TRÌNH ĐƠN (ORDER TRACKING LIST)
+   OrderTrackingListPage.css — Danh sách đơn đang theo dõi
+   ========================================================= */
+
+.tracking-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- Hero Banner --- */
+.tracking-list-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 24px 28px;
+  background:
+    radial-gradient(circle at 92% 15%, rgba(59, 130, 246, 0.28) 0%, transparent 45%),
+    radial-gradient(circle at 8% 85%, rgba(14, 165, 233, 0.2) 0%, transparent 40%),
+    linear-gradient(135deg, #0f274a 0%, #1e3a8a 50%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tracking-list-hero__content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.tracking-list-hero__info {
+  max-width: 680px;
+}
+
+.tracking-list-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.tracking-list-hero__title {
+  margin: 0 0 8px 0;
+  color: #ffffff !important;
+  font-size: clamp(22px, 2.5vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.25;
+}
+
+.tracking-list-hero__desc {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.tracking-list-hero__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* --- KPI Statistics Cards --- */
+.tracking-list-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.tracking-list-kpi-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 0.25s ease;
+}
+
+.tracking-list-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.tracking-list-kpi-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tracking-list-kpi-card__label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tracking-list-kpi-card__value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-list-kpi-card__sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.tracking-list-kpi-card__icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.tracking-list-kpi-card__icon-box--blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.tracking-list-kpi-card__icon-box--cyan {
+  background: #ecfeff;
+  color: #0891b2;
+}
+
+.tracking-list-kpi-card__icon-box--green {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.tracking-list-kpi-card__icon-box--amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+/* --- Section Card Container --- */
+.tracking-list-table-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+/* --- Filter & Toolbar --- */
+.tracking-list-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tracking-list-filter-bar__inputs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tracking-list-filter-bar__options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* --- Quick Segment Tabs --- */
+.tracking-quick-tabs {
+  padding: 12px 20px 0;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.tracking-quick-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+/* --- Table Enhancements --- */
+.tracking-list-table .ant-table-thead > tr > th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 12.5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tracking-list-table .ant-table-tbody > tr:hover > td {
+  background: #f8fbff !important;
+}
+
+.tracking-order-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tracking-order-cell__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 750;
+  font-size: 13.5px;
+  color: #1d4ed8;
+}
+
+.tracking-customer-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tracking-customer-cell__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.tracking-customer-cell__info {
+  display: flex;
+  flex-direction: column;
+}
+
+.tracking-customer-cell__name {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 13.5px;
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 768px) {
+  .tracking-list-hero {
+    padding: 18px 20px;
+  }
+
+  .tracking-list-hero__actions {
+    width: 100%;
+  }
+
+  .tracking-list-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tracking-list-filter-bar__inputs {
+    width: 100%;
+  }
+}
