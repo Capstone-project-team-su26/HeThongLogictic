@@ -190,13 +190,13 @@ export default function OrderReviewPanel({
   /* Tổng backend tự tính cho cả đơn — hiện kèm tổng cộng dòng để hai số soi được nhau. */
   const orderTotalsText = detail
     ? [
-        detail.totalWeight ? `Tổng cân đơn ${formatReviewKg(detail.totalWeight)}` : null,
-        detail.totalVolume
-          ? `thể tích ${formatReviewNumber(detail.totalVolume, 0)} cm³`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
+      detail.totalWeight ? `Tổng cân đơn ${formatReviewKg(detail.totalWeight)}` : null,
+      detail.totalVolume
+        ? `thể tích ${formatReviewNumber(detail.totalVolume, 0)} cm³`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ")
     : "";
 
   const wantedIds = Array.isArray(parcelIds) ? new Set(parcelIds.map(String)) : null;
@@ -214,45 +214,45 @@ export default function OrderReviewPanel({
 
   const quotationLines = quotation
     ? [
-        { label: "Cước vận chuyển ước tính", value: quotation.estimatedFreightCharge },
-        { label: "Phí vận chuyển nội địa", value: quotation.domesticShippingFee },
-        { label: "Phí dịch vụ (thùng, kiểm hàng, bảo hiểm…)", value: quotation.serviceFee },
-        { label: "Thuế & phí nhập khẩu", value: quotation.taxAndDuty },
-        { label: "Tổng báo giá dự kiến", value: quotation.totalEstimatedCost, strong: true },
-      ].filter((line) => line.strong || (line.value !== null && line.value !== undefined))
+      { label: "Cước vận chuyển ước tính", value: quotation.estimatedFreightCharge },
+      { label: "Phí vận chuyển nội địa", value: quotation.domesticShippingFee },
+      { label: "Phí dịch vụ (thùng, kiểm hàng, bảo hiểm…)", value: quotation.serviceFee },
+      { label: "Thuế & phí nhập khẩu", value: quotation.taxAndDuty },
+      { label: "Tổng báo giá dự kiến", value: quotation.totalEstimatedCost, strong: true },
+    ].filter((line) => line.strong || (line.value !== null && line.value !== undefined))
     : [];
 
   const paymentLines = payment
     ? [
-        {
-          label: "Đã cọc",
-          value: hasDepositRow ? paidDeposit : null,
-          tone: "success",
-          hidden: !hasDepositRow,
-        },
-        { label: "Tổng hoá đơn hiện tại", value: payment.totalBillAmount },
-        { label: "Khách đã trả", value: payment.totalPaid, tone: "success" },
-        {
-          label: "Còn lại",
-          value: payment.remaining,
-          strong: true,
-          tone: Number(payment.remaining) > 0 ? "warning" : undefined,
-        },
-        ...payments.map((row, index) => {
-          const meta = getPaymentStatusMeta(row?.status);
-          return {
-            key: row?.paymentId || `payment-${index}`,
-            label: row?.installmentType ? getInstallmentTypeLabel(row.installmentType) : "Khoản thanh toán",
-            hint: row?.paidAt ? `trả lúc ${formatReviewDateTime(row.paidAt)}` : "",
-            value: (
-              <Space size={6}>
-                <Tag color={meta.color}>{meta.label}</Tag>
-                <Text>{formatReviewMoney(row?.amount)}</Text>
-              </Space>
-            ),
-          };
-        }),
-      ]
+      {
+        label: "Đã cọc",
+        value: hasDepositRow ? paidDeposit : null,
+        tone: "success",
+        hidden: !hasDepositRow,
+      },
+      { label: "Tổng hoá đơn hiện tại", value: payment.totalBillAmount },
+      { label: "Khách đã trả", value: payment.totalPaid, tone: "success" },
+      {
+        label: "Còn lại",
+        value: payment.remaining,
+        strong: true,
+        tone: Number(payment.remaining) > 0 ? "warning" : undefined,
+      },
+      ...payments.map((row, index) => {
+        const meta = getPaymentStatusMeta(row?.status);
+        return {
+          key: row?.paymentId || `payment-${index}`,
+          label: row?.installmentType ? getInstallmentTypeLabel(row.installmentType) : "Khoản thanh toán",
+          hint: row?.paidAt ? `trả lúc ${formatReviewDateTime(row.paidAt)}` : "",
+          value: (
+            <Space size={6}>
+              <Tag color={meta.color}>{meta.label}</Tag>
+              <Text>{formatReviewMoney(row?.amount)}</Text>
+            </Space>
+          ),
+        };
+      }),
+    ]
     : [];
 
   const errors = [review?.detailError, review?.paymentError].filter(Boolean).join(" ");
@@ -291,7 +291,7 @@ export default function OrderReviewPanel({
 
       {showItems && orderTotalsText ? (
         <Text type="secondary" style={{ fontSize: 12, marginTop: -8 }}>
-          {orderTotalsText} (số backend lưu trên đơn)
+          {orderTotalsText} (số hệ thống lưu trên đơn)
         </Text>
       ) : null}
 
@@ -301,11 +301,11 @@ export default function OrderReviewPanel({
           extra={
             quotation
               ? [
-                  getQuotationStatusLabel(quotation.status),
-                  quotation.expiredAt ? `hạn ${formatReviewDateTime(quotation.expiredAt)}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
+                getQuotationStatusLabel(quotation.status),
+                quotation.expiredAt ? `hạn ${formatReviewDateTime(quotation.expiredAt)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
               : null
           }
           lines={quotationLines}
